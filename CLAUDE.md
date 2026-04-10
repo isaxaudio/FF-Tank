@@ -244,6 +244,40 @@ Accessed via Vercel proxy: `POST /api/index?service=vps` with `{vpsUrl, agentSec
 - `POST /run/chain` — Scout → Apollo 3-step enrich → Claude draft → outreach_drafts
 - `GET /health` — env check
 
+## GitHub repo & remote workflow
+
+**Repo:** https://github.com/isaxaudio/FF-Tank
+
+### Building FF Tank from phone (no computer needed)
+1. Open GitHub app → FF-Tank → Issues → New Issue
+2. Describe what you want built, include `@claude` in the body
+3. GitHub Action fires → Claude Code edits the code → opens a PR
+4. Review diff on phone → merge → Vercel auto-deploys
+
+### GitHub Action (`.github/workflows/claude.yml`)
+- Triggers on: `@claude` in issue body, `@claude` in issue/PR comment, `claude` label on issue
+- Requires: `ANTHROPIC_API_KEY` secret in repo Settings → Secrets → Actions
+- Requires: Claude GitHub App installed at github.com/apps/claude
+- Claude reads `CLAUDE.md` automatically for project context
+
+### VPS MCP server (`vps/mcp-server.js`)
+- Runs on VPS port 3002 (localhost only, managed by PM2 as `ff-tank-mcp`)
+- Exposes Supabase tables as MCP tools: `get_opportunities`, `get_contacts`, `get_outreach_drafts`, `get_job_runs`, `get_weekly_brief`, `get_target_accounts`
+- Used by Claude Code desktop to query live FF Tank data
+
+### Local Claude data access
+- Credentials stored in `~/ff-tank/.env.local` (gitignored)
+- Claude Code can query Supabase directly via curl using these credentials
+- Supabase MCP also configured in `~/.claude/settings.json` for direct SQL access
+
+### OpenClaw stuck job fix (April 2026)
+- Changed `execFile timeout: 0` → `timeout: 600000` (10 min) in `vps/server.js`
+- Added `POST /cleanup-stuck` endpoint — marks job_runs stuck in `running` > 15 min as `failed`
+
+### Git push
+- Remote stored with token in URL: `git push origin main` works directly
+- Token scope needed: `repo` + `workflow`
+
 ## What is NOT built yet
 - Apollo automation triggered from agent (Flex → Lookalike Engine → Apollo enrich)
 - Dedup of outreach_drafts by contact (if contact already has a draft, skip)
