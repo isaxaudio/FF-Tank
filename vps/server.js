@@ -1,3 +1,4 @@
+# FF Tank Bridge Server - last updated April 2026
 /**
  * FF Tank — OpenClaw Bridge Server
  * Lightweight HTTP trigger layer between FF Tank UI and OpenClaw runtime.
