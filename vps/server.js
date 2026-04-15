@@ -337,7 +337,9 @@ app.post('/configure', auth, async (req, res) => {
 });
 
 // ─── Instagram scrape endpoint ───────────────────────────────────────────────
-// Launches Puppeteer to extract caption + image URLs from a public Instagram post.
+// Extracts caption + image URLs from a public Instagram post.
+// Strategy 1: plain HTTP fetch (Instagram serves OG tags to crawlers — fast, no browser)
+// Strategy 2: Puppeteer fallback if OG fetch returns nothing
 // Returns: { caption, images: [url, ...], username }
 app.post('/run/instagram-scrape', auth, async (req, res) => {
   const { url } = req.body || {};
@@ -345,55 +347,71 @@ app.post('/run/instagram-scrape', auth, async (req, res) => {
     return res.status(400).json({ error: 'Valid Instagram URL required' });
   }
 
+  // ── Strategy 1: plain HTTP fetch for OG meta tags ─────────────────────────
+  function parseOG(html) {
+    const getMeta = (prop) => {
+      const m = html.match(new RegExp(`<meta[^>]+property=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'))
+                || html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${prop}["']`, 'i'));
+      return m ? m[1] : '';
+    };
+    const caption   = getMeta('og:description');
+    const mainImage = getMeta('og:image');
+    const title     = getMeta('og:title');
+    const usernameMatch = title.match(/@([\w.]+)/);
+    const username  = usernameMatch ? usernameMatch[1] : '';
+    const images    = mainImage ? [mainImage] : [];
+    return { caption, images, username };
+  }
+
+  try {
+    const htmlRes = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    const html = await htmlRes.text();
+    const ogResult = parseOG(html);
+
+    if (ogResult.caption || ogResult.images.length > 0) {
+      log('instagram-scrape', `OG fetch succeeded — ${ogResult.images.length} image(s)`);
+      return res.json(ogResult);
+    }
+    log('instagram-scrape', 'OG fetch returned no content, trying Puppeteer...');
+  } catch (e) {
+    log('instagram-scrape', `OG fetch error: ${e.message}, trying Puppeteer...`);
+  }
+
+  // ── Strategy 2: Puppeteer fallback ───────────────────────────────────────
   let browser;
   try {
     const puppeteer = require('puppeteer');
     browser = await puppeteer.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--window-size=1280,800',
-      ],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
-
     const page = await browser.newPage();
-    await page.setUserAgent(
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    );
-    await page.setViewport({ width: 1280, height: 800 });
-
-    // Navigate with a generous timeout
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-    // Give JS a moment to hydrate meta tags
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 2500));
 
     const result = await page.evaluate(() => {
       const getMeta = (prop) =>
         document.querySelector(`meta[property="${prop}"]`)?.getAttribute('content') ||
         document.querySelector(`meta[name="${prop}"]`)?.getAttribute('content') || '';
-
-      const caption = getMeta('og:description');
+      const caption   = getMeta('og:description');
       const mainImage = getMeta('og:image');
-      const title = getMeta('og:title'); // often "Photo by @username on Instagram"
-
-      // Extract username from title or URL
-      const usernameMatch = title.match(/@([\w.]+)/) || window.location.pathname.match(/\/([\w.]+)\//);
-      const username = usernameMatch ? usernameMatch[1] : '';
-
-      // Collect all carousel images if present (Instagram loads them as img tags)
+      const title     = getMeta('og:title');
+      const usernameMatch = title.match(/@([\w.]+)/);
+      const username  = usernameMatch ? usernameMatch[1] : (window.location.pathname.match(/\/([\w.]+)\//) || [])[1] || '';
       const imgEls = Array.from(document.querySelectorAll('img[srcset], article img'));
       const carouselImages = imgEls
         .map(img => img.src)
-        .filter(src => src && (src.includes('cdninstagram') || src.includes('fbcdn')) && src.includes('http'))
-        .filter((src, i, arr) => arr.indexOf(src) === i) // dedupe
-        .slice(0, 6); // max 6 images
-
+        .filter(src => src && (src.includes('cdninstagram') || src.includes('fbcdn')))
+        .filter((src, i, arr) => arr.indexOf(src) === i)
+        .slice(0, 6);
       const images = carouselImages.length > 0 ? carouselImages : (mainImage ? [mainImage] : []);
-
       return { caption, images, username };
     });
 
@@ -404,12 +422,12 @@ app.post('/run/instagram-scrape', auth, async (req, res) => {
       return res.status(422).json({ error: 'Could not extract content — post may be private or login-gated' });
     }
 
-    log('instagram-scrape', `scraped ${result.images.length} image(s) from ${url}`);
-    res.json(result);
+    log('instagram-scrape', `Puppeteer succeeded — ${result.images.length} image(s)`);
+    return res.json(result);
   } catch (e) {
     if (browser) { try { await browser.close(); } catch {} }
-    log('instagram-scrape', `error: ${e.message}`);
-    res.status(500).json({ error: e.message });
+    log('instagram-scrape', `Puppeteer error: ${e.message}`);
+    return res.status(500).json({ error: e.message });
   }
 });
 

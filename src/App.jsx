@@ -8842,9 +8842,10 @@ Cite URLs.`;
                   onChange={e => { setIgUrl(e.target.value); setIgError(""); setIgResult(null); }}
                   placeholder="Paste Instagram post URL..."
                   style={{ flex: 1, padding: "7px 10px", background: "#0C0C0C", border: "1px solid #1E1E1E", borderRadius: 6, color: "#E8E4DC", fontSize: 11, fontFamily: "inherit", outline: "none" }}
-                  onKeyDown={e => e.key === "Enter" && !igLoading && igUrl && runIgScrape()}
+                  onKeyDown={e => { if (e.key === "Enter" && !igLoading && igUrl.trim()) document.getElementById("ig-generate-btn").click(); }}
                 />
                 <button
+                  id="ig-generate-btn"
                   disabled={igLoading || !igUrl.trim()}
                   onClick={async () => {
                     if (!vpsUrl) { setIgError("VPS URL not set — add it in Settings"); return; }
