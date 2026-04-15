@@ -2979,7 +2979,7 @@ async function handleInstagramScrape(req, res) {
   if (!anthropicKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
 
   // Build Claude image blocks from base64 uploads
-  const imageBlocks = images.slice(0, 4).map(img => ({
+  const imageBlocks = images.slice(0, 10).map(img => ({
     type: 'image',
     source: { type: 'base64', media_type: img.mediaType || 'image/jpeg', data: img.data },
   }));

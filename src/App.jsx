@@ -8838,20 +8838,30 @@ Cite URLs.`;
             <div style={{ padding: "12px 16px", borderBottom: "1px solid #0D0D0D", background: "#070707", flexShrink: 0 }}>
               <div style={{ fontSize: 9, color: "#FF6B2B", letterSpacing: "2px", marginBottom: 8 }}>INSTAGRAM → LINKEDIN</div>
 
+              {/* Compress image to max 1200px / JPEG 0.78 before storing */}
               {/* Image upload area */}
               <div
                 onDragOver={e => e.preventDefault()}
                 onDrop={e => {
                   e.preventDefault();
-                  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
-                  files.forEach(file => {
-                    const reader = new FileReader();
-                    reader.onload = ev => {
-                      const data = ev.target.result.split(",")[1];
-                      setIgImages(prev => prev.length < 4 ? [...prev, { data, mediaType: file.type, preview: ev.target.result }] : prev);
+                  const compressAndAdd = (file) => {
+                    const img = new Image();
+                    const url = URL.createObjectURL(file);
+                    img.onload = () => {
+                      const MAX = 1200;
+                      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+                      const canvas = document.createElement("canvas");
+                      canvas.width = Math.round(img.width * scale);
+                      canvas.height = Math.round(img.height * scale);
+                      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+                      const preview = canvas.toDataURL("image/jpeg", 0.78);
+                      const data = preview.split(",")[1];
+                      URL.revokeObjectURL(url);
+                      setIgImages(prev => prev.length < 10 ? [...prev, { data, mediaType: "image/jpeg", preview }] : prev);
                     };
-                    reader.readAsDataURL(file);
-                  });
+                    img.src = url;
+                  };
+                  Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")).forEach(compressAndAdd);
                   setIgError(""); setIgDraft("");
                 }}
                 onClick={() => document.getElementById("ig-file-input").click()}
@@ -8864,21 +8874,31 @@ Cite URLs.`;
                   multiple
                   style={{ display: "none" }}
                   onChange={e => {
-                    Array.from(e.target.files).slice(0, 4 - igImages.length).forEach(file => {
-                      const reader = new FileReader();
-                      reader.onload = ev => {
-                        const data = ev.target.result.split(",")[1];
-                        setIgImages(prev => prev.length < 4 ? [...prev, { data, mediaType: file.type, preview: ev.target.result }] : prev);
+                    const compressAndAdd = (file) => {
+                      const img = new Image();
+                      const url = URL.createObjectURL(file);
+                      img.onload = () => {
+                        const MAX = 1200;
+                        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+                        const canvas = document.createElement("canvas");
+                        canvas.width = Math.round(img.width * scale);
+                        canvas.height = Math.round(img.height * scale);
+                        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+                        const preview = canvas.toDataURL("image/jpeg", 0.78);
+                        const data = preview.split(",")[1];
+                        URL.revokeObjectURL(url);
+                        setIgImages(prev => prev.length < 10 ? [...prev, { data, mediaType: "image/jpeg", preview }] : prev);
                       };
-                      reader.readAsDataURL(file);
-                    });
+                      img.src = url;
+                    };
+                    Array.from(e.target.files).slice(0, 10 - igImages.length).forEach(compressAndAdd);
                     setIgError(""); setIgDraft("");
                     e.target.value = "";
                   }}
                 />
                 {igImages.length === 0 ? (
                   <div style={{ textAlign: "center", color: "#444", fontSize: 10 }}>
-                    Drop screenshots here or click to upload · up to 4 images
+                    Drop screenshots here or click to upload · up to 10 images
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
@@ -8891,7 +8911,7 @@ Cite URLs.`;
                         >✕</div>
                       </div>
                     ))}
-                    {igImages.length < 4 && (
+                    {igImages.length < 10 && (
                       <div
                         onClick={() => document.getElementById("ig-file-input").click()}
                         style={{ height: 64, width: 64, border: "1px dashed #222", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#333", cursor: "pointer" }}
