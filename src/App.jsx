@@ -7305,9 +7305,10 @@ export default function FFTank() {
   const [smugmugKey, setSmugmugKey] = useState(() => localStorage.getItem("smugmugKey") || "");
   const [smugmugSecret, setSmugmugSecret] = useState(() => localStorage.getItem("smugmugSecret") || "");
   const [smugmugUsername, setSmugmugUsername] = useState(() => localStorage.getItem("smugmugUsername") || "");
-  const [igUrl, setIgUrl] = useState("");
+  const [igImages, setIgImages] = useState([]); // [{ data: base64, mediaType, preview }]
+  const [igCaption, setIgCaption] = useState("");
   const [igLoading, setIgLoading] = useState(false);
-  const [igResult, setIgResult] = useState(null); // { draft, caption, images, username }
+  const [igDraft, setIgDraft] = useState("");
   const [igError, setIgError] = useState("");
   const [igCopied, setIgCopied] = useState(false);
   const chatRef = useRef(null);
@@ -8836,69 +8837,120 @@ Cite URLs.`;
           {activeId === "builder" && (
             <div style={{ padding: "12px 16px", borderBottom: "1px solid #0D0D0D", background: "#070707", flexShrink: 0 }}>
               <div style={{ fontSize: 9, color: "#FF6B2B", letterSpacing: "2px", marginBottom: 8 }}>INSTAGRAM → LINKEDIN</div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+
+              {/* Image upload area */}
+              <div
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => {
+                  e.preventDefault();
+                  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+                  files.forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = ev => {
+                      const data = ev.target.result.split(",")[1];
+                      setIgImages(prev => prev.length < 4 ? [...prev, { data, mediaType: file.type, preview: ev.target.result }] : prev);
+                    };
+                    reader.readAsDataURL(file);
+                  });
+                  setIgError(""); setIgDraft("");
+                }}
+                onClick={() => document.getElementById("ig-file-input").click()}
+                style={{ border: `1px dashed ${igImages.length > 0 ? "#FF6B2B50" : "#222"}`, borderRadius: 6, padding: igImages.length > 0 ? "8px" : "14px", cursor: "pointer", marginBottom: 8, background: "#0A0A0A", transition: "border-color 0.15s" }}
+              >
                 <input
-                  value={igUrl}
-                  onChange={e => { setIgUrl(e.target.value); setIgError(""); setIgResult(null); }}
-                  placeholder="Paste Instagram post URL..."
-                  style={{ flex: 1, padding: "7px 10px", background: "#0C0C0C", border: "1px solid #1E1E1E", borderRadius: 6, color: "#E8E4DC", fontSize: 11, fontFamily: "inherit", outline: "none" }}
-                  onKeyDown={e => { if (e.key === "Enter" && !igLoading && igUrl.trim()) document.getElementById("ig-generate-btn").click(); }}
+                  id="ig-file-input"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={e => {
+                    Array.from(e.target.files).slice(0, 4 - igImages.length).forEach(file => {
+                      const reader = new FileReader();
+                      reader.onload = ev => {
+                        const data = ev.target.result.split(",")[1];
+                        setIgImages(prev => prev.length < 4 ? [...prev, { data, mediaType: file.type, preview: ev.target.result }] : prev);
+                      };
+                      reader.readAsDataURL(file);
+                    });
+                    setIgError(""); setIgDraft("");
+                    e.target.value = "";
+                  }}
                 />
+                {igImages.length === 0 ? (
+                  <div style={{ textAlign: "center", color: "#444", fontSize: 10 }}>
+                    Drop screenshots here or click to upload · up to 4 images
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
+                    {igImages.map((img, i) => (
+                      <div key={i} style={{ position: "relative" }}>
+                        <img src={img.preview} alt="" style={{ height: 64, width: 64, objectFit: "cover", borderRadius: 4, border: "1px solid #222", display: "block" }} />
+                        <div
+                          onClick={() => setIgImages(prev => prev.filter((_, j) => j !== i))}
+                          style={{ position: "absolute", top: 2, right: 2, width: 14, height: 14, borderRadius: "50%", background: "#111", border: "1px solid #333", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 8, color: "#888", lineHeight: 1 }}
+                        >✕</div>
+                      </div>
+                    ))}
+                    {igImages.length < 4 && (
+                      <div
+                        onClick={() => document.getElementById("ig-file-input").click()}
+                        style={{ height: 64, width: 64, border: "1px dashed #222", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#333", cursor: "pointer" }}
+                      >+</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Optional caption */}
+              <textarea
+                value={igCaption}
+                onChange={e => setIgCaption(e.target.value)}
+                placeholder="Optional: paste caption or add context..."
+                rows={2}
+                style={{ width: "100%", padding: "7px 10px", background: "#0C0C0C", border: "1px solid #1A1A1A", borderRadius: 6, color: "#B8B4AC", fontSize: 10, fontFamily: "inherit", outline: "none", resize: "none", boxSizing: "border-box", marginBottom: 8 }}
+              />
+
+              <div style={{ display: "flex", gap: 8 }}>
                 <button
-                  id="ig-generate-btn"
-                  disabled={igLoading || !igUrl.trim()}
+                  disabled={igLoading || igImages.length === 0}
                   onClick={async () => {
-                    if (!vpsUrl) { setIgError("VPS URL not set — add it in Settings"); return; }
-                    setIgLoading(true); setIgError(""); setIgResult(null); setIgCopied(false);
+                    setIgLoading(true); setIgError(""); setIgDraft(""); setIgCopied(false);
                     try {
                       const r = await fetch("/api/index?service=instagram-scrape", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ instagramUrl: igUrl.trim(), vpsUrl, agentSecret }),
+                        body: JSON.stringify({ images: igImages.map(i => ({ data: i.data, mediaType: i.mediaType })), caption: igCaption }),
                       });
                       const data = await r.json();
                       if (!r.ok) throw new Error(data.error || "Failed");
-                      setIgResult(data);
+                      setIgDraft(data.draft || "");
                     } catch (e) {
                       setIgError(e.message);
                     } finally {
                       setIgLoading(false);
                     }
                   }}
-                  style={{ padding: "7px 14px", background: igLoading || !igUrl.trim() ? "#111" : "#FF6B2B18", border: `1px solid ${igLoading || !igUrl.trim() ? "#1A1A1A" : "#FF6B2B50"}`, borderRadius: 6, color: igLoading || !igUrl.trim() ? "#444" : "#FF6B2B", fontSize: 11, cursor: igLoading || !igUrl.trim() ? "not-allowed" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                  style={{ padding: "7px 14px", background: igLoading || igImages.length === 0 ? "#111" : "#FF6B2B18", border: `1px solid ${igLoading || igImages.length === 0 ? "#1A1A1A" : "#FF6B2B50"}`, borderRadius: 6, color: igLoading || igImages.length === 0 ? "#444" : "#FF6B2B", fontSize: 11, cursor: igLoading || igImages.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit" }}
                 >
                   {igLoading ? "Generating..." : "Generate Post →"}
                 </button>
+                {(igImages.length > 0 || igDraft || igCaption) && (
+                  <button
+                    onClick={() => { setIgImages([]); setIgCaption(""); setIgDraft(""); setIgError(""); setIgCopied(false); }}
+                    style={{ padding: "7px 12px", background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 6, color: "#555", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+                  >Clear</button>
+                )}
               </div>
-              {igError && (
-                <div style={{ marginTop: 8, fontSize: 10, color: "#FF6B6B" }}>{igError}</div>
-              )}
-              {igResult && (
+
+              {igError && <div style={{ marginTop: 8, fontSize: 10, color: "#FF6B6B" }}>{igError}</div>}
+
+              {igDraft && (
                 <div style={{ marginTop: 10, background: "#0C0C0C", border: "1px solid #1E1E1E", borderRadius: 7, padding: "12px 14px" }}>
-                  {igResult.images?.length > 0 && (
-                    <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto" }}>
-                      {igResult.images.slice(0, 4).map((img, i) => (
-                        <img key={i} src={img} alt="" style={{ height: 56, width: 56, objectFit: "cover", borderRadius: 4, flexShrink: 0, border: "1px solid #1E1E1E" }} />
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ fontSize: 11, lineHeight: 1.7, color: "#C8C4BC", whiteSpace: "pre-wrap", marginBottom: 10 }}>
-                    {igResult.draft}
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(igResult.draft); setIgCopied(true); setTimeout(() => setIgCopied(false), 2000); }}
-                      style={{ padding: "5px 12px", background: igCopied ? "#34D39918" : "#0A0A0A", border: `1px solid ${igCopied ? "#34D39950" : "#222"}`, borderRadius: 5, color: igCopied ? "#34D399" : "#888", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}
-                    >
-                      {igCopied ? "Copied ✓" : "Copy Post"}
-                    </button>
-                    <button
-                      onClick={() => { setIgUrl(""); setIgResult(null); setIgError(""); }}
-                      style={{ padding: "5px 12px", background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 5, color: "#555", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}
-                    >
-                      Clear
-                    </button>
-                  </div>
+                  <div style={{ fontSize: 11, lineHeight: 1.7, color: "#C8C4BC", whiteSpace: "pre-wrap", marginBottom: 10 }}>{igDraft}</div>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(igDraft); setIgCopied(true); setTimeout(() => setIgCopied(false), 2000); }}
+                    style={{ padding: "5px 12px", background: igCopied ? "#34D39918" : "#0A0A0A", border: `1px solid ${igCopied ? "#34D39950" : "#222"}`, borderRadius: 5, color: igCopied ? "#34D399" : "#888", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}
+                  >{igCopied ? "Copied ✓" : "Copy Post"}</button>
                 </div>
               )}
             </div>

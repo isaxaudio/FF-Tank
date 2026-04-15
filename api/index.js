@@ -2971,36 +2971,17 @@ Style: concise, confident, executive-level, no fluff. Translate data into busine
 // 2. Passes images + caption to Claude vision
 // 3. Returns a ready-to-post LinkedIn draft using Isaac's writing framework
 async function handleInstagramScrape(req, res) {
-  const { instagramUrl, vpsUrl, agentSecret } = req.body || {};
-  if (!instagramUrl) return res.status(400).json({ error: 'instagramUrl required' });
-  if (!vpsUrl) return res.status(400).json({ error: 'vpsUrl required' });
+  // Accepts base64 screenshots directly — no scraping needed
+  const { images = [], caption = '' } = req.body || {};
+  if (!images.length) return res.status(400).json({ error: 'At least one image required' });
 
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (!anthropicKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
 
-  // Step 1: scrape Instagram via VPS Puppeteer
-  let scraped;
-  try {
-    const scrapeRes = await fetch(`${vpsUrl.replace(/\/$/, '')}/run/instagram-scrape`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(agentSecret ? { Authorization: `Bearer ${agentSecret}` } : {}),
-      },
-      body: JSON.stringify({ url: instagramUrl }),
-    });
-    scraped = await scrapeRes.json();
-    if (!scrapeRes.ok) return res.status(scrapeRes.status).json({ error: scraped.error || 'VPS scrape failed' });
-  } catch (e) {
-    return res.status(500).json({ error: `VPS unreachable: ${e.message}` });
-  }
-
-  const { caption = '', images = [], username = '' } = scraped;
-
-  // Step 2: build Claude message — images + caption → LinkedIn post
-  const imageBlocks = images.slice(0, 4).map(url => ({
+  // Build Claude image blocks from base64 uploads
+  const imageBlocks = images.slice(0, 4).map(img => ({
     type: 'image',
-    source: { type: 'url', url },
+    source: { type: 'base64', media_type: img.mediaType || 'image/jpeg', data: img.data },
   }));
 
   const LINKEDIN_FRAMEWORK = `LINKEDIN WRITING FRAMEWORK (Ana Andjelic style adapted for Isaac/Fatfish):
@@ -3022,11 +3003,9 @@ Every post should pass this test: one week later, can the audience explain the P
 
 ${LINKEDIN_FRAMEWORK}
 
-Below is an Instagram post (image(s) and caption) from Fatfish's feed. Your job is to transform it into a LinkedIn post that fits Isaac's voice and framework — not a caption rewrite, but a strategic thought leadership post that uses the event/moment as the raw material for insight.
+Below are screenshots from a Fatfish Instagram post. Your job is to transform them into a LinkedIn post that fits Isaac's voice and framework — not a caption rewrite, but a strategic thought leadership post that uses the event/moment as the raw material for insight.
 
-Instagram caption:
-${caption || '(no caption)'}
-${username ? `\nPosted by @${username}` : ''}
+${caption ? `Additional context from Isaac:\n${caption}\n` : 'Read the images for context — extract the event type, visual mood, and any visible caption text.'}
 
 Instructions:
 - Pick the best-fit post structure from the framework above
