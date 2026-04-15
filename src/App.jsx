@@ -8926,7 +8926,7 @@ Cite URLs.`;
                 value={igCaption}
                 onChange={e => setIgCaption(e.target.value)}
                 placeholder="Optional: paste caption or add context..."
-                rows={2}
+                rows={1}
                 style={{ width: "100%", padding: "7px 10px", background: "#0C0C0C", border: "1px solid #1A1A1A", borderRadius: 6, color: "#B8B4AC", fontSize: 10, fontFamily: "inherit", outline: "none", resize: "none", boxSizing: "border-box", marginBottom: 8 }}
               />
 
@@ -8965,12 +8965,17 @@ Cite URLs.`;
               {igError && <div style={{ marginTop: 8, fontSize: 10, color: "#FF6B6B" }}>{igError}</div>}
 
               {igDraft && (
-                <div style={{ marginTop: 10, background: "#0C0C0C", border: "1px solid #1E1E1E", borderRadius: 7, padding: "12px 14px" }}>
-                  <div style={{ fontSize: 11, lineHeight: 1.7, color: "#C8C4BC", whiteSpace: "pre-wrap", marginBottom: 10 }}>{igDraft}</div>
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(igDraft); setIgCopied(true); setTimeout(() => setIgCopied(false), 2000); }}
-                    style={{ padding: "5px 12px", background: igCopied ? "#34D39918" : "#0A0A0A", border: `1px solid ${igCopied ? "#34D39950" : "#222"}`, borderRadius: 5, color: igCopied ? "#34D399" : "#888", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}
-                  >{igCopied ? "Copied ✓" : "Copy Post"}</button>
+                <div style={{ marginTop: 10, background: "#0C0C0C", border: "1px solid #1E1E1E", borderRadius: 7, overflow: "hidden" }}>
+                  {/* Copy button pinned at top so it's always visible */}
+                  <div style={{ padding: "8px 12px", borderBottom: "1px solid #161616", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 9, color: "#555", letterSpacing: "1px" }}>DRAFT</span>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(igDraft); setIgCopied(true); setTimeout(() => setIgCopied(false), 2000); }}
+                      style={{ padding: "4px 12px", background: igCopied ? "#34D39918" : "#111", border: `1px solid ${igCopied ? "#34D39950" : "#222"}`, borderRadius: 5, color: igCopied ? "#34D399" : "#888", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}
+                    >{igCopied ? "Copied ✓" : "Copy Post"}</button>
+                  </div>
+                  {/* Scrollable draft text — max height so it never pushes buttons off screen */}
+                  <div style={{ padding: "12px 14px", maxHeight: 180, overflowY: "auto", fontSize: 11, lineHeight: 1.7, color: "#C8C4BC", whiteSpace: "pre-wrap" }}>{igDraft}</div>
                 </div>
               )}
             </div>
