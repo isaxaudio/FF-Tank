@@ -7305,6 +7305,11 @@ export default function FFTank() {
   const [smugmugKey, setSmugmugKey] = useState(() => localStorage.getItem("smugmugKey") || "");
   const [smugmugSecret, setSmugmugSecret] = useState(() => localStorage.getItem("smugmugSecret") || "");
   const [smugmugUsername, setSmugmugUsername] = useState(() => localStorage.getItem("smugmugUsername") || "");
+  const [igUrl, setIgUrl] = useState("");
+  const [igLoading, setIgLoading] = useState(false);
+  const [igResult, setIgResult] = useState(null); // { draft, caption, images, username }
+  const [igError, setIgError] = useState("");
+  const [igCopied, setIgCopied] = useState(false);
   const chatRef = useRef(null);
 
   const agent = agents.find(a => a.id === activeId) || { icon: "◉", color: "#FF6B2B", name: "Home", subtitle: "Daily brief", tasks: [], model: "claude", flow: null };
@@ -8826,6 +8831,78 @@ Cite URLs.`;
           </div>
           {/* Flywheel */}
           <FlywheelIndicator activeFlow={agent.flow} />
+
+          {/* Instagram → LinkedIn tool — builder only */}
+          {activeId === "builder" && (
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid #0D0D0D", background: "#070707", flexShrink: 0 }}>
+              <div style={{ fontSize: 9, color: "#FF6B2B", letterSpacing: "2px", marginBottom: 8 }}>INSTAGRAM → LINKEDIN</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  value={igUrl}
+                  onChange={e => { setIgUrl(e.target.value); setIgError(""); setIgResult(null); }}
+                  placeholder="Paste Instagram post URL..."
+                  style={{ flex: 1, padding: "7px 10px", background: "#0C0C0C", border: "1px solid #1E1E1E", borderRadius: 6, color: "#E8E4DC", fontSize: 11, fontFamily: "inherit", outline: "none" }}
+                  onKeyDown={e => e.key === "Enter" && !igLoading && igUrl && runIgScrape()}
+                />
+                <button
+                  disabled={igLoading || !igUrl.trim()}
+                  onClick={async () => {
+                    if (!vpsUrl) { setIgError("VPS URL not set — add it in Settings"); return; }
+                    setIgLoading(true); setIgError(""); setIgResult(null); setIgCopied(false);
+                    try {
+                      const r = await fetch("/api/index?service=instagram-scrape", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ instagramUrl: igUrl.trim(), vpsUrl, agentSecret }),
+                      });
+                      const data = await r.json();
+                      if (!r.ok) throw new Error(data.error || "Failed");
+                      setIgResult(data);
+                    } catch (e) {
+                      setIgError(e.message);
+                    } finally {
+                      setIgLoading(false);
+                    }
+                  }}
+                  style={{ padding: "7px 14px", background: igLoading || !igUrl.trim() ? "#111" : "#FF6B2B18", border: `1px solid ${igLoading || !igUrl.trim() ? "#1A1A1A" : "#FF6B2B50"}`, borderRadius: 6, color: igLoading || !igUrl.trim() ? "#444" : "#FF6B2B", fontSize: 11, cursor: igLoading || !igUrl.trim() ? "not-allowed" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                >
+                  {igLoading ? "Generating..." : "Generate Post →"}
+                </button>
+              </div>
+              {igError && (
+                <div style={{ marginTop: 8, fontSize: 10, color: "#FF6B6B" }}>{igError}</div>
+              )}
+              {igResult && (
+                <div style={{ marginTop: 10, background: "#0C0C0C", border: "1px solid #1E1E1E", borderRadius: 7, padding: "12px 14px" }}>
+                  {igResult.images?.length > 0 && (
+                    <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto" }}>
+                      {igResult.images.slice(0, 4).map((img, i) => (
+                        <img key={i} src={img} alt="" style={{ height: 56, width: 56, objectFit: "cover", borderRadius: 4, flexShrink: 0, border: "1px solid #1E1E1E" }} />
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, lineHeight: 1.7, color: "#C8C4BC", whiteSpace: "pre-wrap", marginBottom: 10 }}>
+                    {igResult.draft}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(igResult.draft); setIgCopied(true); setTimeout(() => setIgCopied(false), 2000); }}
+                      style={{ padding: "5px 12px", background: igCopied ? "#34D39918" : "#0A0A0A", border: `1px solid ${igCopied ? "#34D39950" : "#222"}`, borderRadius: 5, color: igCopied ? "#34D399" : "#888", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}
+                    >
+                      {igCopied ? "Copied ✓" : "Copy Post"}
+                    </button>
+                    <button
+                      onClick={() => { setIgUrl(""); setIgResult(null); setIgError(""); }}
+                      style={{ padding: "5px 12px", background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 5, color: "#555", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Task chips */}
           {agent.tasks.length > 0 && (
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap", padding: "6px 16px", borderBottom: "1px solid #0D0D0D", background: "#070707", flexShrink: 0 }}>

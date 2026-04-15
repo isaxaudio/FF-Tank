@@ -41,6 +41,7 @@ module.exports = async (req, res) => {
       case 'agent-setup':    return await handleAgentSetup(req, res);
       case 'agent-run':      return await handleAgentRun(req, res);
       case 'agent-tools':    return await handleAgentTools(req, res);
+      case 'instagram-scrape': return await handleInstagramScrape(req, res);
       default:
         return res.status(400).json({ error: `Unknown service: "${service}"` });
     }
@@ -2963,4 +2964,115 @@ Style: concise, confident, executive-level, no fluff. Translate data into busine
   }
 
   return res.status(500).json({ error: 'Max tool rounds reached' });
+}
+
+// ─── Instagram → LinkedIn handler ──────────────────────────────────────────
+// 1. Calls VPS /run/instagram-scrape to get caption + image URLs via Puppeteer
+// 2. Passes images + caption to Claude vision
+// 3. Returns a ready-to-post LinkedIn draft using Isaac's writing framework
+async function handleInstagramScrape(req, res) {
+  const { instagramUrl, vpsUrl, agentSecret } = req.body || {};
+  if (!instagramUrl) return res.status(400).json({ error: 'instagramUrl required' });
+  if (!vpsUrl) return res.status(400).json({ error: 'vpsUrl required' });
+
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (!anthropicKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+
+  // Step 1: scrape Instagram via VPS Puppeteer
+  let scraped;
+  try {
+    const scrapeRes = await fetch(`${vpsUrl.replace(/\/$/, '')}/run/instagram-scrape`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(agentSecret ? { Authorization: `Bearer ${agentSecret}` } : {}),
+      },
+      body: JSON.stringify({ url: instagramUrl }),
+    });
+    scraped = await scrapeRes.json();
+    if (!scrapeRes.ok) return res.status(scrapeRes.status).json({ error: scraped.error || 'VPS scrape failed' });
+  } catch (e) {
+    return res.status(500).json({ error: `VPS unreachable: ${e.message}` });
+  }
+
+  const { caption = '', images = [], username = '' } = scraped;
+
+  // Step 2: build Claude message — images + caption → LinkedIn post
+  const imageBlocks = images.slice(0, 4).map(url => ({
+    type: 'image',
+    source: { type: 'url', url },
+  }));
+
+  const LINKEDIN_FRAMEWORK = `LINKEDIN WRITING FRAMEWORK (Ana Andjelic style adapted for Isaac/Fatfish):
+
+Post structures to rotate:
+1. Provocation + Redefinition: Hook with a contrarian claim → 2-3 observations → new lens → close with implication
+2. Case Snapshot → Principle: Named event/client moment → why it mattered → transferable rule → "if you lead X, here's the implication"
+3. Myth Busting: Popular assumption → second-order costs → strategic reframe → 3 actionable moves
+4. Framework Post: "3 things / 4 layers" → fast definitions → prioritization → invite debate
+5. Question-led: Sharp strategic question → scenario paths → best path → "what are you seeing?"
+
+Tone: Analytical, assertive, occasionally contrarian. High signal, low fluff. Diagnostic not motivational. Confident without self-promotion. Lead with a claim not a personal anecdote.
+
+Recurring Fatfish IP terms: "event gravity," "narrative yield," "format equity," "experiential legibility"
+
+Every post should pass this test: one week later, can the audience explain the POV in one sentence?`;
+
+  const promptText = `You are writing a LinkedIn post for Isaac Gonzalez, Founder/CMO of Fatfish — a full-service event production company in Salt Lake City (AV, lighting, staging, video, experiential). Clients include WGU, Huntsman, Fox Pest Control, TEDx, Utah Jazz/SEG Group.
+
+${LINKEDIN_FRAMEWORK}
+
+Below is an Instagram post (image(s) and caption) from Fatfish's feed. Your job is to transform it into a LinkedIn post that fits Isaac's voice and framework — not a caption rewrite, but a strategic thought leadership post that uses the event/moment as the raw material for insight.
+
+Instagram caption:
+${caption || '(no caption)'}
+${username ? `\nPosted by @${username}` : ''}
+
+Instructions:
+- Pick the best-fit post structure from the framework above
+- Lead with a strong hook (claim or provocation, not "We produced...")
+- Use the event/image as the proof point or case moment, not the headline
+- 150–250 words max
+- End with a clean close — no hashtag spam (2–3 max, relevant only)
+- Do not use exclamation marks
+- Output the post text only, ready to paste into LinkedIn`;
+
+  const messageContent = [
+    ...imageBlocks,
+    { type: 'text', text: promptText },
+  ];
+
+  // Step 3: call Claude
+  let draft = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+  try {
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
+        messages: [{ role: 'user', content: messageContent }],
+      }),
+    });
+    const claudeData = await claudeRes.json();
+    draft = claudeData.content?.find(b => b.type === 'text')?.text || '';
+    inputTokens = claudeData.usage?.input_tokens || 0;
+    outputTokens = claudeData.usage?.output_tokens || 0;
+  } catch (e) {
+    return res.status(500).json({ error: `Claude call failed: ${e.message}` });
+  }
+
+  return res.json({
+    draft,
+    caption,
+    images,
+    username,
+    usage: { input_tokens: inputTokens, output_tokens: outputTokens },
+  });
 }

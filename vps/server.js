@@ -336,6 +336,83 @@ app.post('/configure', auth, async (req, res) => {
   }
 });
 
+// ─── Instagram scrape endpoint ───────────────────────────────────────────────
+// Launches Puppeteer to extract caption + image URLs from a public Instagram post.
+// Returns: { caption, images: [url, ...], username }
+app.post('/run/instagram-scrape', auth, async (req, res) => {
+  const { url } = req.body || {};
+  if (!url || !url.includes('instagram.com')) {
+    return res.status(400).json({ error: 'Valid Instagram URL required' });
+  }
+
+  let browser;
+  try {
+    const puppeteer = require('puppeteer');
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--window-size=1280,800',
+      ],
+    });
+
+    const page = await browser.newPage();
+    await page.setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
+    await page.setViewport({ width: 1280, height: 800 });
+
+    // Navigate with a generous timeout
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    // Give JS a moment to hydrate meta tags
+    await new Promise(r => setTimeout(r, 2000));
+
+    const result = await page.evaluate(() => {
+      const getMeta = (prop) =>
+        document.querySelector(`meta[property="${prop}"]`)?.getAttribute('content') ||
+        document.querySelector(`meta[name="${prop}"]`)?.getAttribute('content') || '';
+
+      const caption = getMeta('og:description');
+      const mainImage = getMeta('og:image');
+      const title = getMeta('og:title'); // often "Photo by @username on Instagram"
+
+      // Extract username from title or URL
+      const usernameMatch = title.match(/@([\w.]+)/) || window.location.pathname.match(/\/([\w.]+)\//);
+      const username = usernameMatch ? usernameMatch[1] : '';
+
+      // Collect all carousel images if present (Instagram loads them as img tags)
+      const imgEls = Array.from(document.querySelectorAll('img[srcset], article img'));
+      const carouselImages = imgEls
+        .map(img => img.src)
+        .filter(src => src && (src.includes('cdninstagram') || src.includes('fbcdn')) && src.includes('http'))
+        .filter((src, i, arr) => arr.indexOf(src) === i) // dedupe
+        .slice(0, 6); // max 6 images
+
+      const images = carouselImages.length > 0 ? carouselImages : (mainImage ? [mainImage] : []);
+
+      return { caption, images, username };
+    });
+
+    await browser.close();
+    browser = null;
+
+    if (!result.caption && result.images.length === 0) {
+      return res.status(422).json({ error: 'Could not extract content — post may be private or login-gated' });
+    }
+
+    log('instagram-scrape', `scraped ${result.images.length} image(s) from ${url}`);
+    res.json(result);
+  } catch (e) {
+    if (browser) { try { await browser.close(); } catch {} }
+    log('instagram-scrape', `error: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Cleanup stuck jobs ───────────────────────────────────────────────────────
 // Marks any job_run stuck in 'running' for more than 15 minutes as 'failed'.
 // Called by the UI Retry button or manually to clear zombie runs.
