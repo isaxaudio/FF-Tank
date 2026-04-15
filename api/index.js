@@ -3049,9 +3049,6 @@ Instructions:
 
   return res.json({
     draft,
-    caption,
-    images,
-    username,
     usage: { input_tokens: inputTokens, output_tokens: outputTokens },
   });
 }
