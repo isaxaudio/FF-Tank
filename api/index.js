@@ -18,6 +18,34 @@ const cachedTools = (tools) => tools.map((t, i) =>
   i === tools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
 );
 
+// ─── OpenAI shared helpers ────────────────────────────────────────────────────
+// GPT-4o-mini is used for high-volume, low-complexity tasks: lead scoring,
+// data extraction, simple classification. ~20x cheaper than Sonnet.
+const OPENAI_HEADERS = (key) => ({
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${key || process.env.OPENAI_API_KEY || ''}`,
+});
+// Call GPT-4o-mini and return the raw response object (preserves usage for logging).
+const gptMini = async (system, user, maxTokens = 500) => {
+  const key = process.env.OPENAI_API_KEY || '';
+  if (!key) throw new Error('OPENAI_API_KEY not set');
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: OPENAI_HEADERS(key),
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      max_tokens: maxTokens,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user',   content: user },
+      ],
+    }),
+  });
+  return r.json();
+};
+// Extract text content from a GPT-4o-mini response.
+const gptText = (d) => d.choices?.[0]?.message?.content || '';
+
 module.exports = async (req, res) => {
   const service = req.query.service || '';
   const path = (req.query.p || '').replace(/^\//, '');
@@ -297,8 +325,8 @@ async function handleQualify(req, res) {
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_ANON_KEY;
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (!supabaseUrl || !supabaseKey || !anthropicKey) return res.status(500).json({ error: 'Missing env vars' });
+  const openaiKey   = process.env.OPENAI_API_KEY;
+  if (!supabaseUrl || !supabaseKey || !openaiKey) return res.status(500).json({ error: 'Missing env vars' });
 
   const base = supabaseUrl.replace(/\/$/, '');
   const sbH = { 'Content-Type': 'application/json', 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` };
@@ -343,18 +371,8 @@ Be practical and honest. Do not invent data. Use null for dates when not clearly
     const signal = opp.signal || opp.notes || '';
     if (!signal.trim() && !opp.title) { skipped++; continue; }
     try {
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: ANTHROPIC_HEADERS(anthropicKey),
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 500,
-          system: cachedSystem(SYSTEM),
-          messages: [{ role: 'user', content: `Company: ${opp.company || 'unknown'}\nTitle: ${opp.title || ''}\nSignal: ${signal.slice(0, 700)}\nSource: ${opp.source || ''}` }],
-        }),
-      });
-      const d = await r.json();
-      const text = d.content?.find(b => b.type === 'text')?.text || '';
+      const d = await gptMini(SYSTEM, `Company: ${opp.company || 'unknown'}\nTitle: ${opp.title || ''}\nSignal: ${signal.slice(0, 700)}\nSource: ${opp.source || ''}`, 500);
+      const text = gptText(d);
       const intel = JSON.parse(text.replace(/```json|```/g, '').trim());
 
       // Sanitize enum fields — fall back to 'unknown' / 'watch only' if model drifts
@@ -645,20 +663,12 @@ async function handleFlexLookalike(req, res) {
   let targetOrgs = [];
   if (growthInsight && growthInsight.length > 50) {
     try {
-      const extractR = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: ANTHROPIC_HEADERS(anthropicKey),
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 300,
-          messages: [{
-            role: 'user',
-            content: `Extract all named organizations mentioned as lookalike prospects, dormant clients, or specific target companies from this text. Return ONLY a valid JSON array of strings with organization names. No explanation, no markdown, just the array.\n\nText:\n${growthInsight.slice(0, 3000)}`,
-          }],
-        }),
-      });
-      const extractD = await extractR.json();
-      const extractText = extractD.content?.find(b => b.type === 'text')?.text || '[]';
+      const extractD = await gptMini(
+        'You extract named organizations from text. Return ONLY a valid JSON array of strings. No explanation, no markdown.',
+        `Extract all named organizations mentioned as lookalike prospects, dormant clients, or specific target companies from this text. Return ONLY a valid JSON array of strings with organization names.\n\nText:\n${growthInsight.slice(0, 3000)}`,
+        300,
+      );
+      const extractText = gptText(extractD) || '[]';
       const match = extractText.match(/\[[\s\S]*?\]/);
       if (match) {
         const parsed = JSON.parse(match[0]);
@@ -1612,9 +1622,9 @@ async function handleSalesBrief(req, res) {
 
   const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
   const sbKey  = process.env.SUPABASE_ANON_KEY || '';
-  const anthKey = process.env.ANTHROPIC_API_KEY || '';
+  const oaiKey = process.env.OPENAI_API_KEY || '';
   if (!sbBase || !sbKey) return res.status(500).json({ error: 'Supabase not configured' });
-  if (!anthKey)          return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+  if (!oaiKey)           return res.status(500).json({ error: 'OPENAI_API_KEY not set' });
 
   const sbH = { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` };
   const { opportunity, assigned_to = 'Chase', priority = 'medium' } = req.body || {};
@@ -1684,26 +1694,21 @@ Return ONLY valid JSON in this exact shape — no markdown, no commentary:
 }`;
 
   const start = Date.now();
-  const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: ANTHROPIC_HEADERS(anthKey),
-    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 600, messages: [{ role: 'user', content: prompt }] }),
-  });
-  const claudeData = await claudeRes.json();
-  const rawText = claudeData.content?.find(b => b.type === 'text')?.text || '{}';
+  const claudeData = await gptMini('You are a sales brief generator. Return only valid JSON — no markdown, no commentary.', prompt, 600);
+  const rawText = gptText(claudeData) || '{}';
 
   let briefFields = {};
   try { briefFields = JSON.parse(rawText.replace(/^```json\n?|```$/g, '').trim()); } catch {}
 
-  // Log token usage
+  // Log token usage (OpenAI response shape: usage.prompt_tokens / completion_tokens)
   if (claudeData.usage && sbBase && sbKey) {
-    const inT = claudeData.usage.input_tokens || 0;
-    const outT = claudeData.usage.output_tokens || 0;
-    const cost = (inT * 0.8 + outT * 4.0) / 1_000_000;
+    const inT  = claudeData.usage.prompt_tokens     || 0;
+    const outT = claudeData.usage.completion_tokens || 0;
+    const cost = (inT * 0.15 + outT * 0.6) / 1_000_000; // gpt-4o-mini rates
     fetch(`${sbBase}/rest/v1/job_runs`, {
       method: 'POST',
       headers: { ...sbH, 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ job_name: 'sales-brief', provider: 'anthropic', model: 'claude-haiku-4-5-20251001', input_tokens: inT, output_tokens: outT, total_tokens: inT + outT, estimated_cost: cost, duration_ms: Date.now() - start, status: 'completed', triggered_by: 'ui', created_at: new Date().toISOString(), completed_at: new Date().toISOString() }),
+      body: JSON.stringify({ job_name: 'sales-brief', provider: 'openai', model: 'gpt-4o-mini', input_tokens: inT, output_tokens: outT, total_tokens: inT + outT, estimated_cost: cost, duration_ms: Date.now() - start, status: 'completed', triggered_by: 'ui', created_at: new Date().toISOString(), completed_at: new Date().toISOString() }),
     }).catch(() => {});
   }
 
