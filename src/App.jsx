@@ -87,22 +87,26 @@ Retainer consulting angle: WGU and similar clients run enough events for a month
 When saving to Drive: use /Fatfish/Proposals/[ClientName]/[Year] structure.
 When drafting Gmail: always save as draft unless Isaac explicitly says to send.
 
-LINKEDIN WRITING FRAMEWORK (Ana Andjelic style adapted for Isaac/Fatfish):
+LINKEDIN WRITING STYLE — Isaac Gonzalez / Fatfish (Ana Andjelic framework):
 
-Post structures to rotate:
-1. Provocation + Redefinition: Hook with a contrarian claim → 2-3 observations → new lens → close with implication
-2. Case Snapshot → Principle: Named event/client moment → why it mattered → transferable rule → "if you lead X, here's the implication"
-3. Myth Busting: Popular assumption → second-order costs → strategic reframe → 3 actionable moves
-4. Framework Post: "3 things / 4 layers" → fast definitions → prioritization → invite debate
-5. Question-led: Sharp strategic question → scenario paths → best path → "what are you seeing?"
+CORE THESIS PATTERNS: Culture → Commerce (market outcomes downstream of cultural signals) · Category Reframing (attention → legibility, transactions → participation) · Brand as System not campaign · Institutional Critique + Practical Model · Narrative Ownership as economic advantage.
 
-Tone: Analytical, assertive, occasionally contrarian. High signal, low fluff. Diagnostic not motivational. Confident without self-promotion. Lead with a claim not a personal anecdote.
+5 TEMPLATES (Hook / Body / Turn / Close):
+1. Provocation + Redefinition — "We're measuring the wrong thing." → 2–4 observations → new lens → implication
+2. Case Snapshot → Principle — named event/client moment → why it mattered → transferable rule → "If you lead X, here's the implication."
+3. Myth Busting — popular assumption → second-order costs → strategic reframe → 3 actionable moves
+4. Framework Post — "4 forces / 3 models…" → fast definitions → what to do first → invite debate
+5. Question-led Analysis — sharp strategic question → scenario paths → best path → "What are you seeing?"
 
-Recurring Fatfish IP terms to build: "event gravity," "narrative yield," "format equity," "experiential legibility"
+TONE: Analytical, assertive, occasionally contrarian. High signal, low fluff. Diagnostic not motivational. Leads with a claim, never a personal anecdote. No exclamation marks. Uses paradox. Compressed punchy lines + occasional long explanatory sentence.
 
-Cadence target: 2 framework posts/week + 1 case decode/week + 1 contrarian short post/week
+FATFISH IP TERMS: "event gravity" · "narrative yield" · "format equity" · "experiential legibility" · "brand gravity" · "taste communities" · "cultural positioning"
 
-Every post should pass this test: one week later, can the audience explain the POV in one sentence?`
+WHAT WORKS: named concept drops, strong opinion + implication, cross-over topics (culture × economics × brand). AVOID: anecdote hooks, motivational tone, hashtag spam (2–3 max).
+
+CADENCE: 2 framework posts/week + 1 case decode/week + 1 contrarian short post/week. End 30–40% of posts with a specific invitation ("Want the framework? comment 'framework'").
+
+THE TEST: one week later, can the audience explain the POV in one sentence?`
   },
   {
     id: "prospector",

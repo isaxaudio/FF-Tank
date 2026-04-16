@@ -2984,20 +2984,37 @@ async function handleInstagramScrape(req, res) {
     source: { type: 'base64', media_type: img.mediaType || 'image/jpeg', data: img.data },
   }));
 
-  const LINKEDIN_FRAMEWORK = `LINKEDIN WRITING FRAMEWORK (Ana Andjelic style adapted for Isaac/Fatfish):
+  const LINKEDIN_FRAMEWORK = `WRITING STYLE — Isaac Gonzalez / Fatfish (Ana Andjelic framework adapted for event production):
 
-Post structures to rotate:
-1. Provocation + Redefinition: Hook with a contrarian claim → 2-3 observations → new lens → close with implication
-2. Case Snapshot → Principle: Named event/client moment → why it mattered → transferable rule → "if you lead X, here's the implication"
-3. Myth Busting: Popular assumption → second-order costs → strategic reframe → 3 actionable moves
-4. Framework Post: "3 things / 4 layers" → fast definitions → prioritization → invite debate
-5. Question-led: Sharp strategic question → scenario paths → best path → "what are you seeing?"
+CORE THESIS PATTERNS (rotate these angles):
+- Culture → Commerce: market outcomes are downstream of cultural signals. What looks like production is actually social system design.
+- Category Reframing: binary contrasts — attention → legibility · transactions → participation · growth hacking → culture hacking
+- Brand as System: brand = operating model, not campaign. Ongoing world-building, repeated motifs.
+- Institutional Critique + Practical Model: identify stale industry behavior → explain why it fails structurally → offer a framework
+- Narrative Ownership: owning narrative context raises pricing power and long-term resilience.
 
-Tone: Analytical, assertive, occasionally contrarian. High signal, low fluff. Diagnostic not motivational. Confident without self-promotion. Lead with a claim not a personal anecdote.
+5 TEMPLATES (Hook / Body / Turn / Close):
+1. Provocation + Redefinition — Hook: "We're measuring the wrong thing." · Body: 2–4 observations from market behavior · Turn: introduce new lens · Close: implication
+2. Case Snapshot → Principle — Hook: named event/client moment · Body: why it mattered culturally/economically · Turn: transferable rule · Close: "If you lead X, here's the implication."
+3. Myth Busting — Hook: popular assumption ("events are just logistics") · Body: second-order costs · Turn: strategic reframe · Close: 3 actionable moves
+4. Framework Post — Hook: "4 forces / 3 models…" · Body: fast definitions + examples · Turn: what to do first · Close: invite debate
+5. Question-led Analysis — Hook: sharp strategic question · Body: scenario paths · Turn: best path · Close: "What are you seeing?"
 
-Recurring Fatfish IP terms: "event gravity," "narrative yield," "format equity," "experiential legibility"
+TONE:
+- Analytical, assertive, occasionally contrarian. High signal, low fluff. Diagnostic not motivational.
+- Leads with a claim, never a personal anecdote. Confident without self-promotion.
+- Uses paradox ("most scalable thing may be specificity"). No exclamation marks.
+- Compressed punchy lines + occasional long explanatory sentence.
 
-Every post should pass this test: one week later, can the audience explain the POV in one sentence?`;
+FATFISH IP TERMS TO USE: "event gravity" · "narrative yield" · "format equity" · "experiential legibility" · "brand gravity" · "taste communities" · "cultural positioning"
+
+WHAT WORKS: named concept drops, strong opinion + implication, cross-over topics (culture × economics × brand leadership), timely strategic debates.
+AVOID: personal anecdotes as hooks, motivational tone, hashtag spam (2–3 max), exclamation marks.
+
+CADENCE TARGET: 2 framework posts/week + 1 case decode/week + 1 contrarian short post/week.
+End ~30–40% of posts with a specific invitation ("Want the framework? comment 'framework'").
+
+THE TEST: one week later, can the audience explain the POV in one sentence?`;
 
   const promptText = `You are writing a LinkedIn post for Isaac Gonzalez, Founder/CMO of Fatfish — a full-service event production company in Salt Lake City (AV, lighting, staging, video, experiential). Clients include WGU, Huntsman, Fox Pest Control, TEDx, Utah Jazz/SEG Group.
 
