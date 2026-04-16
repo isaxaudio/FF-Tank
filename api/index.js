@@ -46,6 +46,45 @@ const gptMini = async (system, user, maxTokens = 500) => {
 // Extract text content from a GPT-4o-mini response.
 const gptText = (d) => d.choices?.[0]?.message?.content || '';
 
+// ─── Unified run logger ───────────────────────────────────────────────────────
+// Writes one job_runs row per handler call. Fire-and-forget, never throws.
+// handler  — human name matching the function (e.g. 'handleQualify')
+// provider — 'openai' | 'anthropic'
+// model    — exact model string used
+// inT/outT — token counts (aggregated for multi-round/looped calls)
+// durationMs — wall time for the full handler or sub-call
+// success  — true = completed, false = failed/truncated
+const COST_RATES = {
+  'claude-sonnet-4-6':         { input: 3.0,  output: 15.0 },
+  'claude-haiku-4-5-20251001': { input: 0.8,  output: 4.0  },
+  'gpt-4o-mini':               { input: 0.15, output: 0.6  },
+};
+const logRun = (handler, provider, model, inT, outT, durationMs, success) => {
+  const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+  const sbKey  = process.env.SUPABASE_ANON_KEY || '';
+  if (!sbBase || !sbKey) return;
+  const r    = COST_RATES[model] || { input: 0, output: 0 };
+  const cost = (inT * r.input + outT * r.output) / 1_000_000;
+  fetch(`${sbBase}/rest/v1/job_runs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: sbKey, Authorization: `Bearer ${sbKey}`, Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      job_name:       handler,
+      provider,
+      model,
+      input_tokens:   inT,
+      output_tokens:  outT,
+      total_tokens:   inT + outT,
+      estimated_cost: cost,
+      duration_ms:    durationMs,
+      status:         success ? 'completed' : 'failed',
+      triggered_by:   'ui',
+      created_at:     new Date().toISOString(),
+      completed_at:   new Date().toISOString(),
+    }),
+  }).catch(() => {});
+};
+
 module.exports = async (req, res) => {
   const service = req.query.service || '';
   const path = (req.query.p || '').replace(/^\//, '');
@@ -366,12 +405,16 @@ Be practical and honest. Do not invent data. Use null for dates when not clearly
   const VALID_TIMELINES    = new Set(['immediate', '30 days', '60-90 days', '6+ months', 'unknown']);
   const VALID_NEXT_STEPS   = new Set(['draft outreach', 'enrich contact', 'send to sales', 'watch only', 'add to targets']);
 
+  const qualifyStart = Date.now();
+  let totalQualifyIn = 0, totalQualifyOut = 0;
   let qualified = 0, skipped = 0;
   for (const opp of opps) {
     const signal = opp.signal || opp.notes || '';
     if (!signal.trim() && !opp.title) { skipped++; continue; }
     try {
       const d = await gptMini(SYSTEM, `Company: ${opp.company || 'unknown'}\nTitle: ${opp.title || ''}\nSignal: ${signal.slice(0, 700)}\nSource: ${opp.source || ''}`, 500);
+      totalQualifyIn  += d.usage?.prompt_tokens     || 0;
+      totalQualifyOut += d.usage?.completion_tokens || 0;
       const text = gptText(d);
       const intel = JSON.parse(text.replace(/```json|```/g, '').trim());
 
@@ -405,6 +448,7 @@ Be practical and honest. Do not invent data. Use null for dates when not clearly
       skipped++;
     }
   }
+  logRun('handleQualify', 'openai', 'gpt-4o-mini', totalQualifyIn, totalQualifyOut, Date.now() - qualifyStart, true);
   return res.status(200).json({ qualified, skipped, total: opps.length });
 }
 
@@ -663,11 +707,15 @@ async function handleFlexLookalike(req, res) {
   let targetOrgs = [];
   if (growthInsight && growthInsight.length > 50) {
     try {
+      const extractStart = Date.now();
       const extractD = await gptMini(
         'You extract named organizations from text. Return ONLY a valid JSON array of strings. No explanation, no markdown.',
         `Extract all named organizations mentioned as lookalike prospects, dormant clients, or specific target companies from this text. Return ONLY a valid JSON array of strings with organization names.\n\nText:\n${growthInsight.slice(0, 3000)}`,
         300,
       );
+      logRun('handleFlexLookalike-extract', 'openai', 'gpt-4o-mini',
+        extractD.usage?.prompt_tokens || 0, extractD.usage?.completion_tokens || 0,
+        Date.now() - extractStart, true);
       const extractText = gptText(extractD) || '[]';
       const match = extractText.match(/\[[\s\S]*?\]/);
       if (match) {
@@ -1177,6 +1225,9 @@ async function handleCeoBrain(req, res) {
     } catch { return []; }
   };
 
+  const ceoBrainStart = Date.now();
+  let ceoBrainIn = 0, ceoBrainOut = 0;
+
   const claude = async (prompt, maxTokens = 2000) => {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -1184,6 +1235,8 @@ async function handleCeoBrain(req, res) {
       body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
     });
     const d = await r.json();
+    ceoBrainIn  += d.usage?.input_tokens  || 0;
+    ceoBrainOut += d.usage?.output_tokens || 0;
     return d.content?.find(b => b.type === 'text')?.text || '';
   };
 
@@ -1219,6 +1272,7 @@ async function handleCeoBrain(req, res) {
         `You are a competitive intelligence analyst for Fatfish, a full-service event production company in Salt Lake City. Competitors: Webb AV, Cornerstone AV, RMNG, Encore.\n\nAnalyze these competitor signals and summarize what they mean for Fatfish. Focus on: hiring patterns, new markets entered, strategic moves, and specific threats or opportunities.\n\nBe direct and specific. Format as bullet points grouped by competitor. No # headers.\n\nSignals:\n${JSON.stringify(allResults, null, 2)}`,
         800
       );
+      logRun('handleCeoBrain', 'anthropic', 'claude-sonnet-4-6', ceoBrainIn, ceoBrainOut, Date.now() - ceoBrainStart, true);
       return res.status(200).json({ signals: allResults, synthesis });
     }
     return res.status(200).json({ signals: allResults, synthesis: 'No competitor signals found in this scan.' });
@@ -1251,6 +1305,7 @@ async function handleCeoBrain(req, res) {
       `You are a market intelligence analyst for Fatfish, a full-service event production company in Salt Lake City. Services: AV, lighting, staging, décor, video, experiential.\n\nAnalyze these industry signals and identify the top trends relevant to Fatfish. For each trend: name it clearly, explain what it means for a company like Fatfish, and suggest one specific action to capitalize on it.\n\nFormat as clean sections. No # headers.\n\nSignals:\n${JSON.stringify(allResults.slice(0, 15), null, 2)}`,
       1000
     );
+    logRun('handleCeoBrain', 'anthropic', 'claude-sonnet-4-6', ceoBrainIn, ceoBrainOut, Date.now() - ceoBrainStart, true);
     return res.status(200).json({ signals: allResults, synthesis });
   }
 
@@ -1332,6 +1387,7 @@ Expansion signals: ${JSON.stringify(expansionResults)}`,
     });
     const stored = await storeR.json();
 
+    logRun('handleCeoBrain', 'anthropic', 'claude-sonnet-4-6', ceoBrainIn, ceoBrainOut, Date.now() - ceoBrainStart, true);
     return res.status(200).json({ brief: Array.isArray(stored) ? stored[0] : stored, content: briefContent });
   }
 
@@ -1700,17 +1756,9 @@ Return ONLY valid JSON in this exact shape — no markdown, no commentary:
   let briefFields = {};
   try { briefFields = JSON.parse(rawText.replace(/^```json\n?|```$/g, '').trim()); } catch {}
 
-  // Log token usage (OpenAI response shape: usage.prompt_tokens / completion_tokens)
-  if (claudeData.usage && sbBase && sbKey) {
-    const inT  = claudeData.usage.prompt_tokens     || 0;
-    const outT = claudeData.usage.completion_tokens || 0;
-    const cost = (inT * 0.15 + outT * 0.6) / 1_000_000; // gpt-4o-mini rates
-    fetch(`${sbBase}/rest/v1/job_runs`, {
-      method: 'POST',
-      headers: { ...sbH, 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ job_name: 'sales-brief', provider: 'openai', model: 'gpt-4o-mini', input_tokens: inT, output_tokens: outT, total_tokens: inT + outT, estimated_cost: cost, duration_ms: Date.now() - start, status: 'completed', triggered_by: 'ui', created_at: new Date().toISOString(), completed_at: new Date().toISOString() }),
-    }).catch(() => {});
-  }
+  logRun('handleSalesBrief', 'openai', 'gpt-4o-mini',
+    claudeData.usage?.prompt_tokens || 0, claudeData.usage?.completion_tokens || 0,
+    Date.now() - start, true);
 
   const now = new Date().toISOString();
   const row = {
@@ -2938,6 +2986,8 @@ Style: concise, confident, executive-level, no fluff. Translate data into busine
   // Agentic loop — max 5 rounds to stay within Vercel timeout
   let msgs = messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }));
   let rounds = 0;
+  const chatStart = Date.now();
+  let chatIn = 0, chatOut = 0;
 
   while (rounds < 5) {
     rounds++;
@@ -2953,7 +3003,12 @@ Style: concise, confident, executive-level, no fluff. Translate data into busine
       }),
     });
     const claudeData = await claudeRes.json();
-    if (!claudeRes.ok) return res.status(500).json({ error: claudeData.error?.message || 'Claude error' });
+    if (!claudeRes.ok) {
+      logRun('handleChat', 'anthropic', 'claude-sonnet-4-6', chatIn, chatOut, Date.now() - chatStart, false);
+      return res.status(500).json({ error: claudeData.error?.message || 'Claude error' });
+    }
+    chatIn  += claudeData.usage?.input_tokens  || 0;
+    chatOut += claudeData.usage?.output_tokens || 0;
 
     const blocks = claudeData.content || [];
     const stopReason = claudeData.stop_reason;
@@ -2961,6 +3016,7 @@ Style: concise, confident, executive-level, no fluff. Translate data into busine
     // If Claude is done (no tool calls), return the text
     if (stopReason === 'end_turn' || !blocks.some(b => b.type === 'tool_use')) {
       const text = blocks.find(b => b.type === 'text')?.text || '';
+      logRun('handleChat', 'anthropic', 'claude-sonnet-4-6', chatIn, chatOut, Date.now() - chatStart, true);
       return res.json({
         reply: text,
         usage: claudeData.usage,
@@ -2984,6 +3040,7 @@ Style: concise, confident, executive-level, no fluff. Translate data into busine
     msgs.push({ role: 'user', content: toolResults });
   }
 
+  logRun('handleChat', 'anthropic', 'claude-sonnet-4-6', chatIn, chatOut, Date.now() - chatStart, false);
   return res.status(500).json({ error: 'Max tool rounds reached' });
 }
 
