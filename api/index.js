@@ -2285,30 +2285,39 @@ BUSINESS CONTEXT:
 - Existing clients: WGU, Huntsman Cancer Institute, TEDx, Fox Pest Control, Utah Jazz/SEG Group, Progressive Leasing
 - Competitors to monitor: Encore, Webb AV, Cornerstone AV, RMNG
 
-RESULT CLASSIFICATION — classify every search result before deciding what to do:
+RESULT EVALUATION — for every result returned by a search, you must emit a reasoning block before deciding what to do. No exceptions.
+
+Format exactly as:
+  RESULT: [title or URL]
+  search_query_used: [the exact query that surfaced this result]
+  why_this_result_was_selected: [one sentence — what in the result text made you look closer]
+  classification: actionable opportunity | portal | informational
+  why_it_is_actionable_or_not: [explicit reasoning — cite specific evidence from the source, not keywords. If you cannot point to a real deadline, scope, or submission path in the content, classify as not actionable.]
+
+Do not rely on keywords alone. A page titled "RFP" is not automatically actionable. Read what the page actually contains.
 
 CATEGORY 1 — ACTIONABLE OPPORTUNITY (save these only)
 - Has a specific event or project
-- Has at least TWO of the following (if fewer than two are present, do not save):
+- Has at least TWO of the following confirmed from the source content (not inferred):
     • A deadline or due date
     • A defined scope of work
     • A submission or bid instruction
     • A budget or contract reference
-→ Evaluate and save if it scores high enough.
+→ Emit reasoning block. Evaluate and save if it scores high enough.
 
 CATEGORY 2 — PORTAL / LISTING PAGE (do not save — navigate deeper)
 - A page that lists bids or RFPs but does not contain the actual opportunity details
 - Examples: procurement portals, bid listing indexes, search results pages
-→ Follow links to find the actual RFP document. If you find a Category 1 result there, evaluate it. If you reach a dead end or only find Category 3 pages, skip entirely.
+→ Emit reasoning block. Follow links to find the actual RFP document. If you find a Category 1 result there, evaluate it. If you reach a dead end or only find Category 3 pages, skip entirely.
 
 CATEGORY 3 — INFORMATIONAL / POLICY PAGE (reject immediately)
 - Procurement policies or vendor guidelines
 - Vendor registration or "become an approved vendor" pages
 - "How to do business with us" pages
 - Event calendars with no procurement context
-→ Do not save. Do not search deeper. Mark as not actionable and move on.
+→ Emit reasoning block. Do not save. Do not search deeper. Move on.
 
-Only call save_opportunity for Category 1 results.
+Only call save_opportunity for Category 1 results with explicit evidence in the reasoning block.
 
 LOW-VALUE — avoid unless strategic:
 - Commodity AV rental (projector, microphone-only bids)
@@ -2330,8 +2339,8 @@ EPISTEMIC DISCIPLINE:
 WORKFLOW PER SESSION:
 1. Call get_existing_opportunities once to load current pipeline
 2. Run 2–4 targeted web searches using search_web
-3. Evaluate results — score each against our ICP and service mix
-4. Save only 1–3 of the strongest (overall_score >= 6)
+3. For each result: emit the RESULT reasoning block before any save or skip decision
+4. Save only 1–3 of the strongest (overall_score >= 6, classification = actionable opportunity)
 5. For the single best opportunity saved, call execute_next_step to move pipeline forward
 6. Log all saves with log_audit
 
@@ -2380,6 +2389,8 @@ const AGENT_TOOL_DEFINITIONS = [
         company:               { type: 'string', description: 'Organizer or issuing organization' },
         source:                { type: 'string', description: 'Primary source URL — must be a real URL' },
         signal:                { type: 'string', enum: ['rfp', 'market', 'venue', 'competitor'] },
+        search_query_used:     { type: 'string', description: 'The exact search query that surfaced this result.' },
+        classification:        { type: 'string', enum: ['actionable opportunity', 'portal', 'informational'], description: 'From your reasoning block. Must be "actionable opportunity" — do not call save_opportunity for portal or informational results.' },
         notes:                 { type: 'string', description: 'Key facts from the source (max 500 chars). Label FACT / ASSUMPTION / INFERENCE.' },
         why_this_matters:      { type: 'string', description: 'One specific sentence: why this fits Fat Fish right now. Not generic.' },
         recommended_angle:     { type: 'string', description: 'Specific outreach angle — what Fat Fish should lead with for this opportunity.' },
@@ -2394,7 +2405,7 @@ const AGENT_TOOL_DEFINITIONS = [
         event_type:            { type: 'string', description: 'e.g. commencement, conference, brand activation, gala, corporate summit' },
         event_start_date:      { type: 'string', description: 'YYYY-MM-DD if confirmed from source. Null if unknown — do not guess.' },
       },
-      required: ['title', 'source', 'signal', 'fit_score', 'urgency_score', 'confidence_score', 'overall_score', 'why_this_matters', 'recommended_angle', 'recommended_next_step'],
+      required: ['title', 'source', 'signal', 'search_query_used', 'classification', 'fit_score', 'urgency_score', 'confidence_score', 'overall_score', 'why_this_matters', 'recommended_angle', 'recommended_next_step'],
     },
   },
   {
@@ -2622,10 +2633,14 @@ async function handleAgentTools(req, res) {
     }
 
     if (tool_name === 'save_opportunity') {
-      const { title, company, source, signal, notes, why_this_matters, recommended_angle, red_flags, fit_score, urgency_score, confidence_score, overall_score, estimated_budget_band, estimated_timeline, recommended_next_step, event_type, event_start_date } = tool_input || {};
+      const { title, company, source, signal, search_query_used, classification, notes, why_this_matters, recommended_angle, red_flags, fit_score, urgency_score, confidence_score, overall_score, estimated_budget_band, estimated_timeline, recommended_next_step, event_type, event_start_date } = tool_input || {};
 
       // Required field validation
       if (!title || !source || !signal) return res.json({ saved: false, skipped: true, reason: 'title, source, signal required' });
+
+      // Classification gate — reject non-actionable results at the server level
+      if (classification && classification !== 'actionable opportunity')
+        return res.json({ saved: false, skipped: true, reason: `classification is "${classification}" — only actionable opportunities may be saved` });
       if (!sbBase || !sbKey) return res.json({ saved: false, skipped: true, reason: 'Supabase not configured' });
 
       // Score threshold enforcement
@@ -2688,7 +2703,7 @@ async function handleAgentTools(req, res) {
         source,
         signal: VALID_SIGNALS.has(signal) ? signal : 'market',
         status: 'new',
-        notes: (notes || '').slice(0, 500),
+        notes: (search_query_used ? `[query: ${search_query_used}] ` : '') + (notes || '').slice(0, 480),
         why_this_matters: why_this_matters.trim(),
         recommended_angle: recommended_angle.trim(),
         red_flags: red_flags ? red_flags.slice(0, 300) : null,
