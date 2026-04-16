@@ -1,5 +1,23 @@
 const crypto = require('crypto');
 
+// ─── Anthropic shared headers ─────────────────────────────────────────────────
+// ANTHROPIC_HEADERS: base headers for all direct Anthropic API calls.
+// CACHE_HEADERS: adds prompt-caching beta — marks static system/tool content
+// with cache_control so repeated calls reuse cached tokens (90% cheaper on hits).
+const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY || '';
+const ANTHROPIC_HEADERS = (key) => ({
+  'Content-Type': 'application/json',
+  'x-api-key': key || ANTHROPIC_KEY(),
+  'anthropic-version': '2023-06-01',
+  'anthropic-beta': 'prompt-caching-2024-07-31',
+});
+// Helper: wrap a system prompt string into a cacheable content block array.
+const cachedSystem = (text) => [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
+// Helper: mark the last tool in an array as the cache boundary.
+const cachedTools = (tools) => tools.map((t, i) =>
+  i === tools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
+);
+
 module.exports = async (req, res) => {
   const service = req.query.service || '';
   const path = (req.query.p || '').replace(/^\//, '');
@@ -327,11 +345,11 @@ Be practical and honest. Do not invent data. Use null for dates when not clearly
     try {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+        headers: ANTHROPIC_HEADERS(anthropicKey),
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 500,
-          system: SYSTEM,
+          system: cachedSystem(SYSTEM),
           messages: [{ role: 'user', content: `Company: ${opp.company || 'unknown'}\nTitle: ${opp.title || ''}\nSignal: ${signal.slice(0, 700)}\nSource: ${opp.source || ''}` }],
         }),
       });
@@ -393,11 +411,11 @@ async function handleFlexAnalyze(req, res) {
 
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+    headers: ANTHROPIC_HEADERS(anthropicKey),
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1000,
-      system: `You are the Flex Intelligence Agent for Fatfish, a full-service event production company in Salt Lake City. Analyze their historical client, venue, and project data from Flex (their rental management system) and surface strategic insights. Focus on: top industries by event volume, most-used venues, repeatable event types, revenue patterns, geographic concentration, and look-alike prospect opportunities. Be specific and actionable. Format as clean sections with short bullet points. No markdown headers with #.`,
+      system: cachedSystem(`You are the Flex Intelligence Agent for Fatfish, a full-service event production company in Salt Lake City. Analyze their historical client, venue, and project data from Flex (their rental management system) and surface strategic insights. Focus on: top industries by event volume, most-used venues, repeatable event types, revenue patterns, geographic concentration, and look-alike prospect opportunities. Be specific and actionable. Format as clean sections with short bullet points. No markdown headers with #.`),
       messages: [{ role: 'user', content: `Analyze this Fatfish historical data and give strategic insights:\n\n${dataStr}` }],
     }),
   });
@@ -629,7 +647,7 @@ async function handleFlexLookalike(req, res) {
     try {
       const extractR = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+        headers: ANTHROPIC_HEADERS(anthropicKey),
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 300,
@@ -782,7 +800,7 @@ Valid vertical values: corporate, higher-ed, healthcare, nonprofit, sports, tech
 
   const claudeR = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+    headers: ANTHROPIC_HEADERS(anthropicKey),
     body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content: claudePrompt }] }),
   });
   const claudeData = await claudeR.json();
@@ -1108,7 +1126,7 @@ Data:\n${data}`,
   // Use Sonnet for richer, more structured intelligence output
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+    headers: ANTHROPIC_HEADERS(anthropicKey),
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
@@ -1152,7 +1170,7 @@ async function handleCeoBrain(req, res) {
   const claude = async (prompt, maxTokens = 2000) => {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+      headers: ANTHROPIC_HEADERS(anthropicKey),
       body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
     });
     const d = await r.json();
@@ -1668,7 +1686,7 @@ Return ONLY valid JSON in this exact shape — no markdown, no commentary:
   const start = Date.now();
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': anthKey, 'anthropic-version': '2023-06-01' },
+    headers: ANTHROPIC_HEADERS(anthKey),
     body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 600, messages: [{ role: 'user', content: prompt }] }),
   });
   const claudeData = await claudeRes.json();
@@ -2768,9 +2786,7 @@ async function handleChat(req, res) {
     },
   ];
 
-  const pipelineBlock = pipelineContext ? `\n\n---\nLIVE DATA (FF Tank + Google Ads):\n${pipelineContext}\n---` : '';
-
-  const SYSTEM = `You are a CMO and growth strategist for Fatfish, a high-end experiential and event production company in Salt Lake City, Utah.
+  const SYSTEM_STATIC = `You are a CMO and growth strategist for Fatfish, a high-end experiential and event production company in Salt Lake City, Utah.
 
 Services: AV, lighting, staging, scenic design, video production, experiential and brand activations, corporate events, conferences, large-scale productions.
 
@@ -2837,7 +2853,11 @@ Sales: who to target / follow up
 Marketing: content or pages to create
 Strategy: markets, positioning, partnerships
 
-Style: concise, confident, executive-level, no fluff. Translate data into business impact. Do not dump raw numbers without insight.${pipelineBlock}`;
+Style: concise, confident, executive-level, no fluff. Translate data into business impact. Do not dump raw numbers without insight.`;
+
+  // Build cacheable system array: static base is cached; live pipeline data appended uncached
+  const systemBlocks = [{ type: 'text', text: SYSTEM_STATIC, cache_control: { type: 'ephemeral' } }];
+  if (pipelineContext) systemBlocks.push({ type: 'text', text: `\n\n---\nLIVE DATA (FF Tank + Google Ads):\n${pipelineContext}\n---` });
 
   // Execute a tool call
   async function executeTool(name, input) {
@@ -2918,16 +2938,12 @@ Style: concise, confident, executive-level, no fluff. Translate data into busine
     rounds++;
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: ANTHROPIC_HEADERS(anthKey),
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: SYSTEM,
-        tools: TOOLS,
+        system: systemBlocks,
+        tools: cachedTools(TOOLS),
         messages: msgs,
       }),
     });
@@ -3016,11 +3032,7 @@ End ~30–40% of posts with a specific invitation ("Want the framework? comment 
 
 THE TEST: one week later, can the audience explain the POV in one sentence?`;
 
-  const promptText = `You are writing a LinkedIn post for Isaac Gonzalez, Founder/CMO of Fatfish — a full-service event production company in Salt Lake City (AV, lighting, staging, video, experiential). Clients include WGU, Huntsman, Fox Pest Control, TEDx, Utah Jazz/SEG Group.
-
-${LINKEDIN_FRAMEWORK}
-
-Below are screenshots from a Fatfish Instagram post. Your job is to transform them into a LinkedIn post that fits Isaac's voice and framework — not a caption rewrite, but a strategic thought leadership post that uses the event/moment as the raw material for insight.
+  const promptText = `Below are screenshots from a Fatfish Instagram post. Transform them into a LinkedIn post that fits Isaac's voice and framework — not a caption rewrite, but a strategic thought leadership post that uses the event/moment as the raw material for insight.
 
 ${caption ? `Additional context from Isaac:\n${caption}\n` : 'Read the images for context — extract the event type, visual mood, and any visible caption text.'}
 
@@ -3045,14 +3057,11 @@ Instructions:
   try {
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: ANTHROPIC_HEADERS(anthropicKey),
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 600,
+        system: cachedSystem(`You are a LinkedIn ghostwriter for Isaac Gonzalez, Founder/CMO of Fatfish — a full-service event production company in Salt Lake City (AV, lighting, staging, video, experiential). Clients include WGU, Huntsman, Fox Pest Control, TEDx, Utah Jazz/SEG Group.\n\n${LINKEDIN_FRAMEWORK}`),
         messages: [{ role: 'user', content: messageContent }],
       }),
     });
