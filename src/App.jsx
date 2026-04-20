@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import TankOceanBg from "./components/TankOceanBg";
 
 export class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -6,7 +7,7 @@ export class ErrorBoundary extends React.Component {
   render() {
     if (this.state.error) {
       return (
-        <div style={{ padding: 40, fontFamily: "monospace", background: "#0A0A0A", color: "#FF6B6B", minHeight: "100vh" }}>
+        <div style={{ padding: 40, fontFamily: "monospace", background: "rgba(4,14,34,0.62)", color: "#FF6B6B", minHeight: "100vh" }}>
           <div style={{ fontSize: 14, marginBottom: 16 }}>⚠ React render error</div>
           <pre style={{ fontSize: 11, color: "#E8E4DC", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
             {this.state.error.message}{"\n\n"}{this.state.error.stack}
@@ -264,7 +265,7 @@ function FlywheelIndicator({ activeFlow }) {
     { id: "prospector", label: "Grow Pipeline", icon: "⚡", color: "#4ECDC4" },
   ];
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "8px 22px", borderBottom: "1px solid #141414", background: "#080808", overflowX: "auto", flexShrink: 0 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "8px 22px", borderBottom: "1px solid #141414", background: "rgba(4,14,34,0.5)", overflowX: "auto", flexShrink: 0 }}>
       <span style={{ fontSize: 9, color: "#999", letterSpacing: "2px", marginRight: 14 }}>FLYWHEEL</span>
       {steps.map((s, i) => (
         <div key={s.id} style={{ display: "flex", alignItems: "center" }}>
@@ -316,7 +317,7 @@ function TargetsTable({ targets, updateTargetStatus, deleteTarget, thStyle, tdSt
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed" }}>
-          <thead style={{ position: "sticky", top: 0, background: "#080808", zIndex: 1 }}>
+          <thead style={{ position: "sticky", top: 0, background: "rgba(4,14,34,0.5)", zIndex: 1 }}>
             <tr>
               <th style={{ ...thStyle, width: 160 }}>COMPANY</th>
               <th style={{ ...thStyle, width: 100 }}>VERTICAL</th>
@@ -360,7 +361,7 @@ function TargetsTable({ targets, updateTargetStatus, deleteTarget, thStyle, tdSt
                   </td>
                   <td style={tdStyle}>
                     <select value={row.status || "target"} onChange={e => { e.stopPropagation(); updateTargetStatus(row.id, e.target.value); }} onClick={e => e.stopPropagation()}
-                      style={{ background: "#0D0D0D", border: `1px solid ${row.status === "target" ? "#34D39950" : row.status === "converted" ? "#A78BFA50" : "#1A1A1A"}`, borderRadius: 4, color: row.status === "target" ? "#34D399" : row.status === "converted" ? "#A78BFA" : "#555", fontSize: 9, padding: "2px 6px", fontFamily: "inherit", cursor: "pointer" }}>
+                      style={{ background: "rgba(4,14,34,0.6)", border: `1px solid ${row.status === "target" ? "#34D39950" : row.status === "converted" ? "#A78BFA50" : "#1A1A1A"}`, borderRadius: 4, color: row.status === "target" ? "#34D399" : row.status === "converted" ? "#A78BFA" : "#555", fontSize: 9, padding: "2px 6px", fontFamily: "inherit", cursor: "pointer" }}>
                       <option value="target">target</option>
                       <option value="active">active</option>
                       <option value="paused">paused</option>
@@ -583,7 +584,7 @@ function AgentRunButton({ onComplete }) {
         </button>
       )}
       {showLog && events.length > 0 && (
-        <div style={{ position: "absolute", top: "100%", right: 0, zIndex: 100, marginTop: 4, background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "10px 12px", width: 420, maxHeight: 300, overflowY: "auto", boxShadow: "0 4px 24px #00000080" }}>
+        <div style={{ position: "absolute", top: "100%", right: 0, zIndex: 100, marginTop: 4, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "10px 12px", width: 420, maxHeight: 300, overflowY: "auto", boxShadow: "0 4px 24px #00000080" }}>
           <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", marginBottom: 8 }}>AGENT EVENT LOG</div>
           {events.map((ev, i) => (
             <div key={i} style={{ fontSize: 9, color: ev.type === "tool" ? "#A78BFA" : ev.type === "result" ? "#34D399" : ev.type === "skip" ? "#FB923C" : ev.type === "error" ? "#FF6B6B" : "#888", marginBottom: 3, lineHeight: 1.5, fontFamily: "inherit" }}>
@@ -1154,7 +1155,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
           <div style={{ fontSize: 9, color: "#555" }}>scout signals · inbound leads</div>
         </div>
         {/* Tab switcher */}
-        <div style={{ display: "flex", gap: 2, background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 6, padding: 2 }}>
+        <div style={{ display: "flex", gap: 2, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 6, padding: 2 }}>
           {[["signals", "Signals"], ["targets", "Target 100"], ["find", "Find"]].map(([id, label]) => (
             <button key={id} onClick={() => setActiveTab(id)}
               style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: "none", background: activeTab === id ? "#1A1A1A" : "transparent", color: activeTab === id ? "#A78BFA" : "#555", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px", transition: "all 0.15s" }}>
@@ -1255,7 +1256,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                 return (
                   <div key={opp.id} style={{
                     flex: "1 1 260px", minWidth: 220, maxWidth: 400,
-                    background: "#0A0A0A",
+                    background: "rgba(4,14,34,0.62)",
                     border: `1px solid ${isTop ? "#A78BFA20" : "#141414"}`,
                     borderLeft: `3px solid ${borderAccent}`,
                     borderRadius: 6,
@@ -1386,7 +1387,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
 
       {/* Targets: add form */}
       {activeTab === "targets" && showAddTarget && (
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid #0D0D0D", background: "#0A0A0A", flexShrink: 0 }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #0D0D0D", background: "rgba(4,14,34,0.62)", flexShrink: 0 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 160px", minWidth: 140 }}>
               <span style={{ fontSize: 8, color: "#555", letterSpacing: "1px" }}>COMPANY NAME *</span>
@@ -1426,7 +1427,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
           tabIndex={-1}
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
           onClick={e => { if (e.target === e.currentTarget) setDraftModal(null); }}>
-          <div style={{ background: "#0E0E0E", border: "1px solid #1E1E1E", borderRadius: 8, width: "100%", maxWidth: 560, display: "flex", flexDirection: "column", gap: 0, boxShadow: "0 20px 60px rgba(0,0,0,0.8)" }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: "rgba(4,14,34,0.55)", border: "1px solid #1E1E1E", borderRadius: 8, width: "100%", maxWidth: 560, display: "flex", flexDirection: "column", gap: 0, boxShadow: "0 20px 60px rgba(0,0,0,0.8)" }} onClick={e => e.stopPropagation()}>
             {/* Modal header */}
             <div style={{ padding: "14px 18px", borderBottom: "1px solid #1A1A1A", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1512,7 +1513,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
           const BUDGET_LABEL = { small: "< $25k", mid: "$25k–$75k", large: "$75k–$200k", enterprise: "$200k+", unknown: "?" };
           return (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed" }}>
-            <thead style={{ position: "sticky", top: 0, background: "#080808", zIndex: 1 }}>
+            <thead style={{ position: "sticky", top: 0, background: "rgba(4,14,34,0.5)", zIndex: 1 }}>
               <tr>
                 <th style={{ ...thStyle, width: 36 }}>★</th>
                 <th style={{ ...thStyle, width: 120 }}>COMPANY</th>
@@ -1594,7 +1595,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                       </td>
                       <td style={tdStyle} onClick={e => e.stopPropagation()}>
                         <select value={row.status || "new"} onChange={e => updateStatus(row.id, e.target.value)}
-                          style={{ background: "#0D0D0D", border: `1px solid ${(STATUS_COLORS[row.status] || "#1A1A1A") + "50"}`, borderRadius: 4, color: STATUS_COLORS[row.status] || "#888", fontSize: 9, padding: "2px 4px", fontFamily: "inherit", cursor: "pointer" }}>
+                          style={{ background: "rgba(4,14,34,0.6)", border: `1px solid ${(STATUS_COLORS[row.status] || "#1A1A1A") + "50"}`, borderRadius: 4, color: STATUS_COLORS[row.status] || "#888", fontSize: 9, padding: "2px 4px", fontFamily: "inherit", cursor: "pointer" }}>
                           {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
@@ -1630,7 +1631,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                                   { label: "URGENCY", val: row.urgency_score, color: "#F7C948" },
                                   { label: "CONFIDENCE", val: row.confidence_score, color: "#4ECDC4" },
                                 ].map(({ label, val, color }) => (
-                                  <div key={label} style={{ background: "#0D0D0D", border: `1px solid ${color}25`, borderRadius: 6, padding: "6px 12px", minWidth: 60, textAlign: "center" }}>
+                                  <div key={label} style={{ background: "rgba(4,14,34,0.6)", border: `1px solid ${color}25`, borderRadius: 6, padding: "6px 12px", minWidth: 60, textAlign: "center" }}>
                                     <div style={{ fontSize: 16, fontWeight: 700, color, fontFamily: "'Syne', sans-serif" }}>{val ?? "—"}</div>
                                     <div style={{ fontSize: 7, color: "#444", letterSpacing: "1px", marginTop: 2 }}>{label}</div>
                                   </div>
@@ -1712,7 +1713,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
               onChange={e => setFindQuery(e.target.value)}
               onKeyDown={e => e.key === "Enter" && runFind()}
               placeholder='e.g. "event production" RFP Utah 2026'
-              style={{ flex: 1, background: "#0C0C0C", border: "1px solid #1A1A1A", borderRadius: 7, color: "#E8E4DC", fontSize: 12, padding: "9px 14px", fontFamily: "inherit" }}
+              style={{ flex: 1, background: "rgba(3,12,30,0.7)", border: "1px solid #1A1A1A", borderRadius: 7, color: "#E8E4DC", fontSize: 12, padding: "9px 14px", fontFamily: "inherit" }}
             />
             <button onClick={() => runFind()} disabled={findLoading || !tavilyKey || !findQuery.trim()}
               style={{ padding: "9px 18px", background: findLoading ? "#A78BFA20" : "#A78BFA15", border: "1px solid #A78BFA40", borderRadius: 7, color: findLoading ? "#A78BFA" : "#A78BFA99", fontSize: 11, cursor: findLoading || !tavilyKey || !findQuery.trim() ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
@@ -1725,7 +1726,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {FIND_SUGGESTIONS.map((q, i) => (
                 <button key={i} onClick={() => { setFindQuery(q); runFind(q); }}
-                  style={{ textAlign: "left", background: "#0A0A0A", border: "1px solid #141414", borderRadius: 6, padding: "7px 12px", fontSize: 10, color: "#666", cursor: "pointer", fontFamily: "inherit" }}>
+                  style={{ textAlign: "left", background: "rgba(4,14,34,0.62)", border: "1px solid #141414", borderRadius: 6, padding: "7px 12px", fontSize: 10, color: "#666", cursor: "pointer", fontFamily: "inherit" }}>
                   {q}
                 </button>
               ))}
@@ -1745,7 +1746,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                   const saved = savedUrls.has(url);
                   const saving = savingUrl[url];
                   return (
-                    <div key={i} style={{ background: "#0C0C0C", border: `1px solid ${saved ? "#34D39920" : "#141414"}`, borderRadius: 8, padding: "14px 16px" }}>
+                    <div key={i} style={{ background: "rgba(3,12,30,0.7)", border: `1px solid ${saved ? "#34D39920" : "#141414"}`, borderRadius: 8, padding: "14px 16px" }}>
                       <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, color: "#B8B4AC", marginBottom: 5, fontWeight: 500 }}>{r.title || url}</div>
@@ -2050,7 +2051,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
         </div>
         {!hasData && <div style={{ fontSize: 10, color: "#333", padding: "20px 0" }}>Sync Flex data first to generate insights.</div>}
         {hasData && !content && !isGen && (
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "24px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "24px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ fontSize: 10, color: "#444" }}>Click Generate to analyze {clients.length} clients · {projects.length} projects · {venues.length} venues</div>
             <div style={{ fontSize: 9, color: "#333" }}>Uses Claude to surface patterns and strategic recommendations from your historical data.</div>
           </div>
@@ -2084,7 +2085,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
           <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: "#FB923C" }}>Flex Intel</div>
           <div style={{ fontSize: 9, color: "#444" }}>{loadingData ? "loading…" : `${clients.length} clients · ${projects.length} projects · ${venues.length} venues`}</div>
         </div>
-        <div style={{ display: "flex", gap: 2, background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 6, padding: 2 }}>
+        <div style={{ display: "flex", gap: 2, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 6, padding: 2 }}>
           {[
             { id: "overview", label: "Overview" },
             { id: "industries", label: "Industries" },
@@ -2134,7 +2135,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
                 { label: "Projects", value: projects.length, color: "#34D399" },
                 { label: "Repeat Clients", value: repeatClients, color: "#4ECDC4" },
               ].map(s => (
-                <div key={s.label} style={{ flex: "1 1 100px", minWidth: 90, background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
+                <div key={s.label} style={{ flex: "1 1 100px", minWidth: 90, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
                   <div style={{ fontSize: 26, fontWeight: 700, color: s.color, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loadingData ? "—" : s.value}</div>
                   <div style={{ fontSize: 9, color: "#444", letterSpacing: "1.5px", marginTop: 7, textTransform: "uppercase" }}>{s.label}</div>
                 </div>
@@ -2142,7 +2143,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
             </div>
 
             {/* Strategic Snapshot */}
-            <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8 }}>
+            <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8 }}>
               <div style={{ padding: "12px 18px", borderBottom: "1px solid #111", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 9, color: "#FB923C", letterSpacing: "2px" }}>◐ STRATEGIC SNAPSHOT</span>
                 <button onClick={() => generate("overview")} disabled={generating === "overview" || !hasData}
@@ -2161,7 +2162,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
             {/* Top Industries + Top Venues */}
             {hasData && (
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 200px", background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
+                <div style={{ flex: "1 1 200px", background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
                   <div style={{ fontSize: 9, color: "#34D399", letterSpacing: "2px", marginBottom: 14 }}>TOP INDUSTRIES</div>
                   {topIndustries.length > 0 ? topIndustries.map(([ind, n]) => (
                     <div key={ind} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
@@ -2170,7 +2171,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
                     </div>
                   )) : <div style={{ fontSize: 10, color: "#333" }}>No industry tags yet — enrich client records.</div>}
                 </div>
-                <div style={{ flex: "1 1 200px", background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
+                <div style={{ flex: "1 1 200px", background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
                   <div style={{ fontSize: 9, color: "#A78BFA", letterSpacing: "2px", marginBottom: 14 }}>TOP VENUES</div>
                   {topVenuesList.length > 0 ? topVenuesList.map(([v, n]) => (
                     <div key={v} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9, gap: 8 }}>
@@ -2191,7 +2192,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
                 { id: "content", icon: "✦", label: "Content Strategy", desc: "Pages, campaigns & proof points" },
               ].map(s => (
                 <div key={s.id} onClick={() => setActiveTab(s.id)}
-                  style={{ background: "#0A0A0A", border: `1px solid ${insights[s.id] ? ACCENT[s.id] + "30" : "#1A1A1A"}`, borderRadius: 8, padding: "13px 15px", cursor: "pointer", transition: "border-color 0.1s" }}
+                  style={{ background: "rgba(4,14,34,0.62)", border: `1px solid ${insights[s.id] ? ACCENT[s.id] + "30" : "#1A1A1A"}`, borderRadius: 8, padding: "13px 15px", cursor: "pointer", transition: "border-color 0.1s" }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = ACCENT[s.id] + "50"}
                   onMouseLeave={e => e.currentTarget.style.borderColor = insights[s.id] ? ACCENT[s.id] + "30" : "#1A1A1A"}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
@@ -2241,7 +2242,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
             )}
             {/* Lookalike Results Panel */}
             {(lookalikesLoading || lookalikes.length > 0) && (
-              <div style={{ margin: "0 28px 28px", background: "#0A0A0A", border: "1px solid #4ECDC430", borderRadius: 8, overflow: "hidden" }}>
+              <div style={{ margin: "0 28px 28px", background: "rgba(4,14,34,0.62)", border: "1px solid #4ECDC430", borderRadius: 8, overflow: "hidden" }}>
                 <div style={{ padding: "12px 16px", borderBottom: "1px solid #111", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 9, color: "#4ECDC4", letterSpacing: "2px" }}>◐ APOLLO LOOKALIKE PROSPECTS</span>
                   {lookalikesOrgs.length > 0 && (
@@ -2255,7 +2256,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
                 {!lookalikesLoading && lookalikes.length > 0 && (
                   <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
                     {lookalikes.map((c, i) => (
-                      <div key={i} style={{ padding: "12px 14px", background: "#080808", border: "1px solid #111", borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                      <div key={i} style={{ padding: "12px 14px", background: "rgba(4,14,34,0.5)", border: "1px solid #111", borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                             <span style={{ fontSize: 11, color: "#E8E4DC", fontWeight: 500 }}>{c.name || "—"}</span>
@@ -2292,7 +2293,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
         {/* RAW DATA */}
         {activeTab === "data" && (
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-            <div style={{ padding: "10px 16px", borderBottom: "1px solid #0D0D0D", display: "flex", alignItems: "center", gap: 2, background: "#080808", flexShrink: 0 }}>
+            <div style={{ padding: "10px 16px", borderBottom: "1px solid #0D0D0D", display: "flex", alignItems: "center", gap: 2, background: "rgba(4,14,34,0.5)", flexShrink: 0 }}>
               {["clients", "venues", "projects"].map(t => (
                 <button key={t} onClick={() => setDataTab(t)}
                   style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: "none", background: dataTab === t ? "#1A1A1A" : "transparent", color: dataTab === t ? "#FB923C" : "#555", cursor: "pointer", fontFamily: "inherit", textTransform: "capitalize" }}>
@@ -2449,7 +2450,7 @@ function MemoryView({ db }) {
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           {canAdd && (
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="search…"
-              style={{ background: "#0C0C0C", border: "1px solid #1A1A1A", borderRadius: 5, color: "#E8E4DC", fontSize: 10, padding: "3px 9px", fontFamily: "inherit", width: 130 }} />
+              style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #1A1A1A", borderRadius: 5, color: "#E8E4DC", fontSize: 10, padding: "3px 9px", fontFamily: "inherit", width: 130 }} />
           )}
           {canAdd && (
             <button onClick={() => setAdding(!adding)}
@@ -2464,18 +2465,18 @@ function MemoryView({ db }) {
 
       {/* Add form */}
       {adding && canAdd && (
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid #0D0D0D", background: "#080808", flexShrink: 0 }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #0D0D0D", background: "rgba(4,14,34,0.5)", flexShrink: 0 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
             <span style={{ fontSize: 9, padding: "3px 10px", background: (tab?.color || CLR) + "15", border: `1px solid ${(tab?.color || CLR)}30`, borderRadius: 8, color: tab?.color || CLR }}>{tab?.memType}</span>
             {activeTab === "opportunity" && (
               <input value={form.scope_id} onChange={e => setForm(f => ({ ...f, scope_id: e.target.value }))} placeholder="Company / opp name"
-                style={{ background: "#0C0C0C", border: "1px solid #222", borderRadius: 5, color: "#E8E4DC", fontSize: 10, padding: "4px 9px", fontFamily: "inherit", flex: 1, minWidth: 140 }} />
+                style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #222", borderRadius: 5, color: "#E8E4DC", fontSize: 10, padding: "4px 9px", fontFamily: "inherit", flex: 1, minWidth: 140 }} />
             )}
             <input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} placeholder="tags, comma separated"
-              style={{ background: "#0C0C0C", border: "1px solid #222", borderRadius: 5, color: "#E8E4DC", fontSize: 10, padding: "4px 9px", fontFamily: "inherit", width: 180 }} />
+              style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #222", borderRadius: 5, color: "#E8E4DC", fontSize: 10, padding: "4px 9px", fontFamily: "inherit", width: 180 }} />
           </div>
           <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="Memory content…"
-            rows={3} style={{ width: "100%", background: "#0C0C0C", border: "1px solid #222", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "8px 10px", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
+            rows={3} style={{ width: "100%", background: "rgba(3,12,30,0.7)", border: "1px solid #222", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "8px 10px", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
           <button onClick={saveMemory} disabled={saving}
             style={{ marginTop: 8, padding: "5px 16px", background: "#F7C94815", border: "1px solid #F7C94840", borderRadius: 5, color: CLR, fontSize: 10, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>
             {saving ? "Saving…" : "Save"}
@@ -2504,39 +2505,73 @@ function MemoryView({ db }) {
 
         ) : activeTab === "accounts" ? (
           accounts.length === 0 ? (
-            <div style={{ fontSize: 11, color: "#444", marginTop: 20 }}>No target accounts yet. Add them in Opportunities → Target 100.</div>
-          ) : accounts.map(acc => {
-            const accMems = memoriesByAccount[acc.name] || [];
-            const statusColor = acc.status === "active" ? "#34D399" : acc.status === "converted" ? "#F7C948" : "#555";
+            <div style={{ fontSize: 11, color: "var(--t4, #555)", marginTop: 20 }}>No target accounts yet. Add them in Opportunities → Target 100.</div>
+          ) : (() => {
+            const VERT_COLOR = { higher_ed: "#60A5FA", healthcare: "#34D399", medtech: "#4ECDC4", finance: "#A78BFA", sports: "#FB923C", tech: "#F7C948", corporate: "#F7C948", nonprofit: "#4ECDC4" };
+            const thS = { fontSize: 8, fontWeight: 700, letterSpacing: "1.5px", color: "var(--t4, #555)", textTransform: "uppercase", padding: "7px 10px 7px 0" };
             return (
-              <div key={acc.id} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor, marginTop: 4, flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "#B8B4AC" }}>{acc.name}</span>
-                      {acc.industry && <span style={{ fontSize: 9, color: "#555" }}>{acc.industry}</span>}
-                      {acc.vertical && <span style={{ fontSize: 9, color: "#555" }}>{acc.vertical}</span>}
-                      <span style={{ fontSize: 8, padding: "1px 6px", background: statusColor + "15", border: `1px solid ${statusColor}25`, borderRadius: 8, color: statusColor }}>{acc.status || "active"}</span>
-                      <span style={{ fontSize: 9, color: "#333", marginLeft: "auto" }}>scanned {acc.last_scanned ? relTime(acc.last_scanned) : "never"}</span>
-                    </div>
-                    {acc.domain && <div style={{ fontSize: 9, color: "#444", marginBottom: 3 }}>{acc.domain}</div>}
-                    {acc.notes && <div style={{ fontSize: 10, color: "#555", lineHeight: 1.4, marginBottom: acc.lookalike_client ? 3 : 0 }}>{acc.notes}</div>}
-                    {acc.lookalike_client && <div style={{ fontSize: 9, color: "#4ECDC4" }}>lookalike of {acc.lookalike_client}</div>}
-                    {accMems.length > 0 && (
-                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #0D0D0D", display: "flex", flexDirection: "column", gap: 4 }}>
-                        {accMems.slice(0, 3).map(m => (
-                          <div key={m.id} style={{ fontSize: 10, color: "#666", lineHeight: 1.4 }}>
-                            <span style={{ color: "#4ECDC4", fontSize: 8 }}>◈ </span>{m.content.slice(0, 140)}{m.content.length > 140 ? "…" : ""}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+              <div style={{ background: "rgba(3,12,30,0.5)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 12, overflow: "hidden" }}>
+                {/* Table header */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 90px 110px 60px 70px 80px", padding: "0 14px", borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,220,232,0.03)" }}>
+                  {["Company","Vertical","Lookalike","Contact","Score","Status","Actions"].map(h => (
+                    <div key={h} style={thS}>{h}</div>
+                  ))}
                 </div>
+                {/* Rows */}
+                {accounts.map((acc, i) => {
+                  const vert = (acc.vertical || acc.industry || "").toLowerCase().replace(/\s+/g, "_");
+                  const vertColor = VERT_COLOR[vert] || "var(--t4, #555)";
+                  const statusColor = acc.status === "target" ? "#34D399" : acc.status === "converted" ? "#A78BFA" : acc.status === "active" ? "#4ECDC4" : "var(--t4, #555)";
+                  const score = acc.priority_score || acc.score || null;
+                  return (
+                    <div key={acc.id} style={{ display: "grid", gridTemplateColumns: "1fr 80px 90px 110px 60px 70px 80px", padding: "10px 14px", borderBottom: i < accounts.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none", alignItems: "center", transition: "background 0.1s" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                      {/* Company */}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--tx, #E8E4DC)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{acc.name}</div>
+                        {acc.domain && <div style={{ fontSize: 8, color: "var(--t4, #555)", marginTop: 1 }}>{acc.domain}</div>}
+                      </div>
+                      {/* Vertical */}
+                      <div>
+                        {(acc.vertical || acc.industry) ? (
+                          <span style={{ fontSize: 8, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: vertColor + "18", border: `1px solid ${vertColor}35`, color: vertColor }}>
+                            {(acc.vertical || acc.industry).slice(0, 10)}
+                          </span>
+                        ) : <span style={{ fontSize: 9, color: "var(--t5, #333)" }}>—</span>}
+                      </div>
+                      {/* Lookalike */}
+                      <div style={{ fontSize: 9, color: "#4ECDC4", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {acc.lookalike_client || <span style={{ color: "var(--t5, #333)" }}>—</span>}
+                      </div>
+                      {/* Contact */}
+                      <div style={{ fontSize: 9, color: "var(--t3, #666)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {acc.primary_contact || acc.contact_name || <span style={{ color: "var(--t5, #333)" }}>—</span>}
+                      </div>
+                      {/* Score */}
+                      <div style={{ fontSize: 13, fontWeight: 800, color: score >= 70 ? "#34D399" : score >= 40 ? "#F7C948" : score ? "#FF6B6B" : "var(--t4, #555)" }}>
+                        {score ?? "—"}
+                      </div>
+                      {/* Status */}
+                      <div>
+                        <span style={{ fontSize: 8, padding: "2px 7px", borderRadius: 5, background: statusColor + "15", border: `1px solid ${statusColor}30`, color: statusColor, fontWeight: 700, letterSpacing: "0.5px" }}>
+                          {acc.status || "active"}
+                        </span>
+                      </div>
+                      {/* Actions */}
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {acc.domain && (
+                          <a href={`https://${acc.domain}`} target="_blank" rel="noreferrer"
+                            style={{ fontSize: 8, padding: "2px 7px", borderRadius: 5, border: "1px solid rgba(255,255,255,0.07)", color: "var(--t3, #666)", textDecoration: "none" }}>↗</a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             );
-          })
+          })()
 
         ) : activeTab === "artifacts" ? (
           <>
@@ -2544,7 +2579,7 @@ function MemoryView({ db }) {
               <div style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 9, color: "#FB923C", letterSpacing: "2px", marginBottom: 10 }}>WEEKLY BRIEFS</div>
                 {briefs.map(b => (
-                  <div key={b.id} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
+                  <div key={b.id} style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px", marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span style={{ fontSize: 10, color: "#B8B4AC" }}>
                         Brief — {new Date(b.generated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -2591,7 +2626,7 @@ function MemoryCard({ m, typeColor, relTime, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const color = typeColor[m.memory_type] || "#555";
   return (
-    <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
+    <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
         <div style={{ width: 5, height: 5, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 4 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -2822,62 +2857,100 @@ function SalesView({ db, apolloKey, gmailRefreshToken }) {
 
   const NOTE_TYPE_COLORS = { call: "#4ECDC4", email: "#A78BFA", objection: "#FF6B6B", update: "#F7C948", win: "#34D399" };
 
+  const KANBAN_COLS = [
+    { id: "new",       label: "New",       statuses: ["new"],                          color: "#A78BFA", border: "rgba(167,139,250,0.3)" },
+    { id: "contacted", label: "Contacted", statuses: ["sent", "contacted"],             color: "#FB923C", border: "rgba(251,146,60,0.3)"  },
+    { id: "qualified", label: "Qualified", statuses: ["in_progress", "nurturing"],      color: "#34D399", border: "rgba(52,211,153,0.3)"  },
+    { id: "closed",    label: "Closed",    statuses: ["won", "lost", "not_a_fit"],      color: "#888",    border: "rgba(255,255,255,0.1)" },
+  ];
+  const BUDGET_MID = { small: 15000, mid: 50000, large: 137500, enterprise: 250000 };
+  const pipelineValue = KANBAN_COLS.slice(0, 3).reduce((sum, col) => {
+    return sum + briefs.filter(b => col.statuses.includes(b.status || "new"))
+      .reduce((s, b) => s + (BUDGET_MID[b.estimated_budget_band] || 0), 0);
+  }, 0);
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ padding: "14px 20px", borderBottom: "1px solid #111", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-        <span style={{ fontSize: 18 }}>◐</span>
+      <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
         <div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: CLR }}>Sales Queue</div>
-          <div style={{ fontSize: 9, color: "#555" }}>briefs · assignment · status · notes</div>
+          <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, color: CLR }}>Pipeline</div>
+          <div style={{ fontSize: 9, color: "var(--t4, #555)" }}>sales briefs · kanban view</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            style={{ background: "#0C0C0C", border: "1px solid #1A1A1A", borderRadius: 5, color: "#888", fontSize: 9, padding: "3px 7px", fontFamily: "inherit" }}>
-            <option value="all">All statuses</option>
-            {SALES_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {assignees.length > 1 && (
-            <select value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)}
-              style={{ background: "#0C0C0C", border: "1px solid #1A1A1A", borderRadius: 5, color: "#888", fontSize: 9, padding: "3px 7px", fontFamily: "inherit" }}>
-              <option value="all">All assignees</option>
-              {assignees.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
+          {pipelineValue > 0 && (
+            <span style={{ fontSize: 9, color: "#34D399", background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 10, padding: "2px 9px" }}>
+              ~${(pipelineValue / 1000).toFixed(0)}k pipeline
+            </span>
+          )}
+          {taylorToast && (
+            <span style={{ fontSize: 9, padding: "3px 9px", borderRadius: 5, background: taylorToast.ok ? "rgba(52,211,153,0.1)" : "rgba(255,107,107,0.1)", border: `1px solid ${taylorToast.ok ? "rgba(52,211,153,0.3)" : "rgba(255,107,107,0.3)"}`, color: taylorToast.ok ? "#34D399" : "#FF6B6B" }}>{taylorToast.msg}</span>
           )}
           <button onClick={loadBriefs}
-            style={{ background: "none", border: "1px solid #1A1A1A", borderRadius: 5, color: "#555", fontSize: 10, padding: "3px 9px", cursor: "pointer", fontFamily: "inherit" }}>↺</button>
+            style={{ background: "none", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 5, color: "var(--t3, #666)", fontSize: 10, padding: "3px 9px", cursor: "pointer", fontFamily: "inherit" }}>↺</button>
         </div>
       </div>
 
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Queue list */}
-        <div style={{ width: selected ? 340 : "100%", minWidth: 280, flexShrink: 0, borderRight: selected ? "1px solid #111" : "none", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        {/* Kanban board */}
+        <div style={{ flex: 1, display: "flex", gap: 12, padding: "16px 16px", overflowX: "auto", overflowY: "hidden" }}>
           {loading ? (
-            <div style={{ padding: 20, fontSize: 11, color: "#444" }}>Loading…</div>
-          ) : filtered.length === 0 ? (
-            <div style={{ padding: 20, fontSize: 11, color: "#444" }}>
-              {briefs.length === 0 ? 'No sales briefs yet. Click "→ Sales" on any opportunity to create one.' : "No briefs match this filter."}
-            </div>
-          ) : filtered.map(b => {
-            const isActive = selected?.id === b.id;
-            const statusColor = SALES_STATUS_COLORS[b.status] || "#555";
-            const priorityColor = PRIORITY_COLORS[b.priority] || "#555";
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--t4, #555)", fontSize: 11, padding: 20 }}>Loading pipeline…</div>
+          ) : KANBAN_COLS.map(col => {
+            const colBriefs = briefs.filter(b => col.statuses.includes(b.status || "new"));
+            const colValue = colBriefs.reduce((s, b) => s + (BUDGET_MID[b.estimated_budget_band] || 0), 0);
             return (
-              <div key={b.id} onClick={() => selectBrief(b)}
-                style={{ padding: "12px 16px", borderBottom: "1px solid #0D0D0D", cursor: "pointer", background: isActive ? "#FB923C06" : "transparent", borderLeft: `2px solid ${isActive ? CLR : "transparent"}` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: priorityColor, flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#B8B4AC", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {b.company || (b.signal_summary ? b.signal_summary.split(/[.,]/)[0].slice(0, 48) : "—")}
-                  </span>
-                  <span style={{ fontSize: 8, padding: "1px 6px", background: statusColor + "15", border: `1px solid ${statusColor}30`, borderRadius: 8, color: statusColor, flexShrink: 0 }}>{b.status || "new"}</span>
+              <div key={col.id} style={{ width: 230, minWidth: 230, flexShrink: 0, display: "flex", flexDirection: "column", gap: 0 }}>
+                {/* Column header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 4px 10px", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: col.color }} />
+                    <span style={{ fontSize: 10, fontWeight: 700, color: col.color, letterSpacing: "1px" }}>{col.label.toUpperCase()}</span>
+                    <span style={{ fontSize: 9, color: "var(--t4, #444)", background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "1px 6px" }}>{colBriefs.length}</span>
+                  </div>
+                  {colValue > 0 && <span style={{ fontSize: 8, color: "var(--t4, #444)" }}>${(colValue/1000).toFixed(0)}k</span>}
                 </div>
-                <div style={{ fontSize: 9, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 4 }}>
-                  {b.signal_summary || b.why_this_matters || "—"}
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 8, color: "#444" }}>{b.assigned_to || "unassigned"}</span>
-                  <span style={{ fontSize: 8, color: "#333" }}>{relTime(b.sent_to_sales_at)}</span>
+                {/* Cards */}
+                <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+                  {colBriefs.length === 0 ? (
+                    <div style={{ padding: "20px 12px", textAlign: "center", fontSize: 9, color: "var(--t5, #333)", border: "1px dashed rgba(255,255,255,0.05)", borderRadius: 10 }}>Empty</div>
+                  ) : colBriefs.map(b => {
+                    const isActive = selected?.id === b.id;
+                    const priorityColor = PRIORITY_COLORS[b.priority] || "#555";
+                    const statusColor = SALES_STATUS_COLORS[b.status] || "#555";
+                    const budgetLabel = { small: "<$25k", mid: "$25–75k", large: "$75–200k", enterprise: "$200k+" }[b.estimated_budget_band] || "";
+                    return (
+                      <div key={b.id} onClick={() => selectBrief(b)}
+                        style={{ background: isActive ? "rgba(251,146,60,0.07)" : "rgba(3,12,30,0.55)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", border: `1px solid ${isActive ? "rgba(251,146,60,0.3)" : "rgba(255,255,255,0.05)"}`, borderRadius: 10, padding: "11px 12px", cursor: "pointer", transition: "all 0.1s" }}
+                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(3,12,30,0.75)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}
+                        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "rgba(3,12,30,0.55)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)"; }}
+                      >
+                        {/* Card top row */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: priorityColor, flexShrink: 0 }} />
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--tx, #E8E4DC)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {b.company || (b.signal_summary ? b.signal_summary.split(/[.,]/)[0].slice(0, 36) : "—")}
+                          </span>
+                        </div>
+                        {/* Description */}
+                        <div style={{ fontSize: 9, color: "var(--t3, #666)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginBottom: 8 }}>
+                          {b.why_this_matters || b.signal_summary || "—"}
+                        </div>
+                        {/* Footer */}
+                        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                          <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: "0.5px", padding: "2px 6px", borderRadius: 5, background: statusColor + "15", border: `1px solid ${statusColor}30`, color: statusColor }}>
+                            {b.status || "new"}
+                          </span>
+                          {budgetLabel && (
+                            <span style={{ fontSize: 7, padding: "2px 6px", borderRadius: 5, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", color: "var(--t3, #666)" }}>
+                              {budgetLabel}
+                            </span>
+                          )}
+                          <span style={{ fontSize: 7, color: "var(--t5, #333)", marginLeft: "auto" }}>{relTime(b.sent_to_sales_at)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -2886,15 +2959,15 @@ function SalesView({ db, apolloKey, gmailRefreshToken }) {
 
         {/* Detail panel */}
         {selected && (
-          <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ width: 360, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.04)", background: "rgba(2,10,26,0.6)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Detail header */}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#E8E4DC", marginBottom: 4 }}>{selected.company}</div>
-                <div style={{ fontSize: 9, color: "#555" }}>sent {relTime(selected.sent_to_sales_at)} · by {selected.assigned_by || "Isaac"}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--tx, #E8E4DC)", marginBottom: 4, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{selected.company}</div>
+                <div style={{ fontSize: 9, color: "var(--t4, #555)" }}>sent {relTime(selected.sent_to_sales_at)} · by {selected.assigned_by || "Isaac"}</div>
               </div>
               <button onClick={() => setSelected(null)}
-                style={{ background: "none", border: "none", color: "#555", fontSize: 14, cursor: "pointer", padding: "2px 6px", fontFamily: "inherit" }}>✕</button>
+                style={{ background: "none", border: "none", color: "var(--t4, #555)", fontSize: 14, cursor: "pointer", padding: "2px 6px", fontFamily: "inherit" }}>✕</button>
             </div>
 
             {/* Controls row */}
@@ -2903,21 +2976,21 @@ function SalesView({ db, apolloKey, gmailRefreshToken }) {
                 <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px" }}>STATUS</div>
                 <select value={selected.status || "new"} onChange={e => updateStatus(selected.id, e.target.value)}
                   disabled={!!updatingId}
-                  style={{ background: "#0C0C0C", border: `1px solid ${(SALES_STATUS_COLORS[selected.status] || "#222")}40`, borderRadius: 5, color: SALES_STATUS_COLORS[selected.status] || "#888", fontSize: 10, padding: "4px 8px", fontFamily: "inherit", cursor: "pointer" }}>
+                  style={{ background: "rgba(3,12,30,0.7)", border: `1px solid ${(SALES_STATUS_COLORS[selected.status] || "#222")}40`, borderRadius: 5, color: SALES_STATUS_COLORS[selected.status] || "#888", fontSize: 10, padding: "4px 8px", fontFamily: "inherit", cursor: "pointer" }}>
                   {SALES_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px" }}>PRIORITY</div>
                 <select value={selected.priority || "medium"} onChange={e => updatePriority(selected.id, e.target.value)}
-                  style={{ background: "#0C0C0C", border: `1px solid ${(PRIORITY_COLORS[selected.priority] || "#222")}40`, borderRadius: 5, color: PRIORITY_COLORS[selected.priority] || "#888", fontSize: 10, padding: "4px 8px", fontFamily: "inherit", cursor: "pointer" }}>
+                  style={{ background: "rgba(3,12,30,0.7)", border: `1px solid ${(PRIORITY_COLORS[selected.priority] || "#222")}40`, borderRadius: 5, color: PRIORITY_COLORS[selected.priority] || "#888", fontSize: 10, padding: "4px 8px", fontFamily: "inherit", cursor: "pointer" }}>
                   {["high","medium","low"].map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px" }}>ASSIGNED TO</div>
                 <select value={selected.assigned_to || "Chase"} onChange={e => updateAssignee(selected.id, e.target.value)}
-                  style={{ background: "#0C0C0C", border: "1px solid #222", borderRadius: 5, color: "#B8B4AC", fontSize: 10, padding: "4px 8px", fontFamily: "inherit", cursor: "pointer" }}>
+                  style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #222", borderRadius: 5, color: "#B8B4AC", fontSize: 10, padding: "4px 8px", fontFamily: "inherit", cursor: "pointer" }}>
                   {["Taylor","Chase","Isaac","Cynthia","Richard","Ben","Stacey"].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
@@ -2954,7 +3027,7 @@ function SalesView({ db, apolloKey, gmailRefreshToken }) {
               { label: "POSITIONING ANGLE",     value: selected.positioning_angle },
               { label: "RECOMMENDED NEXT STEP", value: selected.recommended_next_step },
             ].filter(f => f.value).map(f => (
-              <div key={f.label} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
+              <div key={f.label} style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
                 <div style={{ fontSize: 8, color: CLR, letterSpacing: "2px", marginBottom: 6 }}>{f.label}</div>
                 <div style={{ fontSize: 11, color: "#B8B4AC", lineHeight: 1.6 }}>{f.value}</div>
               </div>
@@ -2962,7 +3035,7 @@ function SalesView({ db, apolloKey, gmailRefreshToken }) {
 
             {/* Contacts snapshot */}
             {Array.isArray(selected.contacts_snapshot) && selected.contacts_snapshot.length > 0 && (
-              <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
                 <div style={{ fontSize: 8, color: CLR, letterSpacing: "2px", marginBottom: 10 }}>CONTACTS</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {selected.contacts_snapshot.map((c, i) => {
@@ -2972,7 +3045,7 @@ function SalesView({ db, apolloKey, gmailRefreshToken }) {
                     const li    = c.linkedin_url || c.contact_linkedin;
                     const isOpp = c.source === "opportunity";
                     return (
-                      <div key={i} style={{ padding: "8px 10px", background: "#080808", borderRadius: 6, borderLeft: `2px solid ${isOpp ? CLR : "#222"}` }}>
+                      <div key={i} style={{ padding: "8px 10px", background: "rgba(4,14,34,0.5)", borderRadius: 6, borderLeft: `2px solid ${isOpp ? CLR : "#222"}` }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
                           <span style={{ fontSize: 11, color: "#B8B4AC", fontWeight: 500 }}>{name}</span>
                           {isOpp && <span style={{ fontSize: 8, color: CLR, padding: "1px 5px", background: CLR + "15", border: `1px solid ${CLR}25`, borderRadius: 8 }}>primary</span>}
@@ -3001,7 +3074,7 @@ function SalesView({ db, apolloKey, gmailRefreshToken }) {
             {selected.outreach_draft_snapshot && (selected.outreach_draft_snapshot.subject || selected.outreach_draft_snapshot.body) && (() => {
               const d = selected.outreach_draft_snapshot;
               return (
-                <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
                   <div style={{ fontSize: 8, color: CLR, letterSpacing: "2px", marginBottom: 8 }}>OUTREACH DRAFT ON FILE</div>
                   {d.contact_name && <div style={{ fontSize: 9, color: "#666", marginBottom: 6 }}>To: {d.contact_name}{d.contact_email ? ` · ${d.contact_email}` : ""}</div>}
                   {d.subject && <div style={{ fontSize: 10, color: "#888", marginBottom: 8, fontWeight: 500 }}>Re: {d.subject}</div>}
@@ -3016,7 +3089,7 @@ function SalesView({ db, apolloKey, gmailRefreshToken }) {
 
             {/* Source links */}
             {Array.isArray(selected.source_links) && selected.source_links.length > 0 && (
-              <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
                 <div style={{ fontSize: 8, color: CLR, letterSpacing: "2px", marginBottom: 8 }}>SOURCE</div>
                 {selected.source_links.map((link, i) => (
                   <a key={i} href={link} target="_blank" rel="noopener noreferrer"
@@ -3028,12 +3101,12 @@ function SalesView({ db, apolloKey, gmailRefreshToken }) {
             )}
 
             {/* Notes */}
-            <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
+            <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
               <div style={{ fontSize: 8, color: CLR, letterSpacing: "2px", marginBottom: 10 }}>NOTES {notes.length > 0 && `(${notes.length})`}</div>
               {notes.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
                   {notes.map(n => (
-                    <div key={n.id} style={{ padding: "8px 10px", background: "#080808", borderRadius: 6, borderLeft: `2px solid ${NOTE_TYPE_COLORS[n.note_type] || "#333"}` }}>
+                    <div key={n.id} style={{ padding: "8px 10px", background: "rgba(4,14,34,0.5)", borderRadius: 6, borderLeft: `2px solid ${NOTE_TYPE_COLORS[n.note_type] || "#333"}` }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                         <span style={{ fontSize: 8, color: NOTE_TYPE_COLORS[n.note_type] || "#555", letterSpacing: "1px" }}>{(n.note_type || "update").toUpperCase()}</span>
                         <span style={{ fontSize: 8, color: "#333" }}>{n.author} · {relTime(n.created_at)}</span>
@@ -3045,12 +3118,12 @@ function SalesView({ db, apolloKey, gmailRefreshToken }) {
               )}
               <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                 <select value={noteType} onChange={e => setNoteType(e.target.value)}
-                  style={{ background: "#080808", border: "1px solid #222", borderRadius: 5, color: "#888", fontSize: 9, padding: "5px 7px", fontFamily: "inherit", flexShrink: 0 }}>
+                  style={{ background: "rgba(4,14,34,0.5)", border: "1px solid #222", borderRadius: 5, color: "#888", fontSize: 9, padding: "5px 7px", fontFamily: "inherit", flexShrink: 0 }}>
                   {["update","call","email","objection","win"].map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
                 <textarea value={noteBody} onChange={e => setNoteBody(e.target.value)}
                   placeholder="Add a note…" rows={2}
-                  style={{ flex: 1, background: "#080808", border: "1px solid #222", borderRadius: 5, color: "#E8E4DC", fontSize: 10, padding: "5px 8px", fontFamily: "inherit", resize: "vertical", outline: "none" }} />
+                  style={{ flex: 1, background: "rgba(4,14,34,0.5)", border: "1px solid #222", borderRadius: 5, color: "#E8E4DC", fontSize: 10, padding: "5px 8px", fontFamily: "inherit", resize: "vertical", outline: "none" }} />
                 <button onClick={addNote} disabled={savingNote || !noteBody.trim()}
                   style={{ padding: "5px 12px", background: "#FB923C12", border: "1px solid #FB923C40", borderRadius: 5, color: CLR, fontSize: 10, cursor: !noteBody.trim() ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}>
                   {savingNote ? "…" : "Save"}
@@ -3232,43 +3305,196 @@ function CRMView({ db, apolloKey, gmailRefreshToken }) {
     setSent(Array.isArray(s) ? s : []);
   }
 
+  const [selectedItem, setSelectedItem] = useState(null); // { type: "contact"|"draft"|"signal", data: {...} }
+
   useEffect(() => { load(); loadExtra(); }, []);
 
-  const TABS = [
-    { id: "contacts",  label: "Contacts",       count: contacts.length  },
-    { id: "drafts",    label: "Outreach Drafts", count: drafts.length    },
-    { id: "signals",   label: "Account Signals", count: signals.length   },
-    { id: "companies", label: "Companies",        count: companies.length },
-    { id: "sent",      label: "Sent Outreach",    count: sent.length      },
-  ];
+  // Build unified inbox list based on activeTab filter
+  const inboxItems = (() => {
+    const items = [];
+    if (activeTab === "contacts" || activeTab === "all") {
+      filteredContacts.forEach(c => items.push({ type: "contact", data: c, key: "c_" + c.id, label: c.name || "—", sub: c.title || c.notes?.slice(0, 40) || "—", ts: c.created_at, color: CLR }));
+    }
+    if (activeTab === "drafts" || activeTab === "all") {
+      filteredDrafts.forEach(d => items.push({ type: "draft", data: d, key: "d_" + d.id, label: d.company || d.contact_name || "—", sub: d.subject || "—", ts: d.created_at, color: "#A78BFA" }));
+    }
+    if (activeTab === "signals") {
+      signals.forEach(s => items.push({ type: "signal", data: s, key: "s_" + s.id, label: accounts.find(a => a.id === s.account_id)?.name || "Signal", sub: s.signal_type || "—", ts: s.created_at, color: "#F7C948" }));
+    }
+    return items;
+  })();
+
+  function avatarInitials(name) {
+    if (!name) return "?";
+    const parts = name.trim().split(/\s+/);
+    return (parts[0]?.[0] || "") + (parts[1]?.[0] || "");
+  }
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ padding: "14px 20px", borderBottom: "1px solid #111", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-        <span style={{ fontSize: 18 }}>◐</span>
+      <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
         <div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: CLR }}>CRM</div>
-          <div style={{ fontSize: 9, color: "#555" }}>contacts · outreach · account signals</div>
+          <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, color: CLR }}>CRM</div>
+          <div style={{ fontSize: 9, color: "var(--t4, #555)" }}>contacts · outreach · signals</div>
+        </div>
+        <div style={{ display: "flex", gap: 5, marginLeft: 16 }}>
+          {[["all","All"], ["contacts","Contacts"], ["drafts","Drafts"], ["signals","Signals"]].map(([id, label]) => (
+            <button key={id} onClick={() => { setActiveTab(id); setSelectedItem(null); }}
+              style={{ fontSize: 9, padding: "3px 9px", borderRadius: 5, border: `1px solid ${activeTab === id ? "rgba(78,205,196,0.35)" : "rgba(255,255,255,0.07)"}`, background: activeTab === id ? "rgba(78,205,196,0.1)" : "transparent", color: activeTab === id ? CLR : "var(--t3, #666)", cursor: "pointer", fontFamily: "inherit" }}>
+              {label}
+            </button>
+          ))}
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="search…"
-            style={{ background: "#0C0C0C", border: "1px solid #1A1A1A", borderRadius: 5, color: "#E8E4DC", fontSize: 10, padding: "3px 9px", fontFamily: "inherit", width: 140 }} />
-          <button onClick={load} style={{ background: "none", border: "1px solid #1A1A1A", borderRadius: 5, color: "#555", fontSize: 10, padding: "3px 9px", cursor: "pointer", fontFamily: "inherit" }}>↺</button>
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 6, color: "var(--tx, #E8E4DC)", fontSize: 10, padding: "4px 10px", fontFamily: "inherit", width: 140, outline: "none" }} />
+          <button onClick={() => { load(); loadExtra(); }} style={{ background: "none", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 5, color: "var(--t3, #666)", fontSize: 10, padding: "3px 9px", cursor: "pointer", fontFamily: "inherit" }}>↺</button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", borderBottom: "1px solid #111", padding: "0 20px", flexShrink: 0 }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            style={{ padding: "10px 16px", background: "none", border: "none", borderBottom: `2px solid ${activeTab === t.id ? CLR : "transparent"}`, color: activeTab === t.id ? CLR : "#555", fontSize: 10, letterSpacing: "1px", cursor: "pointer", fontFamily: "inherit" }}>
-            {t.label.toUpperCase()} {t.count > 0 ? `(${t.count})` : ""}
-          </button>
-        ))}
-      </div>
+      {/* Two-panel email client layout */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+        {/* Left: inbox list */}
+        <div style={{ width: 280, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.04)", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+          {inboxItems.length === 0 ? (
+            <div style={{ padding: 20, fontSize: 11, color: "var(--t4, #555)" }}>
+              {activeTab === "contacts" ? "No contacts yet. Run Prospector to populate." :
+               activeTab === "drafts" ? "No drafts yet. Enrich contacts to draft outreach." :
+               activeTab === "signals" ? "No signals yet. Scan target accounts." :
+               "Nothing here yet."}
+            </div>
+          ) : inboxItems.map(item => {
+            const isActive = selectedItem?.key === item.key;
+            return (
+              <div key={item.key} onClick={() => setSelectedItem(item)}
+                style={{ padding: "11px 14px", borderBottom: "1px solid rgba(255,255,255,0.03)", cursor: "pointer", background: isActive ? `rgba(78,205,196,0.06)` : "transparent", borderLeft: `2px solid ${isActive ? CLR : "transparent"}`, transition: "background 0.1s" }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.02)"; }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {/* Avatar */}
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: item.color + "18", border: `1px solid ${item.color}30`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: item.color }}>{avatarInitials(item.label)}</span>
+                  </div>
+                  {/* Text */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--tx, #E8E4DC)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</div>
+                    <div style={{ fontSize: 9, color: "var(--t3, #666)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{item.sub}</div>
+                  </div>
+                  <div style={{ flexShrink: 0, textAlign: "right" }}>
+                    <span style={{ fontSize: 7, padding: "1px 5px", borderRadius: 4, background: item.color + "12", color: item.color }}>{item.type}</span>
+                    <div style={{ fontSize: 7, color: "var(--t5, #444)", marginTop: 2 }}>{relTime(item.ts)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right: detail pane */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+          {!selectedItem ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
+              <div style={{ width: 48, height: 48, borderRadius: "50%", border: `1px solid rgba(78,205,196,0.2)`, background: "rgba(78,205,196,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: 20, color: CLR }}>◎</span>
+              </div>
+              <span style={{ fontSize: 11, color: "var(--t4, #555)" }}>Select a contact or draft</span>
+            </div>
+          ) : selectedItem.type === "contact" ? (() => {
+            const c = selectedItem.data;
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Contact header */}
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(78,205,196,0.1)", border: `1px solid rgba(78,205,196,0.25)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: CLR }}>{avatarInitials(c.name)}</span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--tx, #E8E4DC)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{c.name || "—"}</div>
+                    <div style={{ fontSize: 10, color: "var(--t3, #666)", marginTop: 2 }}>{c.title || ""} {c.title && c.notes ? "·" : ""} {c.notes?.slice(0, 50) || ""}</div>
+                  </div>
+                  {apolloKey && (
+                    <button onClick={() => enrichContact(c)} disabled={enriching === c.id}
+                      style={{ marginLeft: "auto", padding: "5px 12px", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 7, color: "#A78BFA", fontSize: 9, cursor: enriching === c.id ? "default" : "pointer", fontFamily: "inherit" }}>
+                      {enriching === c.id ? "◌ Enriching…" : "◈ Enrich"}
+                    </button>
+                  )}
+                </div>
+                {/* Contact details */}
+                {[
+                  { label: "Email", val: c.email, link: c.email ? `mailto:${c.email}` : null },
+                  { label: "LinkedIn", val: c.linkedin, link: c.linkedin },
+                  { label: "Company", val: c.notes },
+                  { label: "Source", val: c.source },
+                ].filter(f => f.val).map(({ label, val, link }) => (
+                  <div key={label} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+                    <span style={{ fontSize: 8, letterSpacing: "1px", color: "var(--t4, #555)", width: 72, flexShrink: 0 }}>{label}</span>
+                    {link ? <a href={link} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: CLR }}>{val}</a>
+                           : <span style={{ fontSize: 10, color: "var(--t2, #B8B4AC)" }}>{val}</span>}
+                  </div>
+                ))}
+                {/* Related drafts */}
+                {drafts.filter(d => d.contact_email === c.email || d.contact_name === c.name).length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 8, color: "var(--t4, #555)", letterSpacing: "1px", marginBottom: 8 }}>OUTREACH DRAFTS</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {drafts.filter(d => d.contact_email === c.email || d.contact_name === c.name).map(d => (
+                        <div key={d.id} onClick={() => setSelectedItem({ type: "draft", data: d, key: "d_" + d.id, label: d.company || d.contact_name || "—", sub: d.subject || "—", ts: d.created_at, color: "#A78BFA" })}
+                          style={{ padding: "9px 12px", background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.12)", borderRadius: 8, cursor: "pointer" }}>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: "var(--tx, #E8E4DC)", marginBottom: 3 }}>{d.subject || "No subject"}</div>
+                          <div style={{ fontSize: 9, color: "var(--t3, #666)" }}>{(d.body || "").slice(0, 80)}…</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })() : selectedItem.type === "draft" ? (() => {
+            const d = selectedItem.data;
+            const sendState = draftSending[d.id];
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Draft header */}
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "#A78BFA" }}>{avatarInitials(d.contact_name || d.company)}</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--tx, #E8E4DC)", fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 3 }}>{d.subject || "No subject"}</div>
+                    <div style={{ fontSize: 9, color: "var(--t4, #555)" }}>To: {d.contact_email || d.contact_name || "—"} · {d.company || ""} · {relTime(d.created_at)}</div>
+                  </div>
+                  {gmailRefreshToken && (
+                    <button onClick={() => sendToGmail(d)} disabled={!!sendState}
+                      style={{ padding: "6px 14px", background: sendState === "saved" ? "rgba(52,211,153,0.1)" : "rgba(78,205,196,0.1)", border: `1px solid ${sendState === "saved" ? "rgba(52,211,153,0.3)" : "rgba(78,205,196,0.3)"}`, borderRadius: 7, color: sendState === "saved" ? "#34D399" : CLR, fontSize: 10, cursor: sendState ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                      {sendState === "sending" ? "◌ Saving…" : sendState === "saved" ? "✓ Saved" : sendState === "error" ? "✕ Error" : "Save to Gmail →"}
+                    </button>
+                  )}
+                </div>
+                {/* Email body */}
+                <div style={{ background: "rgba(3,12,30,0.5)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 10, padding: "16px 18px" }}>
+                  <pre style={{ fontSize: 11, color: "var(--t2, #B8B4AC)", lineHeight: 1.75, whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                    {d.body || "No body"}
+                  </pre>
+                </div>
+              </div>
+            );
+          })() : (() => {
+            const s = selectedItem.data;
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--tx, #E8E4DC)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                  {accounts.find(a => a.id === s.account_id)?.name || "Signal"}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--t3, #666)", lineHeight: 1.6 }}>{s.signal_text || s.summary || "—"}</div>
+                <div style={{ fontSize: 8, color: "var(--t4, #555)" }}>{relTime(s.created_at)}</div>
+              </div>
+            );
+          })()}
+
+        <div style={{ display: "none" }}>{/* legacy tab content preserved below — now unused */}
 
         {/* Contacts tab */}
         {activeTab === "contacts" && (
@@ -3276,7 +3502,7 @@ function CRMView({ db, apolloKey, gmailRefreshToken }) {
             {filteredContacts.length === 0 ? (
               <div style={{ fontSize: 11, color: "#444" }}>No contacts yet. Run the Prospector agent or ff-enrich-chain to populate.</div>
             ) : filteredContacts.map(c => (
-              <div key={c.id} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+              <div key={c.id} style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#141414", border: "1px solid #1A1A1A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <span style={{ fontSize: 12, color: "#555" }}>{(c.name || c.title || "?")[0]?.toUpperCase()}</span>
                 </div>
@@ -3314,7 +3540,7 @@ function CRMView({ db, apolloKey, gmailRefreshToken }) {
             {filteredDrafts.length === 0 ? (
               <div style={{ fontSize: 11, color: "#444" }}>No outreach drafts. Run the chain workflow to generate drafts.</div>
             ) : filteredDrafts.map(d => (
-              <div key={d.id} style={{ background: "#0C0C0C", border: `1px solid ${statusColor(d.status)}20`, borderRadius: 8, padding: "14px 16px" }}>
+              <div key={d.id} style={{ background: "rgba(3,12,30,0.7)", border: `1px solid ${statusColor(d.status)}20`, borderRadius: 8, padding: "14px 16px" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -3331,7 +3557,7 @@ function CRMView({ db, apolloKey, gmailRefreshToken }) {
                     <span style={{ fontSize: 8, color: "#333", marginTop: 4 }}>{relTime(d.created_at)}</span>
                   </div>
                 </div>
-                <div style={{ fontSize: 10, color: "#B8B4AC", lineHeight: 1.6, whiteSpace: "pre-wrap", background: "#080808", border: "1px solid #111", borderRadius: 6, padding: "10px 12px", maxHeight: 180, overflowY: "auto" }}>
+                <div style={{ fontSize: 10, color: "#B8B4AC", lineHeight: 1.6, whiteSpace: "pre-wrap", background: "rgba(4,14,34,0.5)", border: "1px solid #111", borderRadius: 6, padding: "10px 12px", maxHeight: 180, overflowY: "auto" }}>
                   {d.body}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -3381,11 +3607,11 @@ function CRMView({ db, apolloKey, gmailRefreshToken }) {
             {Object.keys(signalsByAccount).length === 0 ? (
               <div style={{ fontSize: 11, color: "#444" }}>No account signals yet. Run ff-scout or scan-targets to populate.</div>
             ) : Object.entries(signalsByAccount).map(([accountName, sigs]) => (
-              <div key={accountName} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+              <div key={accountName} style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
                 <div style={{ fontSize: 9, color: CLR, letterSpacing: "2px", marginBottom: 12 }}>{accountName.toUpperCase()} — {sigs.length} SIGNAL{sigs.length !== 1 ? "S" : ""}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {sigs.map(s => (
-                    <div key={s.id} style={{ padding: "10px 12px", background: "#080808", border: "1px solid #141414", borderRadius: 6 }}>
+                    <div key={s.id} style={{ padding: "10px 12px", background: "rgba(4,14,34,0.5)", border: "1px solid #141414", borderRadius: 6 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -3417,7 +3643,7 @@ function CRMView({ db, apolloKey, gmailRefreshToken }) {
             {companies.length === 0 ? (
               <div style={{ fontSize: 11, color: "#444" }}>No companies yet. Apollo enrichment and the chain workflow will populate this table as contacts are discovered.</div>
             ) : companies.map(c => (
-              <div key={c.id} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+              <div key={c.id} style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 11, color: "#E8E4DC", fontWeight: 500 }}>{c.name}</div>
                   <div style={{ display: "flex", gap: 10, marginTop: 3 }}>
@@ -3435,25 +3661,9 @@ function CRMView({ db, apolloKey, gmailRefreshToken }) {
           </div>
         )}
 
-        {/* Sent Outreach tab */}
-        {activeTab === "sent" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {sent.length === 0 ? (
-              <div style={{ fontSize: 11, color: "#444" }}>No sent outreach yet. Mark drafts as sent from the Outreach Drafts tab to build this log.</div>
-            ) : sent.map(o => (
-              <div key={o.id} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 9, padding: "1px 6px", background: "#34D39910", border: "1px solid #34D39920", borderRadius: 8, color: "#34D399" }}>{o.type || "email"}</span>
-                  <span style={{ fontSize: 9, color: "#555" }}>{o.status}</span>
-                  <span style={{ fontSize: 9, color: "#333", marginLeft: "auto" }}>{relTime(o.sent_at || o.created_at)}</span>
-                </div>
-                <div style={{ fontSize: 11, color: "#E8E4DC" }}>{o.subject}</div>
-                {o.body && <div style={{ fontSize: 10, color: "#666", marginTop: 4, lineHeight: 1.5 }}>{o.body.slice(0, 200)}{o.body.length > 200 ? "…" : ""}</div>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+        </div>{/* end hidden legacy div */}
+        </div>{/* end right detail panel */}
+      </div>{/* end two-panel container */}
     </div>
   );
 }
@@ -3636,7 +3846,7 @@ function ChatHistoryView({ db, fetchGoogleAdsData }) {
             </div>
             <div style={{ padding: "12px 20px", borderTop: "1px solid #111", display: "flex", gap: 8, flexShrink: 0 }}>
               <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()} placeholder="Message…"
-                style={{ flex: 1, background: "#0C0C0C", border: "1px solid #1A1A1A", borderRadius: 7, color: "#E8E4DC", fontSize: 11, padding: "8px 12px", fontFamily: "inherit" }} />
+                style={{ flex: 1, background: "rgba(3,12,30,0.7)", border: "1px solid #1A1A1A", borderRadius: 7, color: "#E8E4DC", fontSize: 11, padding: "8px 12px", fontFamily: "inherit" }} />
               <button onClick={send} disabled={sending || !input.trim()}
                 style={{ padding: "8px 16px", background: CLR + "15", border: `1px solid ${CLR}40`, borderRadius: 7, color: CLR, fontSize: 11, cursor: sending ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
                 {sending ? "…" : "Send"}
@@ -3941,7 +4151,7 @@ function ActionsView({ vpsUrl, agentSecret, db, onNavigate, gmailRefreshToken })
             const borderColor = isRunning ? "#F7C94830" : failed ? "#FF6B6B20" : "#141414";
 
             return (
-              <div key={action.id} style={{ background: "#0C0C0C", border: `1px solid ${borderColor}`, borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 11 }}>
+              <div key={action.id} style={{ background: "rgba(3,12,30,0.7)", border: `1px solid ${borderColor}`, borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 11 }}>
                 {/* Title row */}
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <div style={{ width: 7, height: 7, borderRadius: "50%", background: action.color, marginTop: 4, flexShrink: 0, boxShadow: isRunning ? `0 0 8px ${action.color}` : "none" }} />
@@ -3960,7 +4170,7 @@ function ActionsView({ vpsUrl, agentSecret, db, onNavigate, gmailRefreshToken })
                 </div>
 
                 {/* Last run */}
-                <div style={{ padding: "8px 10px", background: "#080808", border: "1px solid #141414", borderRadius: 6 }}>
+                <div style={{ padding: "8px 10px", background: "rgba(4,14,34,0.5)", border: "1px solid #141414", borderRadius: 6 }}>
                   {run ? (
                     <>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -3988,7 +4198,7 @@ function ActionsView({ vpsUrl, agentSecret, db, onNavigate, gmailRefreshToken })
 
                 {/* Param form */}
                 {showParams[action.id] && action.params && (
-                  <div style={{ padding: "12px", background: "#080808", border: "1px solid #1E1E1E", borderRadius: 7, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ padding: "12px", background: "rgba(4,14,34,0.5)", border: "1px solid #1E1E1E", borderRadius: 7, display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ fontSize: 8, color: action.color, letterSpacing: "1.5px", marginBottom: 2 }}>CONFIGURE RUN</div>
                     {action.params.map(p => {
                       const val = (paramValues[action.id] || {})[p.key] || "";
@@ -4002,13 +4212,13 @@ function ActionsView({ vpsUrl, agentSecret, db, onNavigate, gmailRefreshToken })
                               onChange={e => setVal(e.target.value)}
                               placeholder={p.placeholder || ""}
                               rows={2}
-                              style={{ background: "#0C0C0C", border: "1px solid #222", borderRadius: 5, color: "#B8B4AC", fontSize: 10, fontFamily: "inherit", padding: "6px 8px", resize: "vertical", outline: "none" }}
+                              style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #222", borderRadius: 5, color: "#B8B4AC", fontSize: 10, fontFamily: "inherit", padding: "6px 8px", resize: "vertical", outline: "none" }}
                             />
                           ) : p.type === "select" ? (
                             <select
                               value={val}
                               onChange={e => setVal(e.target.value)}
-                              style={{ background: "#0C0C0C", border: "1px solid #222", borderRadius: 5, color: "#B8B4AC", fontSize: 10, fontFamily: "inherit", padding: "5px 8px", outline: "none" }}
+                              style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #222", borderRadius: 5, color: "#B8B4AC", fontSize: 10, fontFamily: "inherit", padding: "5px 8px", outline: "none" }}
                             >
                               {p.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                             </select>
@@ -4018,7 +4228,7 @@ function ActionsView({ vpsUrl, agentSecret, db, onNavigate, gmailRefreshToken })
                               value={val}
                               onChange={e => setVal(e.target.value)}
                               placeholder={p.placeholder || ""}
-                              style={{ background: "#0C0C0C", border: "1px solid #222", borderRadius: 5, color: "#B8B4AC", fontSize: 10, fontFamily: "inherit", padding: "5px 8px", outline: "none" }}
+                              style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #222", borderRadius: 5, color: "#B8B4AC", fontSize: 10, fontFamily: "inherit", padding: "5px 8px", outline: "none" }}
                             />
                           )}
                         </div>
@@ -4071,7 +4281,7 @@ function ActionsView({ vpsUrl, agentSecret, db, onNavigate, gmailRefreshToken })
 
         {/* Recent run log */}
         {jobRuns.length > 0 && (
-          <div style={{ marginTop: 24, background: "#0C0C0C", border: "1px solid #141414", borderRadius: 10, padding: "14px 18px" }}>
+          <div style={{ marginTop: 24, background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 10, padding: "14px 18px" }}>
             <div style={{ fontSize: 9, color: "#FB923C", letterSpacing: "2px", marginBottom: 12 }}>RECENT RUN LOG</div>
             <div style={{ display: "flex", flexDirection: "column" }}>
               {jobRuns.slice(0, 20).map(r => (
@@ -4105,7 +4315,7 @@ function ActionsView({ vpsUrl, agentSecret, db, onNavigate, gmailRefreshToken })
             {outreachDrafts.length === 0 ? (
               <div style={{ fontSize: 11, color: "#444" }}>No outreach drafts yet.</div>
             ) : outreachDrafts.map(d => (
-              <div key={d.id} style={{ background: "#0C0C0C", border: `1px solid ${d.status === "approved" ? "#34D39920" : d.status === "rejected" ? "#FF6B6B15" : "#141414"}`, borderRadius: 8, padding: "14px 16px", marginBottom: 10 }}>
+              <div key={d.id} style={{ background: "rgba(3,12,30,0.7)", border: `1px solid ${d.status === "approved" ? "#34D39920" : d.status === "rejected" ? "#FF6B6B15" : "#141414"}`, borderRadius: 8, padding: "14px 16px", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
@@ -4160,7 +4370,7 @@ function ActionsView({ vpsUrl, agentSecret, db, onNavigate, gmailRefreshToken })
                 {pendingApprovals > 0 && <span style={{ marginLeft: 8, padding: "1px 7px", background: "#F7C94815", border: "1px solid #F7C94830", borderRadius: 8, color: "#F7C948" }}>{pendingApprovals}</span>}
               </div>
               {approvals.map(a => (
-                <div key={a.id} style={{ background: "#0C0C0C", border: `1px solid ${a.status === "approved" ? "#34D39920" : a.status === "rejected" ? "#FF6B6B15" : "#141414"}`, borderRadius: 8, padding: "12px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
+                <div key={a.id} style={{ background: "rgba(3,12,30,0.7)", border: `1px solid ${a.status === "approved" ? "#34D39920" : a.status === "rejected" ? "#FF6B6B15" : "#141414"}`, borderRadius: 8, padding: "12px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
                       <span style={{ fontSize: 9, padding: "1px 6px", background: "#A78BFA12", border: "1px solid #A78BFA25", borderRadius: 5, color: "#A78BFA" }}>{a.type || "review"}</span>
@@ -4410,7 +4620,7 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
                 { label: "FAILED", value: failedRuns, color: failedRuns > 0 ? "#FF6B6B" : "#555" },
                 { label: "EST. COST", value: totalCost > 0 ? `$${totalCost.toFixed(4)}` : "$0.00", color: "#F7C948" },
               ].map(s => (
-                <div key={s.label} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
+                <div key={s.label} style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
                   <div style={{ fontSize: 9, color: "#555", letterSpacing: "2px", marginBottom: 6 }}>{s.label}</div>
                   <div style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.value}</div>
                 </div>
@@ -4418,7 +4628,7 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
             </div>
 
             {/* Today's activity */}
-            <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+            <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={{ fontSize: 9, color: CLR, letterSpacing: "2px" }}>TODAY'S ACTIVITY</div>
                 <span style={{ fontSize: 9, color: "#444" }}>{todayRuns.length} run{todayRuns.length !== 1 ? "s" : ""} in last 24h</span>
@@ -4428,7 +4638,7 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {todayRuns.map(r => (
-                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", background: "#080808", borderRadius: 5 }}>
+                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", background: "rgba(4,14,34,0.5)", borderRadius: 5 }}>
                       <div style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor(r.status), flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 11, color: "#B8B4AC" }}>{r.job_name}</div>
@@ -4477,7 +4687,7 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
               }, {});
 
               return (
-                <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+                <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                     <div style={{ fontSize: 9, color: CLR, letterSpacing: "2px" }}>ACTIVE SKILLS</div>
                     {liveSkills && <div style={{ padding: "1px 6px", background: "#34D39910", border: "1px solid #34D39925", borderRadius: 8 }}><span style={{ fontSize: 8, color: "#34D399" }}>live</span></div>}
@@ -4492,7 +4702,7 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
                       const isRunning = lastRun?.status === "running";
                       const dotColor = isRunning ? "#F7C948" : (s.color || CLR);
                       return (
-                        <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", background: "#080808", border: `1px solid ${isRunning ? "#F7C94825" : "#141414"}`, borderRadius: 6 }}>
+                        <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", background: "rgba(4,14,34,0.5)", border: `1px solid ${isRunning ? "#F7C94825" : "#141414"}`, borderRadius: 6 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor, flexShrink: 0, boxShadow: isRunning ? `0 0 6px ${dotColor}` : "none" }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 11, color: s.color || CLR, fontFamily: "inherit" }}>{s.name || "unknown"}</div>
@@ -4521,7 +4731,7 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
 
             {/* Scheduled Jobs (live from OpenClaw cron) */}
             {status?.crons && Array.isArray(status.crons) && status.crons.length > 0 && (
-              <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+              <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
                 <div style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px", marginBottom: 12 }}>SCHEDULED JOBS</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {status.crons.map((c, i) => (
@@ -4537,7 +4747,7 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
             )}
 
             {/* Recent runs preview */}
-            <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+            <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
               <div style={{ fontSize: 9, color: CLR, letterSpacing: "2px", marginBottom: 12 }}>RECENT RUNS</div>
               {jobRuns.slice(0, 5).length === 0 ? (
                 <div style={{ fontSize: 11, color: "#444" }}>No runs recorded yet. Trigger a job to start tracking.</div>
@@ -4562,7 +4772,7 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
 
             {/* Health detail */}
             {health && !health.error && (
-              <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+              <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
                 <div style={{ fontSize: 9, color: CLR, letterSpacing: "2px", marginBottom: 12 }}>BRIDGE HEALTH</div>
                 <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
                   {Object.entries(health.env || {}).map(([k, v]) => (
@@ -4578,7 +4788,7 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
 
             {/* VPS Config Sync */}
             {BASE && (
-              <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+              <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
                 <div style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px", marginBottom: 12 }}>VPS CONFIG SYNC</div>
                 <div style={{ fontSize: 10, color: "#666", marginBottom: 10 }}>Push Slack webhook from settings to VPS so the ff-brief skill can deliver on Monday mornings.</div>
                 <button
@@ -4634,7 +4844,7 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {filteredRuns.map(r => (
-                  <div key={r.id} style={{ background: "#0C0C0C", border: `1px solid ${r.status === "failed" ? "#FF6B6B18" : "#141414"}`, borderRadius: 7, padding: "10px 14px" }}>
+                  <div key={r.id} style={{ background: "rgba(3,12,30,0.7)", border: `1px solid ${r.status === "failed" ? "#FF6B6B18" : "#141414"}`, borderRadius: 7, padding: "10px 14px" }}>
                     {/* Top row */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor(r.status), flexShrink: 0 }} />
@@ -4688,14 +4898,14 @@ function OpenClawView({ vpsUrl, agentSecret, db, onNavigate }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
               {Object.entries(byJob).map(([job, count]) => (
-                <div key={job} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
+                <div key={job} style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
                   <div style={{ fontSize: 9, color: "#555", letterSpacing: "1px", marginBottom: 6 }}>{job.toUpperCase()}</div>
                   <div style={{ fontSize: 18, fontWeight: 600, color: CLR }}>{count}</div>
                   <div style={{ fontSize: 9, color: "#444", marginTop: 2 }}>runs logged</div>
                 </div>
               ))}
             </div>
-            <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+            <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
               <div style={{ fontSize: 9, color: CLR, letterSpacing: "2px", marginBottom: 10 }}>COST TRACKING</div>
               <div style={{ fontSize: 10, color: "#555" }}>Token-level tracking activates once OpenClaw skills write token counts to job_runs. Currently tracking run counts, duration, and status.</div>
               <div style={{ marginTop: 12, display: "flex", gap: 20 }}>
@@ -4817,7 +5027,7 @@ function UsageView({ db, onNavigate }) {
                 { label: "FAILED", value: failedRuns, color: failedRuns > 0 ? "#FF6B6B" : "#555" },
                 { label: "TOTAL TOKENS", value: totalTokens > 0 ? `${(totalTokens / 1000).toFixed(1)}K` : "0", color: "#A78BFA" },
               ].map(s => (
-                <div key={s.label} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
+                <div key={s.label} style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "12px 14px" }}>
                   <div style={{ fontSize: 9, color: "#555", letterSpacing: "2px", marginBottom: 6 }}>{s.label}</div>
                   <div style={{ fontSize: 20, fontWeight: 600, color: s.color }}>{s.value}</div>
                 </div>
@@ -4825,7 +5035,7 @@ function UsageView({ db, onNavigate }) {
             </div>
 
             {/* Budget */}
-            <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+            <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
               <div style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px", marginBottom: 14 }}>MONTHLY BUDGET</div>
               <BudgetBar label={`CLAUDE · ${fmtUSD(claudeCost)} of $${CLAUDE_BUDGET}`} spent={claudeCost} cap={CLAUDE_BUDGET} color="#FF6B2B" />
               <div style={{ marginTop: 10 }}>
@@ -4850,13 +5060,13 @@ function UsageView({ db, onNavigate }) {
             </div>
 
             {/* Daily cost chart */}
-            <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+            <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
               <div style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px", marginBottom: 14 }}>COST — LAST 7 DAYS</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {dailyCost.map((d, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ fontSize: 9, color: "#666", minWidth: 68, textAlign: "right" }}>{d.label}</div>
-                    <div style={{ flex: 1, height: 14, background: "#0A0A0A", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ flex: 1, height: 14, background: "rgba(4,14,34,0.62)", borderRadius: 3, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${(d.cost / maxDailyCost) * 100}%`, background: i === 0 ? "#F7C948" : "#F7C94835", borderRadius: 3, minWidth: d.cost > 0 ? 3 : 0 }} />
                     </div>
                     <div style={{ fontSize: 9, color: d.cost > 0 ? "#F7C948" : "#333", minWidth: 56, textAlign: "right" }}>{d.cost > 0 ? fmtUSD(d.cost) : "—"}</div>
@@ -4866,7 +5076,7 @@ function UsageView({ db, onNavigate }) {
             </div>
 
             {/* By-job breakdown */}
-            <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+            <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
               <div style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px", marginBottom: 12 }}>BREAKDOWN BY JOB</div>
               {jobList.length === 0 ? (
                 <div style={{ fontSize: 10, color: "#444" }}>No runs recorded yet.</div>
@@ -4902,11 +5112,11 @@ function UsageView({ db, onNavigate }) {
 
             {/* Top expensive runs */}
             {topRuns.some(r => r.estimated_cost > 0) && (
-              <div style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
+              <div style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px" }}>
                 <div style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px", marginBottom: 12 }}>MOST EXPENSIVE RUNS</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {topRuns.filter(r => r.estimated_cost > 0).map(r => (
-                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", background: "#080808", borderRadius: 5 }}>
+                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", background: "rgba(4,14,34,0.5)", borderRadius: 5 }}>
                       <div style={{ width: 5, height: 5, borderRadius: "50%", background: JOB_COLORS[r.job_name] || "#666", flexShrink: 0 }} />
                       <div style={{ flex: 1, fontSize: 10, color: "#B8B4AC" }}>{r.job_name}</div>
                       <div style={{ fontSize: 9, color: "#555" }}>{r.total_tokens > 0 ? `${r.total_tokens.toLocaleString()} tokens` : "—"}</div>
@@ -5091,7 +5301,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
           <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: "#F7C948" }}>Brain</div>
           <div style={{ fontSize: 9, color: "#444" }}>weekly intelligence · competitor watch · industry trends</div>
         </div>
-        <div style={{ display: "flex", gap: 2, background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 6, padding: 2 }}>
+        <div style={{ display: "flex", gap: 2, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 6, padding: 2 }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
               style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: "none", background: activeTab === t.id ? "#1A1A1A" : "transparent", color: activeTab === t.id ? t.color : "#555", cursor: "pointer", fontFamily: "inherit" }}>
@@ -5131,7 +5341,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
                       setSelectedBriefIdx(idx);
                       setBrief(briefHistory[idx].content);
                       setBriefDate(briefHistory[idx].generated_at);
-                    }} style={{ fontSize: 9, background: "#0D0D0D", border: "1px solid #2A2A2A", borderRadius: 4, color: "#888", padding: "2px 6px", fontFamily: "inherit", cursor: "pointer" }}>
+                    }} style={{ fontSize: 9, background: "rgba(4,14,34,0.6)", border: "1px solid #2A2A2A", borderRadius: 4, color: "#888", padding: "2px 6px", fontFamily: "inherit", cursor: "pointer" }}>
                       {briefHistory.map((b, i) => (
                         <option key={b.id || i} value={i}>
                           {new Date(b.generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}{i === 0 ? " (latest)" : ""}
@@ -5162,7 +5372,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
             </div>
             {/* Delivery history */}
             {showHistory && (
-              <div style={{ marginBottom: 20, background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 7, padding: "12px 16px" }}>
+              <div style={{ marginBottom: 20, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 7, padding: "12px 16px" }}>
                 <div style={{ fontSize: 9, color: "#444", letterSpacing: "2px", marginBottom: 10 }}>DELIVERY HISTORY</div>
                 {!deliveries && <div style={{ fontSize: 10, color: "#444" }}>Loading…</div>}
                 {deliveries && deliveries.length === 0 && <div style={{ fontSize: 10, color: "#444" }}>No deliveries yet.</div>}
@@ -5182,7 +5392,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
               </div>
             )}
             {!brief && !isLoading("brief") && (
-              <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "28px 24px" }}>
+              <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "28px 24px" }}>
                 <div style={{ fontSize: 11, color: "#F7C948", marginBottom: 8 }}>Fatfish Weekly Intelligence Brief</div>
                 <div style={{ fontSize: 10, color: "#444", lineHeight: 1.8, maxWidth: 500 }}>
                   Auto-generates every Monday at 8:30am MT via cron. Pulls from:<br />
@@ -5216,7 +5426,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
               </button>
             </div>
             {!compSynthesis && !isLoading("competitors") && (
-              <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "28px 24px" }}>
+              <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "28px 24px" }}>
                 <div style={{ fontSize: 10, color: "#444", lineHeight: 1.8 }}>
                   Scan for hiring signals, new office openings, major client announcements, and market moves by competitors.<br />
                   <span style={{ color: "#333" }}>Searches Tavily for recent news on Webb AV, Cornerstone AV, RMNG, Encore.</span>
@@ -5231,7 +5441,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
                   <div style={{ borderTop: "1px solid #111", paddingTop: 16 }}>
                     <div style={{ fontSize: 9, color: "#444", letterSpacing: "2px", marginBottom: 12 }}>RAW SIGNALS ({competitors.length})</div>
                     {competitors.map((s, i) => (
-                      <div key={i} style={{ marginBottom: 10, padding: "10px 14px", background: "#0A0A0A", borderRadius: 6, border: "1px solid #111" }}>
+                      <div key={i} style={{ marginBottom: 10, padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 6, border: "1px solid #111" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                           <span style={{ fontSize: 10, color: "#FF6B6B" }}>{s.company}</span>
                           <a href={s.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 9, color: "#333" }}>{new URL(s.url).hostname}</a>
@@ -5261,7 +5471,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
               </button>
             </div>
             {!trendSynthesis && !isLoading("trends") && (
-              <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "28px 24px" }}>
+              <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "28px 24px" }}>
                 <div style={{ fontSize: 10, color: "#444", lineHeight: 1.8, maxWidth: 500 }}>
                   Monitor event industry publications, corporate event trends, university production news, and healthcare event signals.<br />
                   <span style={{ color: "#333" }}>Sources: BizBash, EventMB, corporate event news, hybrid production trends.</span>
@@ -5276,7 +5486,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
                   <div style={{ borderTop: "1px solid #111", paddingTop: 16 }}>
                     <div style={{ fontSize: 9, color: "#444", letterSpacing: "2px", marginBottom: 12 }}>SOURCES ({trends.length})</div>
                     {trends.slice(0, 12).map((s, i) => (
-                      <div key={i} style={{ marginBottom: 8, padding: "8px 12px", background: "#0A0A0A", borderRadius: 5, border: "1px solid #0D0D0D", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <div key={i} style={{ marginBottom: 8, padding: "8px 12px", background: "rgba(4,14,34,0.62)", borderRadius: 5, border: "1px solid #0D0D0D", display: "flex", gap: 10, alignItems: "flex-start" }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 10, color: "#E8E4DC" }}>{s.title}</div>
                           <div style={{ fontSize: 9, color: "#444", marginTop: 2 }}>{s.snippet?.slice(0, 120)}</div>
@@ -5314,7 +5524,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
             </div>
 
             {!drafts && !loadingDrafts && (
-              <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "28px 24px" }}>
+              <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "28px 24px" }}>
                 <div style={{ fontSize: 10, color: "#444", lineHeight: 1.8, maxWidth: 500 }}>
                   Run the chain to automatically find contacts for new opportunities and draft personalized outreach.<br />
                   <span style={{ color: "#333" }}>Requires APOLLO_API_KEY on the VPS.</span>
@@ -5327,7 +5537,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
             {drafts && drafts.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {drafts.map((d, i) => (
-                  <div key={i} style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 20px" }}>
+                  <div key={i} style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 20px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                       <div>
                         <div style={{ fontSize: 11, color: "#FB923C", marginBottom: 3 }}>{d.company}</div>
@@ -5343,7 +5553,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
                         )}
                         {d.status === "sent" && (
                           <select value={d.reply_status || "pending"} onChange={e => patchDraft(d.id, { reply_status: e.target.value })}
-                            style={{ fontSize: 9, background: "#0D0D0D", border: `1px solid ${d.reply_status === "replied" ? "#34D39940" : d.reply_status === "booked" ? "#A78BFA40" : d.reply_status === "no_reply" ? "#1A1A1A" : "#2A2A2A"}`, borderRadius: 4, color: d.reply_status === "replied" ? "#34D399" : d.reply_status === "booked" ? "#A78BFA" : d.reply_status === "no_reply" ? "#555" : "#888", padding: "2px 6px", fontFamily: "inherit", cursor: "pointer" }}>
+                            style={{ fontSize: 9, background: "rgba(4,14,34,0.6)", border: `1px solid ${d.reply_status === "replied" ? "#34D39940" : d.reply_status === "booked" ? "#A78BFA40" : d.reply_status === "no_reply" ? "#1A1A1A" : "#2A2A2A"}`, borderRadius: 4, color: d.reply_status === "replied" ? "#34D399" : d.reply_status === "booked" ? "#A78BFA" : d.reply_status === "no_reply" ? "#555" : "#888", padding: "2px 6px", fontFamily: "inherit", cursor: "pointer" }}>
                             <option value="pending">pending</option>
                             <option value="replied">replied</option>
                             <option value="booked">booked</option>
@@ -5384,7 +5594,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
               {strategyBriefs.length === 0 ? (
                 <div style={{ fontSize: 11, color: "#555" }}>No strategy briefs yet. These will be written by agents as they develop Fatfish's strategic direction. You can also create them manually via the Brain agent.</div>
               ) : strategyBriefs.map(b => (
-                <div key={b.id} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "16px 18px", marginBottom: 12 }}>
+                <div key={b.id} style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "16px 18px", marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                     <span style={{ fontSize: 11, color: "#E8E4DC", fontWeight: 500 }}>{b.title}</span>
                     {b.type && <span style={{ fontSize: 9, padding: "1px 6px", background: "#A78BFA15", border: "1px solid #A78BFA25", borderRadius: 8, color: "#A78BFA" }}>{b.type}</span>}
@@ -5415,7 +5625,7 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
               {library.length === 0 ? (
                 <div style={{ fontSize: 11, color: "#555" }}>No content saved yet. The Build Content agent saves pieces here automatically when you generate proposals, posts, and recaps.</div>
               ) : library.map(c => (
-                <div key={c.id} style={{ background: "#0C0C0C", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px", marginBottom: 10 }}>
+                <div key={c.id} style={{ background: "rgba(3,12,30,0.7)", border: "1px solid #141414", borderRadius: 8, padding: "14px 16px", marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                     {c.type && <span style={{ fontSize: 9, padding: "1px 6px", background: (typeColor[c.type] || "#555") + "15", border: `1px solid ${(typeColor[c.type] || "#555")}25`, borderRadius: 8, color: typeColor[c.type] || "#555" }}>{c.type}</span>}
                     <span style={{ fontSize: 11, color: "#E8E4DC", fontWeight: 500, flex: 1 }}>{c.title}</span>
@@ -5474,7 +5684,7 @@ Give me exactly 10 SEMrush seed keywords to search — terms that corporate even
         {loading ? "..." : "✦ SUGGEST KEYWORDS"}
       </button>
       {suggestions && (
-        <div style={{ position: "absolute", top: 24, right: 0, zIndex: 100, background: "#0E0E0E", border: "1px solid #2A2A2A", borderRadius: 8, padding: "14px 16px", width: 300, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}>
+        <div style={{ position: "absolute", top: 24, right: 0, zIndex: 100, background: "rgba(4,14,34,0.55)", border: "1px solid #2A2A2A", borderRadius: 8, padding: "14px 16px", width: 300, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}>
           <div style={{ fontSize: 9, color: "#A78BFA", letterSpacing: "1px", marginBottom: 10 }}>SEARCH THESE IN SEMRUSH</div>
           <pre style={{ fontSize: 10, color: "#E8E4DC", margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.8, fontFamily: "inherit" }}>{suggestions}</pre>
           <button onClick={() => setSuggestions(null)}
@@ -6063,7 +6273,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
       </div>
 
       {/* Stepper — SEO Pages only */}
-      {pubTab === "seo" && <div className="publisher-stepper" style={{ padding: "10px 20px", borderBottom: "1px solid #111", display: "flex", alignItems: "center", flexShrink: 0, background: "#0A0A0A", overflowX: "auto" }}>
+      {pubTab === "seo" && <div className="publisher-stepper" style={{ padding: "10px 20px", borderBottom: "1px solid #111", display: "flex", alignItems: "center", flexShrink: 0, background: "rgba(4,14,34,0.62)", overflowX: "auto" }}>
         {STAGES.map((s, i) => (
           <div key={s.n} style={{ display: "flex", alignItems: "center" }}>
             <div
@@ -6099,7 +6309,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
 
             {/* Album picker */}
             {smugmugKey ? (
-              <div style={{ padding: "16px 18px", background: "#0A0A0A", borderRadius: 8, border: "1px solid #1A1A1A" }}>
+              <div style={{ padding: "16px 18px", background: "rgba(4,14,34,0.62)", borderRadius: 8, border: "1px solid #1A1A1A" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: albums.length ? 12 : 0 }}>
                   <div style={{ fontSize: 9, color: "#F7C948", letterSpacing: "1px" }}>◈ SMUGMUG ALBUMS</div>
                   <button onClick={loadAlbums} disabled={albumsLoading}
@@ -6112,7 +6322,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
                 {albums.length > 0 && (
                   <>
                     <input value={albumSearch} onChange={e => setAlbumSearch(e.target.value)} placeholder="Search albums…"
-                      style={{ width: "100%", background: "#0D0D0D", border: "1px solid #222", borderRadius: 5, color: "#C8C4BC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", marginBottom: 8, boxSizing: "border-box" }} />
+                      style={{ width: "100%", background: "rgba(4,14,34,0.6)", border: "1px solid #222", borderRadius: 5, color: "#C8C4BC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", marginBottom: 8, boxSizing: "border-box" }} />
                     <div style={{ display: "flex", flexDirection: "column", gap: 3, maxHeight: 220, overflowY: "auto" }}>
                       {albums.filter(a => !albumSearch || a.name.toLowerCase().includes(albumSearch.toLowerCase())).map(a => (
                         <div key={a.key}
@@ -6134,7 +6344,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
 
             {/* Photos */}
             {(photosLoading || matchedPhotos.length > 0 || photosError) && (
-              <div style={{ padding: "16px 18px", background: "#0A0A0A", borderRadius: 8, border: "1px solid #1A1A1A" }}>
+              <div style={{ padding: "16px 18px", background: "rgba(4,14,34,0.62)", borderRadius: 8, border: "1px solid #1A1A1A" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                   <div style={{ fontSize: 9, color: "#F7C948", letterSpacing: "1px" }}>
                     ◈ PHOTOS {matchedAlbum && <span style={{ color: "#666", textTransform: "none", letterSpacing: 0 }}>— {matchedAlbum.name}</span>}
@@ -6189,7 +6399,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
                         onChange={e => setEventContext(e.target.value)}
                         placeholder="e.g. corporate awards dinner for 400 guests, keynote + gala format"
                         rows={2}
-                        style={{ width: "100%", background: "#0D0D0D", border: "1px solid #1A1A1A", borderRadius: 6, color: "#A8A4A0", fontSize: 10, padding: "8px 10px", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }}
+                        style={{ width: "100%", background: "rgba(4,14,34,0.6)", border: "1px solid #1A1A1A", borderRadius: 6, color: "#A8A4A0", fontSize: 10, padding: "8px 10px", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }}
                       />
                     </div>
 
@@ -6226,31 +6436,31 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
                   { label: "META TITLE", value: projectCopy.metaTitle },
                   { label: "META DESCRIPTION", value: projectCopy.metaDescription },
                 ].map(f => f.value && (
-                  <div key={f.label} style={{ padding: "10px 14px", background: "#0A0A0A", borderRadius: 6, border: "1px solid #111" }}>
+                  <div key={f.label} style={{ padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 6, border: "1px solid #111" }}>
                     <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", marginBottom: 5 }}>{f.label}</div>
                     <div style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.55 }}>{f.value}</div>
                   </div>
                 ))}
                 {/* Editable short descriptions */}
-                <div style={{ padding: "10px 14px", background: "#0A0A0A", borderRadius: 6, border: "1px solid #111" }}>
+                <div style={{ padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 6, border: "1px solid #111" }}>
                   <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", marginBottom: 5 }}>SHORT DESCRIPTION <span style={{ color: "#333", textTransform: "none", letterSpacing: 0 }}>— 65 words · event scope + what Fatfish delivered</span></div>
                   <textarea
                     value={projectCopy.shortDescription || ""}
                     onChange={e => setProjectCopy(prev => ({ ...prev, shortDescription: e.target.value }))}
                     rows={3}
-                    style={{ width: "100%", background: "#0D0D0D", border: "1px solid #1A1A1A", borderRadius: 4, color: "#A8A4A0", fontSize: 11, padding: "6px 8px", fontFamily: "inherit", lineHeight: 1.55, resize: "vertical", boxSizing: "border-box" }}
+                    style={{ width: "100%", background: "rgba(4,14,34,0.6)", border: "1px solid #1A1A1A", borderRadius: 4, color: "#A8A4A0", fontSize: 11, padding: "6px 8px", fontFamily: "inherit", lineHeight: 1.55, resize: "vertical", boxSizing: "border-box" }}
                   />
                 </div>
-                <div style={{ padding: "10px 14px", background: "#0A0A0A", borderRadius: 6, border: "1px solid #111" }}>
+                <div style={{ padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 6, border: "1px solid #111" }}>
                   <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", marginBottom: 5 }}>SHORT DESCRIPTION V2 <span style={{ color: "#333", textTransform: "none", letterSpacing: 0 }}>— 56 words · client relationship + outcome</span></div>
                   <textarea
                     value={projectCopy.shortDescriptionV2 || ""}
                     onChange={e => setProjectCopy(prev => ({ ...prev, shortDescriptionV2: e.target.value }))}
                     rows={3}
-                    style={{ width: "100%", background: "#0D0D0D", border: "1px solid #1A1A1A", borderRadius: 4, color: "#A8A4A0", fontSize: 11, padding: "6px 8px", fontFamily: "inherit", lineHeight: 1.55, resize: "vertical", boxSizing: "border-box" }}
+                    style={{ width: "100%", background: "rgba(4,14,34,0.6)", border: "1px solid #1A1A1A", borderRadius: 4, color: "#A8A4A0", fontSize: 11, padding: "6px 8px", fontFamily: "inherit", lineHeight: 1.55, resize: "vertical", boxSizing: "border-box" }}
                   />
                 </div>
-                <div style={{ padding: "10px 14px", background: "#0A0A0A", borderRadius: 6, border: "1px solid #111" }}>
+                <div style={{ padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 6, border: "1px solid #111" }}>
                   <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", marginBottom: 8 }}>BODY COPY</div>
                   <div style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.65, maxHeight: 200, overflowY: "auto" }}
                     dangerouslySetInnerHTML={{ __html: projectCopy.description }} />
@@ -6262,7 +6472,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
                       <select
                         value={selectedCategoryId}
                         onChange={e => setSelectedCategoryId(e.target.value)}
-                        style={{ background: "#0E0E0E", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "4px 8px", fontFamily: "inherit" }}
+                        style={{ background: "rgba(4,14,34,0.55)", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "4px 8px", fontFamily: "inherit" }}
                       >
                         {CATEGORY_OPTIONS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
@@ -6350,7 +6560,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
                   )}
                 </label>
                 {semrushRows.length > 0 && (
-                  <div style={{ marginTop: 8, padding: "8px 12px", background: "#0A0A0A", borderRadius: 6, border: "1px solid #111" }}>
+                  <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(4,14,34,0.62)", borderRadius: 6, border: "1px solid #111" }}>
                     <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", marginBottom: 5 }}>PREVIEW</div>
                     {semrushRows.slice(0, 4).map((r, i) => (
                       <div key={i} style={{ fontSize: 9, color: "#666", padding: "2px 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -6384,7 +6594,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
 
             {/* Webflow Collection Discovery */}
             {webflowApiKey && (
-              <div style={{ marginTop: 20, padding: "16px 18px", background: "#0A0A0A", borderRadius: 8, border: "1px solid #1A1A1A" }}>
+              <div style={{ marginTop: 20, padding: "16px 18px", background: "rgba(4,14,34,0.62)", borderRadius: 8, border: "1px solid #1A1A1A" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: discoveredCollections.length ? 12 : 0 }}>
                   <div style={{ fontSize: 9, color: "#34D399", letterSpacing: "1px" }}>◈ WEBFLOW COLLECTIONS</div>
                   <button
@@ -6407,7 +6617,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
                       <select
                         value={webflowCollectionId}
                         onChange={e => { onCollectionSelect(e.target.value); fetchCollectionFields(e.target.value); }}
-                        style={{ flex: 1, background: "#0D0D0D", border: "1px solid #2A2A2A", borderRadius: 5, color: "#C8C4BC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", cursor: "pointer" }}
+                        style={{ flex: 1, background: "rgba(4,14,34,0.6)", border: "1px solid #2A2A2A", borderRadius: 5, color: "#C8C4BC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", cursor: "pointer" }}
                       >
                         <option value="">— select a collection —</option>
                         {discoveredCollections.map(c => (
@@ -6438,7 +6648,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
 
             {/* SmugMug Albums */}
             {smugmugKey && smugmugSecret && (
-              <div style={{ marginTop: 20, padding: "16px 18px", background: "#0A0A0A", borderRadius: 8, border: "1px solid #1A1A1A" }}>
+              <div style={{ marginTop: 20, padding: "16px 18px", background: "rgba(4,14,34,0.62)", borderRadius: 8, border: "1px solid #1A1A1A" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: albums.length ? 12 : 0 }}>
                   <div style={{ fontSize: 9, color: "#F7C948", letterSpacing: "1px" }}>◈ SMUGMUG ALBUMS</div>
                   <button
@@ -6457,13 +6667,13 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
                       value={albumSearch}
                       onChange={e => setAlbumSearch(e.target.value)}
                       placeholder="Search albums…"
-                      style={{ width: "100%", background: "#0D0D0D", border: "1px solid #222", borderRadius: 5, color: "#C8C4BC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", marginBottom: 8, boxSizing: "border-box" }}
+                      style={{ width: "100%", background: "rgba(4,14,34,0.6)", border: "1px solid #222", borderRadius: 5, color: "#C8C4BC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", marginBottom: 8, boxSizing: "border-box" }}
                     />
                     <div style={{ display: "flex", flexDirection: "column", gap: 3, maxHeight: 200, overflowY: "auto" }}>
                       {albums
                         .filter(a => !albumSearch || a.name.toLowerCase().includes(albumSearch.toLowerCase()))
                         .map(a => (
-                          <div key={a.key} style={{ padding: "5px 8px", background: "#0D0D0D", borderRadius: 4, border: "1px solid #181818", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div key={a.key} style={{ padding: "5px 8px", background: "rgba(4,14,34,0.6)", borderRadius: 4, border: "1px solid #181818", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <span style={{ fontSize: 10, color: "#C8C4BC" }}>{a.name}</span>
                             <span style={{ fontSize: 8, color: "#333", fontFamily: "monospace" }}>{a.key}</span>
                           </div>
@@ -6534,7 +6744,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
               </table>
             </div>
             {opportunities.length > 0 && (
-              <div style={{ marginTop: 14, padding: "10px 14px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #111" }}>
+              <div style={{ marginTop: 14, padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #111" }}>
                 <div style={{ fontSize: 9, color: "#666" }}>
                   {opportunities.length} opportunities ranked · Click "Build →" to generate copy and create a Webflow draft
                 </div>
@@ -6551,7 +6761,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
               <button onClick={() => { setStage(2); setRunning(false); }} style={{ background: "none", border: "1px solid #1E1E1E", borderRadius: 5, color: "#666", fontSize: 9, padding: "3px 9px", cursor: "pointer", fontFamily: "inherit" }}>← Opportunities</button>
             </div>
             {selectedOpp && (
-              <div style={{ padding: "12px 16px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #1A1A1A", marginBottom: 20 }}>
+              <div style={{ padding: "12px 16px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #1A1A1A", marginBottom: 20 }}>
                 <div style={{ fontSize: 12, color: "#E8E4DC", marginBottom: 8 }}>{selectedOpp.pageType}</div>
                 <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 9, color: "#666" }}>keyword: <span style={{ color: "#A8A4A0" }}>{selectedOpp.keyword}</span></span>
@@ -6601,12 +6811,12 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
                   { label: "INDUSTRY", value: generatedCopy.industry },
                   { label: "LOCATION", value: generatedCopy.location },
                 ].map(field => (
-                  <div key={field.label} style={{ padding: "10px 14px", background: "#0A0A0A", borderRadius: 6, border: "1px solid #111" }}>
+                  <div key={field.label} style={{ padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 6, border: "1px solid #111" }}>
                     <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", marginBottom: 5 }}>{field.label}</div>
                     <div style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.55 }}>{field.value}</div>
                   </div>
                 ))}
-                <div style={{ padding: "10px 14px", background: "#0A0A0A", borderRadius: 6, border: "1px solid #111" }}>
+                <div style={{ padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 6, border: "1px solid #111" }}>
                   <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", marginBottom: 8 }}>BODY COPY</div>
                   <div
                     style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.65, maxHeight: 200, overflowY: "auto" }}
@@ -6616,7 +6826,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
 
                 {/* SmugMug Photo Match */}
                 {smugmugKey && smugmugSecret && (
-                  <div style={{ padding: "14px 18px", background: "#0A0A0A", borderRadius: 8, border: "1px solid #1A1A1A" }}>
+                  <div style={{ padding: "14px 18px", background: "rgba(4,14,34,0.62)", borderRadius: 8, border: "1px solid #1A1A1A" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                       <div style={{ fontSize: 9, color: "#F7C948", letterSpacing: "1px" }}>◈ MATCH PHOTOS</div>
                       <button
@@ -6669,7 +6879,7 @@ function PublisherView({ webflowApiKey, webflowCollectionId, onCollectionSelect,
                       <select
                         value={selectedCategoryId}
                         onChange={e => setSelectedCategoryId(e.target.value)}
-                        style={{ background: "#0E0E0E", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "4px 8px", fontFamily: "inherit" }}
+                        style={{ background: "rgba(4,14,34,0.55)", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "4px 8px", fontFamily: "inherit" }}
                       >
                         {CATEGORY_OPTIONS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
@@ -6963,25 +7173,25 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
               <>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   {[
-                    { label: "Sessions", value: parseInt(gaData.sessions || 0).toLocaleString() },
-                    { label: "Users", value: parseInt(gaData.users || 0).toLocaleString() },
-                    { label: "New Users", value: parseInt(gaData.newUsers || 0).toLocaleString() },
+                    { label: "Sessions", value: parseInt(gaData.sessions || 0).toLocaleString(), color: "#00DCE8" },
+                    { label: "Users", value: parseInt(gaData.users || 0).toLocaleString(), color: "#A78BFA" },
+                    { label: "New Users", value: parseInt(gaData.newUsers || 0).toLocaleString(), color: "#00FF87" },
                   ].map(m => (
-                    <div key={m.label} style={{ padding: "14px 18px", background: "#0A0A0A", borderRadius: 8, border: "1px solid #111", minWidth: 100 }}>
-                      <div style={{ fontSize: 20, fontWeight: 500, color: "#E8E4DC", fontFamily: "'Syne', sans-serif" }}>{m.value}</div>
-                      <div style={{ fontSize: 9, color: "#555", marginTop: 4, letterSpacing: "0.5px" }}>{m.label}</div>
+                    <div key={m.label} style={{ padding: "14px 18px", background: "rgba(3,12,30,0.6)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderRadius: 10, border: `1px solid ${m.color}18`, minWidth: 100, boxShadow: `0 0 24px ${m.color}08` }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: m.color, fontFamily: "'Plus Jakarta Sans', sans-serif", lineHeight: 1 }}>{m.value}</div>
+                      <div style={{ fontSize: 8, color: "var(--t3, #666)", marginTop: 5, letterSpacing: "1.5px", textTransform: "uppercase" }}>{m.label}</div>
                     </div>
                   ))}
                 </div>
                 {gaData.topPages && gaData.topPages !== "N/A" && (
-                  <div style={{ marginTop: 10, padding: "10px 14px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #111" }}>
+                  <div style={{ marginTop: 10, padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #111" }}>
                     <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", marginBottom: 6 }}>TOP PAGES</div>
                     <div style={{ fontSize: 10, color: "#666", lineHeight: 1.7 }}>{gaData.topPages}</div>
                   </div>
                 )}
               </>
             ) : (
-              <div style={{ padding: "12px 16px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #111", fontSize: 10, color: "#444" }}>
+              <div style={{ padding: "12px 16px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #111", fontSize: 10, color: "#444" }}>
                 Site Pulse unavailable — add Google Analytics credentials in ⚙ settings
               </div>
             )}
@@ -6993,7 +7203,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
             {adsData && adsData.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {adsData.slice(0, 5).map((c, i) => (
-                  <div key={i} style={{ padding: "10px 14px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #111", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div key={i} style={{ padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #111", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 11, color: "#C8C4BC", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.campaign}</div>
                     </div>
@@ -7014,7 +7224,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
                 ))}
               </div>
             ) : (
-              <div style={{ padding: "12px 16px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #111", fontSize: 10, color: "#444" }}>
+              <div style={{ padding: "12px 16px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #111", fontSize: 10, color: "#444" }}>
                 {hasGoogleAdsCredentials ? "No campaign data returned — check account or date range" : "Google Ads unavailable — add credentials in ⚙ settings"}
               </div>
             )}
@@ -7026,7 +7236,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
             {news.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {news.slice(0, 5).map((r, i) => (
-                  <div key={i} style={{ padding: "12px 16px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #1A1A1A" }}>
+                  <div key={i} style={{ padding: "12px 16px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #1A1A1A" }}>
                     <div style={{ fontSize: 11, color: "#C8C4BC", marginBottom: 6, lineHeight: 1.5, fontWeight: 500 }}>{r.title}</div>
                     {r.content && (
                       <div style={{ fontSize: 10, color: "#666", lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginBottom: 8 }}>{r.content}</div>
@@ -7041,7 +7251,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
                 ))}
               </div>
             ) : (
-              <div style={{ padding: "12px 16px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #111", fontSize: 10, color: "#444" }}>
+              <div style={{ padding: "12px 16px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #111", fontSize: 10, color: "#444" }}>
                 {tavilyKey ? "No results returned — try again later" : "Add Tavily API key in ⚙ settings to enable live news"}
               </div>
             )}
@@ -7053,7 +7263,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
             {movesLoading ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {[0, 1, 2].map(i => (
-                  <div key={i} style={{ padding: "16px 18px", background: "#0A0A0A", borderRadius: 8, border: "1px solid #111" }}>
+                  <div key={i} style={{ padding: "16px 18px", background: "rgba(4,14,34,0.62)", borderRadius: 8, border: "1px solid #111" }}>
                     <div style={{ height: 12, width: "55%", background: "#141414", borderRadius: 3, marginBottom: 10, animation: `pulse 1.4s ${i * 0.2}s infinite` }} />
                     <div style={{ height: 9, width: "80%", background: "#111", borderRadius: 3, marginBottom: 6, animation: `pulse 1.4s ${i * 0.2}s infinite` }} />
                     <div style={{ height: 9, width: "40%", background: "#111", borderRadius: 3, animation: `pulse 1.4s ${i * 0.2}s infinite` }} />
@@ -7061,11 +7271,11 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
                 ))}
               </div>
             ) : movesError ? (
-              <div style={{ padding: "12px 16px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #111", fontSize: 10, color: "#444" }}>
+              <div style={{ padding: "12px 16px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #111", fontSize: 10, color: "#444" }}>
                 Could not generate recommendations — check API key in settings
               </div>
             ) : moves.filter((_, i) => !snoozed.has(i)).length === 0 ? (
-              <div style={{ padding: "12px 16px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #111", fontSize: 10, color: "#444" }}>
+              <div style={{ padding: "12px 16px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #111", fontSize: 10, color: "#444" }}>
                 All moves snoozed for this session.
               </div>
             ) : (
@@ -7076,7 +7286,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
                   const draft = editing[i] || {};
                   const urg = (move.urgency || "low").toLowerCase();
                   return (
-                    <div key={i} style={{ padding: "16px 18px", background: "#0A0A0A", borderRadius: 8, border: `1px solid ${URG_BORDER[urg] || "#111"}` }}>
+                    <div key={i} style={{ padding: "16px 18px", background: "rgba(4,14,34,0.62)", borderRadius: 8, border: `1px solid ${URG_BORDER[urg] || "#111"}` }}>
                       {/* Title row */}
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
                         {isEditing ? (
@@ -7127,7 +7337,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
           </div>
 
           {/* COMMAND — Orchestrator */}
-          <div style={{ padding: "20px 22px", background: "#060606", borderRadius: 10, border: "1px solid #181818" }}>
+          <div style={{ padding: "20px 22px", background: "rgba(2,8,20,0.75)", borderRadius: 10, border: "1px solid #181818" }}>
             <div style={{ fontSize: 9, color: "#FF6B2B", letterSpacing: "2px", marginBottom: 14 }}>COMMAND</div>
             <div style={{ display: "flex", gap: 8 }}>
               <input
@@ -7136,7 +7346,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
                 onKeyDown={e => e.key === "Enter" && runOrchestrator()}
                 placeholder="What do you want to accomplish?"
                 disabled={orchestrating}
-                style={{ flex: 1, background: "#0C0C0C", border: "1px solid #1E1E1E", borderRadius: 7, color: "#E8E4DC", fontSize: 12, padding: "9px 14px", fontFamily: "inherit" }}
+                style={{ flex: 1, background: "rgba(3,12,30,0.7)", border: "1px solid #1E1E1E", borderRadius: 7, color: "#E8E4DC", fontSize: 12, padding: "9px 14px", fontFamily: "inherit" }}
               />
               <button
                 onClick={runOrchestrator}
@@ -7153,7 +7363,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
                   const statusColor = step.status === "done" ? "#34D399" : step.status === "error" ? "#FF6B6B" : step.status === "running" ? "#F7C948" : "#444";
                   const agentLabel = { scout: "Find Opportunities", builder: "Build Content", prospector: "Grow Pipeline", monday: "Run Projects" }[step.agent] || step.agent;
                   return (
-                    <div key={i} style={{ padding: "12px 14px", background: "#0A0A0A", borderRadius: 7, border: `1px solid ${step.status === "done" ? "#34D39920" : step.status === "error" ? "#FF6B6B20" : "#111"}` }}>
+                    <div key={i} style={{ padding: "12px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: `1px solid ${step.status === "done" ? "#34D39920" : step.status === "error" ? "#FF6B6B20" : "#111"}` }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: step.result ? 8 : 0 }}>
                         {step.status === "running" ? (
                           <div style={{ display: "flex", gap: 3 }}>
@@ -7187,14 +7397,14 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
 
             {/* Error */}
             {orchError && (
-              <div style={{ marginTop: 12, padding: "10px 14px", background: "#0A0A0A", borderRadius: 7, border: "1px solid #FF6B6B28", fontSize: 10, color: "#FF6B6B" }}>
+              <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #FF6B6B28", fontSize: 10, color: "#FF6B6B" }}>
                 {orchError}
               </div>
             )}
           </div>
 
           {/* Autopilot */}
-          <div style={{ padding: "20px 22px", background: "#060606", borderRadius: 10, border: "1px solid #181818" }}>
+          <div style={{ padding: "20px 22px", background: "rgba(2,8,20,0.75)", borderRadius: 10, border: "1px solid #181818" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 9, color: "#A78BFA", letterSpacing: "2px" }}>◉ AUTOPILOT</span>
@@ -7257,7 +7467,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
                 <button
                   key={qa.label}
                   onClick={() => onNavigate(qa.agent, qa.prompt)}
-                  style={{ padding: "9px 16px", background: "#0A0A0A", border: "1px solid #1E1E1E", borderRadius: 7, color: "#A8A4A0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "border-color 0.15s, color 0.15s" }}
+                  style={{ padding: "9px 16px", background: "rgba(4,14,34,0.62)", border: "1px solid #1E1E1E", borderRadius: 7, color: "#A8A4A0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "border-color 0.15s, color 0.15s" }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = "#333"; e.currentTarget.style.color = "#E8E4DC"; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = "#1E1E1E"; e.currentTarget.style.color = "#A8A4A0"; }}
                 >
@@ -8239,7 +8449,8 @@ Cite URLs.`;
   const modelInfo = PRICING[agent.model] || PRICING.claude;
 
   return (
-    <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#080808", color: "#E8E4DC", height: "100vh", width: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#020912", color: "#E8E4DC", height: "100vh", width: "100%", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+      <TankOceanBg />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap');
         html, body, #root { width: 100%; height: 100%; margin: 0; padding: 0; }
@@ -8283,9 +8494,9 @@ Cite URLs.`;
         }
       `}</style>
 
-      <div style={{ padding: "14px 24px", borderBottom: "1px solid #111", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", rowGap: 8, flexShrink: 0 }}>
+      <div style={{ padding: "14px 24px", borderBottom: "1px solid rgba(255,255,255,0.04)", background: "rgba(2,10,26,0.7)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", rowGap: 8, flexShrink: 0, position: "relative", zIndex: 10 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-          <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 800, color: "#FF6B2B", letterSpacing: "-0.5px", flexShrink: 0 }}>FF TANK</span>
+          <span onClick={() => setActiveId("home")} style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 800, color: "#FF6B2B", letterSpacing: "-0.5px", flexShrink: 0, cursor: "pointer" }}>FF TANK</span>
           <span className="header-tagline" style={{ fontSize: 9, color: "#999", letterSpacing: "3px" }}>SALES · MARKETING · AI</span>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", rowGap: 6 }}>
@@ -8301,7 +8512,7 @@ Cite URLs.`;
               )}
             </button>
             {notifOpen && (
-              <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 340, background: "#0E0E0E", border: "1px solid #1A1A1A", borderRadius: 10, zIndex: 100, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 340, background: "rgba(4,14,34,0.55)", border: "1px solid #1A1A1A", borderRadius: 10, zIndex: 100, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", overflow: "hidden" }}>
                 <div style={{ padding: "10px 14px", borderBottom: "1px solid #141414", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 10, color: "#F7C948", letterSpacing: "1.5px" }}>NOTIFICATIONS</span>
                   <button onClick={() => setNotifOpen(false)} style={{ background: "none", border: "none", color: "#555", fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: "0 2px" }}>✕</button>
@@ -8407,7 +8618,7 @@ Cite URLs.`;
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: supabaseUrl && supabaseAnonKey ? "#4ECDC4" : "#333" }} />
             <span style={{ fontSize: 9, color: supabaseUrl && supabaseAnonKey ? "#4ECDC4" : "#555" }}>DB</span>
           </div>
-          <div className="header-claude-pill" style={{ padding: "3px 10px", background: "#0C0C0C", border: "1px solid #FF6B2B28", borderRadius: 20, display: "flex", alignItems: "center", gap: 6 }}>
+          <div className="header-claude-pill" style={{ padding: "3px 10px", background: "rgba(3,12,30,0.7)", border: "1px solid #FF6B2B28", borderRadius: 20, display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#FF6B2B" }} />
             <span style={{ fontSize: 9, color: "#888" }}>Claude</span>
             <span style={{ fontSize: 9, color: "#FF6B2B" }}>{formatUSD(claudeSpent)}<span style={{ color: "#999" }}>/$90</span></span>
@@ -8423,14 +8634,14 @@ Cite URLs.`;
 
       {showSettings && (
         <div className="settings-panel" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: "40px 20px" }} onClick={e => { if (e.target === e.currentTarget) setShowSettings(false); }}>
-        <div style={{ background: "#0E0E0E", border: "1px solid #1E1E1E", borderRadius: 12, width: "100%", maxWidth: 860, padding: "28px 32px" }}>
+        <div style={{ background: "rgba(4,14,34,0.55)", border: "1px solid #1E1E1E", borderRadius: 12, width: "100%", maxWidth: 860, padding: "28px 32px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
             <span style={{ fontSize: 11, color: "#F7C948", letterSpacing: "2px" }}>⚙ SETTINGS</span>
             <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 18, fontFamily: "inherit" }}>×</button>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
           {/* Monday.com */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px" }}>▦ MONDAY.COM</span>
               <span style={{ fontSize: 9, color: mondayToken && mondayBoards.length > 0 ? "#34D399" : "#444" }}>{mondayToken && mondayBoards.length > 0 ? `✓ ${mondayBoards.length} board${mondayBoards.length !== 1 ? "s" : ""}` : "—"}</span>
@@ -8457,7 +8668,7 @@ Cite URLs.`;
           </div>
 
           {/* Apollo */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#4ECDC4", letterSpacing: "2px" }}>⚡ APOLLO</span>
               <span style={{ fontSize: 9, color: apolloKey ? "#34D399" : "#444" }}>{apolloKey ? "✓ Connected" : "—"}</span>
@@ -8467,7 +8678,7 @@ Cite URLs.`;
           </div>
 
           {/* Tavily */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#A78BFA", letterSpacing: "2px" }}>◎ TAVILY</span>
               <span style={{ fontSize: 9, color: tavilyKey ? "#34D399" : "#444" }}>{tavilyKey ? "✓ Connected" : "—"}</span>
@@ -8477,7 +8688,7 @@ Cite URLs.`;
           </div>
 
           {/* Google Analytics */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#A78BFA", letterSpacing: "2px" }}>◎ GOOGLE ANALYTICS</span>
               <span style={{ fontSize: 9, color: gaPropertyId && gaServiceAccount ? "#34D399" : "#444" }}>{gaPropertyId && gaServiceAccount ? "✓ Connected" : "—"}</span>
@@ -8489,7 +8700,7 @@ Cite URLs.`;
           </div>
 
           {/* Google Ads */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#34D399", letterSpacing: "2px" }}>◎ GOOGLE ADS</span>
               <span style={{ fontSize: 9, color: googleAdsDevToken && googleAdsCustomerId && googleAdsRefreshToken ? "#34D399" : "#444" }}>{googleAdsDevToken && googleAdsCustomerId && googleAdsRefreshToken ? "✓ Connected" : "—"}</span>
@@ -8505,7 +8716,7 @@ Cite URLs.`;
           </div>
 
           {/* Webflow */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#34D399", letterSpacing: "2px" }}>◈ WEBFLOW</span>
               <span style={{ fontSize: 9, color: webflowApiKey && webflowCollectionId ? "#34D399" : "#444" }}>{webflowApiKey && webflowCollectionId ? "✓ Connected" : "—"}</span>
@@ -8517,7 +8728,7 @@ Cite URLs.`;
           </div>
 
           {/* Supabase */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#4ECDC4", letterSpacing: "2px" }}>◈ SUPABASE</span>
               <span style={{ fontSize: 9, color: supabaseUrl && supabaseAnonKey ? "#34D399" : "#444" }}>{supabaseUrl && supabaseAnonKey ? "✓ Connected" : "—"}</span>
@@ -8529,7 +8740,7 @@ Cite URLs.`;
           </div>
 
           {/* SmugMug */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px" }}>◈ SMUGMUG</span>
               <span style={{ fontSize: 9, color: smugmugKey && smugmugSecret ? "#34D399" : "#444" }}>{smugmugKey && smugmugSecret ? "✓ Connected" : "—"}</span>
@@ -8543,7 +8754,7 @@ Cite URLs.`;
           </div>
 
           {/* Flex Rental Solutions */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#FB923C", letterSpacing: "2px" }}>◐ FLEX RENTAL</span>
               <span style={{ fontSize: 9, color: flexApiKey ? "#34D399" : "#444" }}>{flexApiKey ? "✓ Connected" : "—"}</span>
@@ -8554,7 +8765,7 @@ Cite URLs.`;
           </div>
 
           {/* Brief Delivery */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px" }}>◉ BRIEF DELIVERY</span>
               <span style={{ fontSize: 9, color: briefEmail || slackWebhookUrl ? "#34D399" : "#444" }}>{briefEmail || slackWebhookUrl ? "✓ Configured" : "—"}</span>
@@ -8567,7 +8778,7 @@ Cite URLs.`;
           </div>
 
           {/* VPS Agent Runner */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#34D399", letterSpacing: "2px" }}>◎ VPS AGENT RUNNER</span>
               <span style={{ fontSize: 9, color: vpsUrl ? "#34D399" : "#444" }}>{vpsUrl ? "✓ Connected" : "—"}</span>
@@ -8580,7 +8791,7 @@ Cite URLs.`;
           </div>
 
           {/* Gmail */}
-          <div style={{ background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "#4ECDC4", letterSpacing: "2px" }}>◎ GMAIL DRAFTS</span>
               <span style={{ fontSize: 9, color: gmailRefreshToken ? "#34D399" : "#444" }}>{gmailRefreshToken ? "✓ Connected" : "—"}</span>
@@ -8595,8 +8806,8 @@ Cite URLs.`;
         </div>
       )}
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <div className="ff-sidebar" style={{ width: 200, flexShrink: 0, borderRight: "1px solid #111", padding: "14px 11px", display: "flex", flexDirection: "column", gap: 6, overflowY: "auto" }}>
+      <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative", zIndex: 1 }}>
+        <div className="ff-sidebar" style={{ width: 200, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.05)", padding: "14px 11px", display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", background: "rgba(2,10,26,0.5)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", position: "relative", zIndex: 1 }}>
           <div className="agent-pill" onClick={() => setActiveId("home")}
             style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${"home" === activeId ? "#FF6B2B50" : "#111"}`, background: "home" === activeId ? "#FF6B2B0A" : "transparent", marginBottom: 6 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -8742,7 +8953,7 @@ Cite URLs.`;
               </div>
             </div>
           </div>
-          <div style={{ marginTop: "auto", padding: 10, background: "#0A0A0A", borderRadius: 7, border: "1px solid #111" }}>
+          <div style={{ marginTop: "auto", padding: 10, background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #111" }}>
             <div style={{ fontSize: 9, color: "#999", letterSpacing: "2px", marginBottom: 10 }}>MARCH BUDGET</div>
             <BudgetBar label="CLAUDE · $90" spent={claudeSpent} cap={CLAUDE_BUDGET} color="#FF6B2B" />
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #111", display: "flex", justifyContent: "space-between" }}>
@@ -8803,7 +9014,7 @@ Cite URLs.`;
             />
           ) : (<>
           {/* Agent tab strip */}
-          <div style={{ display: "flex", borderBottom: "1px solid #111", padding: "0 16px", flexShrink: 0, background: "#080808" }}>
+          <div style={{ display: "flex", borderBottom: "1px solid #111", padding: "0 16px", flexShrink: 0, background: "rgba(4,14,34,0.5)" }}>
             {agents.filter(a => ["builder", "prospector", "monday", "dossier"].includes(a.id)).map(a => (
               <button key={a.id} onClick={() => setActiveId(a.id)}
                 style={{ padding: "9px 14px", background: "none", border: "none", borderBottom: `2px solid ${activeId === a.id ? a.color : "transparent"}`, color: activeId === a.id ? a.color : "#555", fontSize: 10, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "color 0.15s" }}>
@@ -8869,7 +9080,7 @@ Cite URLs.`;
                   setIgError(""); setIgDraft("");
                 }}
                 onClick={() => document.getElementById("ig-file-input").click()}
-                style={{ border: `1px dashed ${igImages.length > 0 ? "#FF6B2B50" : "#222"}`, borderRadius: 6, padding: igImages.length > 0 ? "8px" : "14px", cursor: "pointer", marginBottom: 8, background: "#0A0A0A", transition: "border-color 0.15s" }}
+                style={{ border: `1px dashed ${igImages.length > 0 ? "#FF6B2B50" : "#222"}`, borderRadius: 6, padding: igImages.length > 0 ? "8px" : "14px", cursor: "pointer", marginBottom: 8, background: "rgba(4,14,34,0.62)", transition: "border-color 0.15s" }}
               >
                 <input
                   id="ig-file-input"
@@ -8931,7 +9142,7 @@ Cite URLs.`;
                 onChange={e => setIgCaption(e.target.value)}
                 placeholder="Optional: paste caption or add context..."
                 rows={1}
-                style={{ width: "100%", padding: "7px 10px", background: "#0C0C0C", border: "1px solid #1A1A1A", borderRadius: 6, color: "#B8B4AC", fontSize: 10, fontFamily: "inherit", outline: "none", resize: "none", boxSizing: "border-box", marginBottom: 8 }}
+                style={{ width: "100%", padding: "7px 10px", background: "rgba(3,12,30,0.7)", border: "1px solid #1A1A1A", borderRadius: 6, color: "#B8B4AC", fontSize: 10, fontFamily: "inherit", outline: "none", resize: "none", boxSizing: "border-box", marginBottom: 8 }}
               />
 
               <div style={{ display: "flex", gap: 8 }}>
@@ -8961,7 +9172,7 @@ Cite URLs.`;
                 {(igImages.length > 0 || igDraft || igCaption) && (
                   <button
                     onClick={() => { setIgImages([]); setIgCaption(""); setIgDraft(""); setIgError(""); setIgCopied(false); }}
-                    style={{ padding: "7px 12px", background: "#0A0A0A", border: "1px solid #1A1A1A", borderRadius: 6, color: "#555", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+                    style={{ padding: "7px 12px", background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 6, color: "#555", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
                   >Clear</button>
                 )}
               </div>
@@ -8969,7 +9180,7 @@ Cite URLs.`;
               {igError && <div style={{ marginTop: 8, fontSize: 10, color: "#FF6B6B" }}>{igError}</div>}
 
               {igDraft && (
-                <div style={{ marginTop: 10, background: "#0C0C0C", border: "1px solid #1E1E1E", borderRadius: 7, overflow: "hidden" }}>
+                <div style={{ marginTop: 10, background: "rgba(3,12,30,0.7)", border: "1px solid #1E1E1E", borderRadius: 7, overflow: "hidden" }}>
                   {/* Copy button pinned at top so it's always visible */}
                   <div style={{ padding: "8px 12px", borderBottom: "1px solid #161616", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 9, color: "#555", letterSpacing: "1px" }}>DRAFT</span>
@@ -8990,7 +9201,7 @@ Cite URLs.`;
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap", padding: "6px 16px", borderBottom: "1px solid #0D0D0D", background: "#070707", flexShrink: 0 }}>
               {agent.tasks.map(t => (
                 <div key={t} className="chip" onClick={() => setPrompt(t)}
-                  style={{ padding: "3px 8px", background: "#0C0C0C", border: "1px solid #161616", borderRadius: 20, fontSize: 9, color: "#888", cursor: "pointer" }}>
+                  style={{ padding: "3px 8px", background: "rgba(3,12,30,0.7)", border: "1px solid #161616", borderRadius: 20, fontSize: 9, color: "#888", cursor: "pointer" }}>
                   {t}
                 </div>
               ))}
@@ -9049,7 +9260,7 @@ Cite URLs.`;
             <div style={{ display: "flex", gap: 7, alignItems: "flex-end" }}>
               <textarea value={prompt} onChange={e => setPrompt(e.target.value)} onKeyDown={handleKey}
                 placeholder={`Tell ${agent.name} what to do...`} rows={2}
-                style={{ flex: 1, background: "#0C0C0C", border: "1px solid #161616", borderRadius: 7, color: "#E8E4DC", fontSize: 12, padding: "8px 12px", resize: "none", fontFamily: "inherit", lineHeight: 1.5 }} />
+                style={{ flex: 1, background: "rgba(3,12,30,0.7)", border: "1px solid #161616", borderRadius: 7, color: "#E8E4DC", fontSize: 12, padding: "8px 12px", resize: "none", fontFamily: "inherit", lineHeight: 1.5 }} />
               <button onClick={runAgent} disabled={running || !prompt.trim()}
                 style={{ padding: "8px 15px", height: 47, background: running || !prompt.trim() ? "#0C0C0C" : agent.color, color: running || !prompt.trim() ? "#999" : "#080808", border: "none", borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: running || !prompt.trim() ? "not-allowed" : "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
                 {running ? "..." : "RUN →"}
@@ -9065,7 +9276,7 @@ Cite URLs.`;
       </div>
 
       {/* Mobile bottom tab bar — visible only on screens < 768px via CSS */}
-      <div className="ff-tab-bar" style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 56, background: "#080808", borderTop: "1px solid #1A1A1A", zIndex: 50, alignItems: "center", justifyContent: "space-around", padding: "0 4px" }}>
+      <div className="ff-tab-bar" style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 56, background: "rgba(4,14,34,0.5)", borderTop: "1px solid #1A1A1A", zIndex: 50, alignItems: "center", justifyContent: "space-around", padding: "0 4px" }}>
         <div onClick={() => setActiveId("home")} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 8px", borderRadius: 8, background: activeId === "home" ? "#FF6B2B15" : "transparent", cursor: "pointer", flex: 1 }}>
           <span style={{ fontSize: 15, color: activeId === "home" ? "#FF6B2B" : "#555" }}>◉</span>
           <span style={{ fontSize: 7, color: activeId === "home" ? "#FF6B2B" : "#555", letterSpacing: "0.5px" }}>Home</span>

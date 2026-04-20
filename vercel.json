@@ -2,8 +2,15 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/agent-stream.js": { "maxDuration": 300 }
+    "api/agent-stream.js": { "maxDuration": 300 },
+    "api/cron-exec-movement.js": { "maxDuration": 300 }
   },
+  "crons": [
+    {
+      "path": "/api/cron-exec-movement",
+      "schedule": "0 9 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }

@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mendable/firecrawl-js": "^4.18.3",
+    "exa-js": "^2.11.0",
     "node-fetch": "^2.7.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

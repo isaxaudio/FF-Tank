@@ -1,0 +1,382 @@
+/* ═══════════════════════════════════════════════════
+   FF TANK — Design System
+   Built by Claude for Fatfish Media
+   Import in main.jsx BEFORE index.css:
+     import './tank-theme.css'
+═══════════════════════════════════════════════════ */
+
+:root {
+  /* ── Color tokens ── */
+  --deep:    #020912;
+  --ocean:   #04122A;
+  --mid:     #071930;
+  --card:    #0E1122;
+  --card2:   #121526;
+
+  /* Glass surfaces */
+  --glass:   rgba(4, 14, 34, 0.62);
+  --glass2:  rgba(3, 11, 28, 0.55);
+
+  /* Borders */
+  --b1: rgba(0, 220, 232, 0.09);
+  --b2: rgba(0, 220, 232, 0.18);
+  --b3: rgba(255, 255, 255, 0.06);
+  --b4: rgba(255, 255, 255, 0.10);
+
+  /* Text */
+  --tx: #E4F4FF;
+  --t2: #7EB8CC;
+  --t3: #3D6B80;
+  --t4: #1A3348;
+  --t5: #0D1F2E;
+
+  /* Brand accent — teal */
+  --teal:  #00DCE8;
+  --tealD: #00A8B8;
+  --tealG: rgba(0, 220, 232, 0.18);
+
+  /* Signal colors */
+  --purple: #A78BFA;
+  --purpleG: rgba(167, 139, 250, 0.16);
+  --green:  #00FF87;
+  --greenG: rgba(0, 255, 135, 0.14);
+  --orange: #FF7C3C;
+  --orangeG: rgba(255, 124, 60, 0.16);
+  --coral:  #FF6B8A;
+  --yellow: #F7C948;
+  --red:    #FF6B6B;
+
+  /* Score color shortcuts */
+  --score-high:   var(--green);
+  --score-mid:    var(--yellow);
+  --score-low:    var(--red);
+
+  /* Typography */
+  --sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+
+  /* Radius */
+  --r:  14px;
+  --r2: 10px;
+  --r3: 8px;
+}
+
+/* ── Google Font import ── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+/* ═══════════════════════════════════════════════════
+   OCEAN BACKGROUND
+   Apply .tank-bg to your root app wrapper
+═══════════════════════════════════════════════════ */
+.tank-bg {
+  background: var(--deep);
+  position: relative;
+  min-height: 100vh;
+}
+
+.tank-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 90% 70% at 15% -10%, rgba(0, 150, 200, 0.09) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 80% at 85% 20%,  rgba(100, 60, 200, 0.07) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 50% 85%,  rgba(0, 80, 120, 0.07)  0%, transparent 55%),
+    linear-gradient(180deg, #030D20 0%, #020912 100%);
+}
+
+/* Caustic light shimmer */
+.tank-caustic {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  animation: tankCausticShift 12s ease-in-out infinite alternate;
+  background:
+    radial-gradient(ellipse 35% 25% at 25% 35%, rgba(0, 220, 232, 0.05) 0%, transparent 100%),
+    radial-gradient(ellipse 25% 20% at 72% 22%, rgba(0, 220, 232, 0.04) 0%, transparent 100%),
+    radial-gradient(ellipse 20% 30% at 55% 65%, rgba(120, 80, 255, 0.04) 0%, transparent 100%);
+}
+@keyframes tankCausticShift {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(3%, 4%) scale(1.05); }
+}
+
+/* ── Light ray overlay ── */
+.tank-rays {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.4;
+  background-image:
+    radial-gradient(1px 60px at 18% 0%, rgba(0, 220, 232, 0.07) 0%, transparent 100%),
+    radial-gradient(1px 80px at 42% 0%, rgba(0, 220, 232, 0.05) 0%, transparent 100%),
+    radial-gradient(1px 50px at 68% 0%, rgba(0, 220, 232, 0.07) 0%, transparent 100%),
+    radial-gradient(1px 65px at 86% 0%, rgba(0, 220, 232, 0.04) 0%, transparent 100%);
+  animation: tankRays 9s ease-in-out infinite alternate;
+}
+@keyframes tankRays {
+  from { background-position: 0 0, 0 0, 0 0, 0 0; }
+  to   { background-position: 6px 0, -5px 0, 4px 0, -3px 0; }
+}
+
+/* ── Bubbles ── */
+.tank-bubble {
+  position: fixed;
+  bottom: -20px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 220, 232, 0.3);
+  background: radial-gradient(circle at 32% 32%, rgba(0, 220, 232, 0.1), rgba(0, 220, 232, 0.02));
+  box-shadow:
+    inset 0 -2px 3px rgba(255, 255, 255, 0.05),
+    0 0 5px rgba(0, 220, 232, 0.12);
+  pointer-events: none;
+  z-index: 0;
+  animation: tankBubble linear infinite;
+}
+@keyframes tankBubble {
+  0%   { transform: translateY(0) translateX(0);    opacity: 0; }
+  8%   { opacity: 0.55; }
+  88%  { opacity: 0.4; }
+  100% { transform: translateY(-105vh) translateX(10px); opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════
+   GLASS CARD UTILITIES
+═══════════════════════════════════════════════════ */
+.tank-glass {
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--b1);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-radius: var(--r);
+}
+
+.tank-glass-deep {
+  background: rgba(3, 12, 30, 0.62);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--b1);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border-radius: var(--r);
+}
+
+/* Glass sheen top-edge highlight */
+.tank-glass-sheen::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 40%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, transparent 100%);
+  pointer-events: none;
+  border-radius: var(--r) var(--r) 0 0;
+}
+
+/* ═══════════════════════════════════════════════════
+   GLOW UTILITIES
+═══════════════════════════════════════════════════ */
+.glow-teal    { box-shadow: 0 0 20px rgba(0, 220, 232, 0.2),  0 0 40px rgba(0, 220, 232, 0.1); }
+.glow-green   { box-shadow: 0 0 20px rgba(0, 255, 135, 0.2),  0 0 40px rgba(0, 255, 135, 0.1); }
+.glow-orange  { box-shadow: 0 0 20px rgba(255, 124, 60, 0.2), 0 0 40px rgba(255, 124, 60, 0.1); }
+.glow-purple  { box-shadow: 0 0 20px rgba(167, 139, 250, 0.2),0 0 40px rgba(167, 139, 250, 0.1); }
+
+.text-glow-teal   { text-shadow: 0 0 16px rgba(0, 220, 232, 0.7),  0 0 32px rgba(0, 220, 232, 0.3); }
+.text-glow-green  { text-shadow: 0 0 20px rgba(0, 255, 135, 0.6),  0 0 40px rgba(0, 255, 135, 0.28); }
+.text-glow-orange { text-shadow: 0 0 16px rgba(255, 124, 60, 0.6),  0 0 32px rgba(255, 124, 60, 0.3); }
+.text-glow-yellow { text-shadow: 0 0 16px rgba(247, 201, 72, 0.5),  0 0 30px rgba(247, 201, 72, 0.25); }
+
+/* ═══════════════════════════════════════════════════
+   SCORE BADGE
+   Usage: <span className="tank-score tank-score--high">82</span>
+═══════════════════════════════════════════════════ */
+.tank-score {
+  font-family: var(--sans);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.tank-score--high   { color: var(--green);  text-shadow: 0 0 20px rgba(0,255,135,0.6), 0 0 40px rgba(0,255,135,0.28); }
+.tank-score--mid    { color: var(--yellow); text-shadow: 0 0 16px rgba(247,201,72,0.5); }
+.tank-score--low    { color: var(--red);    text-shadow: 0 0 14px rgba(255,107,107,0.4); }
+.tank-score--dim    { color: var(--t4); }
+
+/* ═══════════════════════════════════════════════════
+   SIGNAL TYPE BADGE
+   Usage: <span className="tank-badge tank-badge--rfp">RFP</span>
+═══════════════════════════════════════════════════ */
+.tank-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.tank-badge--rfp       { color: var(--orange); border-color: rgba(255,124,60,0.4);   background: rgba(255,124,60,0.1); }
+.tank-badge--market    { color: var(--purple); border-color: rgba(167,139,250,0.3);  background: rgba(167,139,250,0.08); }
+.tank-badge--venue     { color: var(--teal);   border-color: rgba(0,220,232,0.28);   background: rgba(0,220,232,0.07); }
+.tank-badge--competitor{ color: var(--coral);  border-color: rgba(255,107,138,0.3);  background: rgba(255,107,138,0.07); }
+.tank-badge--funding   { color: var(--green);  border-color: rgba(0,255,135,0.25);   background: rgba(0,255,135,0.06); }
+.tank-badge--urgent    { color: var(--orange); border-color: rgba(255,124,60,0.3);   background: rgba(255,124,60,0.07); }
+.tank-badge--reviewed  { color: var(--green);  border-color: rgba(0,255,135,0.2);    background: transparent; font-size: 7px; }
+
+/* ── Status badges ── */
+.tank-badge--new        { color: var(--teal);   border-color: rgba(0,220,232,0.25);  background: rgba(0,220,232,0.07); }
+.tank-badge--contacted  { color: var(--purple); border-color: rgba(167,139,250,0.25);background: rgba(167,139,250,0.07); }
+.tank-badge--qualified  { color: var(--yellow); border-color: rgba(247,201,72,0.25); background: rgba(247,201,72,0.07); }
+.tank-badge--closed     { color: var(--green);  border-color: rgba(0,255,135,0.25);  background: rgba(0,255,135,0.07); }
+.tank-badge--draft      { color: var(--yellow); border-color: rgba(247,201,72,0.28); background: rgba(247,201,72,0.07); }
+.tank-badge--sent       { color: var(--green);  border-color: rgba(0,255,135,0.22);  background: rgba(0,255,135,0.06); }
+.tank-badge--target     { color: var(--t3);     border-color: rgba(255,255,255,0.08);background: transparent; }
+.tank-badge--converted  { color: var(--green);  border-color: rgba(0,255,135,0.25);  background: rgba(0,255,135,0.07); }
+
+/* ── Next-step chips ── */
+.tank-next { display: inline-flex; font-size: 8px; font-weight: 600; padding: 3px 8px; border-radius: 5px; border: 1px solid; }
+.tank-next--draft   { color: var(--green);  border-color: rgba(0,255,135,0.28);   background: rgba(0,255,135,0.07); }
+.tank-next--enrich  { color: var(--purple); border-color: rgba(167,139,250,0.28); background: rgba(167,139,250,0.07); }
+.tank-next--targets { color: var(--teal);   border-color: rgba(0,220,232,0.25);   background: rgba(0,220,232,0.06); }
+.tank-next--watch   { color: var(--t3);     border-color: rgba(255,255,255,0.07); background: transparent; }
+.tank-next--sales   { color: var(--orange); border-color: rgba(255,124,60,0.28);  background: rgba(255,124,60,0.07); }
+
+/* ═══════════════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════════════ */
+.tank-btn {
+  font-family: var(--sans);
+  font-weight: 700;
+  border-radius: var(--r3);
+  cursor: pointer;
+  border: 1px solid;
+  transition: all 0.15s;
+  white-space: nowrap;
+  font-size: 10px;
+  padding: 7px 15px;
+}
+.tank-btn--primary {
+  color: var(--green);
+  border-color: rgba(0,255,135,0.3);
+  background: rgba(0,255,135,0.08);
+  box-shadow: 0 0 14px rgba(0,255,135,0.1);
+}
+.tank-btn--primary:hover {
+  background: rgba(0,255,135,0.16);
+  box-shadow: 0 0 24px rgba(0,255,135,0.2);
+  border-color: rgba(0,255,135,0.5);
+}
+.tank-btn--teal {
+  color: var(--teal);
+  border-color: rgba(0,220,232,0.25);
+  background: rgba(0,220,232,0.07);
+}
+.tank-btn--teal:hover {
+  background: rgba(0,220,232,0.15);
+  border-color: rgba(0,220,232,0.45);
+  box-shadow: 0 0 16px rgba(0,220,232,0.15);
+}
+.tank-btn--ghost {
+  color: var(--t3);
+  border-color: transparent;
+  background: transparent;
+}
+.tank-btn--ghost:hover { color: var(--coral); }
+.tank-btn--sm { font-size: 9px; padding: 4px 10px; border-radius: 6px; }
+.tank-btn--run {
+  font-size: 8px; padding: 3px 9px; border-radius: 5px;
+  border: 1px solid rgba(0,220,232,0.16); background: transparent;
+  color: var(--t3); font-family: var(--sans); font-weight: 700; cursor: pointer; transition: all 0.12s;
+}
+.tank-btn--run:hover {
+  color: var(--teal); border-color: rgba(0,220,232,0.38);
+  background: rgba(0,220,232,0.07); box-shadow: 0 0 10px rgba(0,220,232,0.1);
+}
+
+/* ═══════════════════════════════════════════════════
+   FILTER BAR CHIPS
+═══════════════════════════════════════════════════ */
+.tank-chip {
+  font-family: var(--sans); font-size: 10px; font-weight: 600;
+  padding: 5px 11px; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.07); background: transparent;
+  color: var(--t3); transition: all 0.12s;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.tank-chip:hover { border-color: rgba(255,255,255,0.12); color: var(--t2); }
+.tank-chip--active { background: rgba(0,220,232,0.1); border-color: rgba(0,220,232,0.28); color: var(--teal); box-shadow: 0 0 12px rgba(0,220,232,0.08); }
+.tank-chip--rfp    { background: rgba(255,124,60,0.08); border-color: rgba(255,124,60,0.22); color: var(--orange); }
+.tank-chip--market { background: rgba(167,139,250,0.08);border-color: rgba(167,139,250,0.22);color: var(--purple); }
+
+/* ═══════════════════════════════════════════════════
+   LIVE DOT
+═══════════════════════════════════════════════════ */
+.tank-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.tank-dot--live   { background: var(--green);  box-shadow: 0 0 8px var(--green), 0 0 16px rgba(0,255,135,0.4); animation: tankPulse 2s infinite; }
+.tank-dot--recent { background: var(--yellow); box-shadow: 0 0 8px rgba(247,201,72,0.5); }
+.tank-dot--idle   { background: var(--t5); }
+@keyframes tankPulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%     { opacity: 0.4; transform: scale(0.8); }
+}
+
+/* ═══════════════════════════════════════════════════
+   SEARCH BOX
+═══════════════════════════════════════════════════ */
+.tank-search {
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(0,220,232,0.1);
+  border-radius: 9px; padding: 5px 11px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.tank-search:focus-within {
+  border-color: rgba(0,220,232,0.28);
+  box-shadow: 0 0 16px rgba(0,220,232,0.08);
+}
+.tank-search input {
+  background: none; border: none; outline: none;
+  font-family: var(--sans); font-size: 11px; color: var(--tx);
+}
+.tank-search input::placeholder { color: var(--t3); }
+
+/* ═══════════════════════════════════════════════════
+   SIDEBAR NAV
+═══════════════════════════════════════════════════ */
+.tank-nav-link {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; margin: 1px 8px; border-radius: 10px;
+  cursor: pointer; color: var(--t2); font-size: 12px; font-weight: 600;
+  transition: all 0.15s; text-decoration: none; position: relative; overflow: hidden;
+}
+.tank-nav-link:hover { background: rgba(0,220,232,0.06); color: var(--tx); }
+.tank-nav-link--active {
+  background: rgba(0,220,232,0.1); color: var(--teal);
+  box-shadow: inset 0 0 0 1px rgba(0,220,232,0.18), 0 0 16px rgba(0,220,232,0.07);
+}
+.tank-nav-link--active::before {
+  content: '';
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 60%; background: var(--teal); border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 10px var(--teal);
+}
+
+/* ═══════════════════════════════════════════════════
+   SCROLLBAR THEMING
+═══════════════════════════════════════════════════ */
+.tank-scroll::-webkit-scrollbar { width: 3px; height: 3px; }
+.tank-scroll::-webkit-scrollbar-track { background: transparent; }
+.tank-scroll::-webkit-scrollbar-thumb { background: rgba(0,220,232,0.14); border-radius: 2px; }
+
+/* ═══════════════════════════════════════════════════
+   LAYOUT HELPERS
+═══════════════════════════════════════════════════ */
+.tank-above-bg { position: relative; z-index: 1; }

@@ -97,6 +97,21 @@ async function completeJobRun(runId, summary, durationMs, status = 'completed', 
   } catch {}
 }
 
+// ─── Concurrency guard ───────────────────────────────────────────────────────
+// Returns true if a job_run for jobName is already in 'running' state.
+// Used to prevent stampede failures on long-running skills.
+async function isJobRunning(jobName) {
+  if (!SB_BASE || !SB_KEY) return false;
+  try {
+    const r = await fetch(
+      `${SB_BASE}/rest/v1/job_runs?job_name=eq.${encodeURIComponent(jobName)}&status=eq.running&limit=1`,
+      { headers: SB_H }
+    );
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch { return false; }
+}
+
 // ─── OpenClaw trigger helper ──────────────────────────────────────────────────
 // Fires an OpenClaw agent session in the background (non-blocking).
 // Calls completeJobRun when the skill exits, capturing duration and any token
@@ -108,7 +123,7 @@ function triggerOpenClaw(skillName, sessionId, agentId, runId) {
   const args = ['agent', '--session-id', sessionId, '--message', `/${skillName}`];
   if (agentId) args.push('--agent', agentId);
 
-  execFile(clawPath, args, { timeout: 10 * 60 * 1000 }, async (err, stdout) => {
+  execFile(clawPath, args, { timeout: 10 * 60 * 1000 }, async (err, stdout, stderr) => {
     const duration = Date.now() - start;
 
     // Try to extract token usage from stdout JSON
@@ -130,8 +145,9 @@ function triggerOpenClaw(skillName, sessionId, agentId, runId) {
     } catch {}
 
     if (err) {
-      log('trigger', `OpenClaw ${skillName} error: ${err.message}`);
-      if (runId) await completeJobRun(runId, null, duration, 'failed', err.message, tokens);
+      const errMsg = stderr ? `${err.message} | stderr: ${stderr.trim()}` : err.message;
+      log('trigger', `OpenClaw ${skillName} error: ${errMsg}`);
+      if (runId) await completeJobRun(runId, null, duration, 'failed', errMsg, tokens);
     } else {
       log('trigger', `OpenClaw ${skillName} done in ${(duration/1000).toFixed(1)}s`);
       if (runId) await completeJobRun(runId, summary, duration, 'completed', null, tokens);
@@ -221,12 +237,14 @@ app.post('/run/scan-targets', auth, async (req, res) => {
 });
 
 app.post('/run/chain', auth, async (req, res) => {
+  if (await isJobRunning('chain')) return res.json({ triggered: false, reason: 'already running' });
   const runId = await startJobRun('chain', req.body?.triggeredBy || 'ui');
   triggerOpenClaw('ff-enrich-chain', `ff-tank-chain-${Date.now()}`, 'ff-chain', runId);
   res.json({ triggered: true, via: 'openclaw', runId });
 });
 
 app.post('/run/brief', auth, async (req, res) => {
+  if (await isJobRunning('brief')) return res.json({ triggered: false, reason: 'already running' });
   const runId = await startJobRun('brief', req.body?.triggeredBy || 'ui');
   triggerOpenClaw('ff-brief', `ff-tank-brief-${Date.now()}`, 'ff-brief', runId);
   res.json({ triggered: true, via: 'openclaw', runId });
@@ -243,6 +261,7 @@ app.post('/run/lookalike', auth, async (req, res) => {
 });
 
 app.post('/run/competitor', auth, async (req, res) => {
+  if (await isJobRunning('competitor')) return res.json({ triggered: false, reason: 'already running' });
   const runId = await startJobRun('competitor', req.body?.triggeredBy || 'ui');
   triggerOpenClaw('ff-competitor', `ff-tank-competitor-${Date.now()}`, 'ff-competitor', runId);
   res.json({ triggered: true, via: 'openclaw', runId });

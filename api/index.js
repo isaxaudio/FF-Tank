@@ -127,6 +127,126 @@ module.exports = async (req, res) => {
       case 'agent-run':      return await handleAgentRun(req, res);
       case 'agent-tools':    return await handleAgentTools(req, res);
       case 'instagram-scrape': return await handleInstagramScrape(req, res);
+      case 'exa': {
+        const { query, options = {} } = req.body;
+        if (!query) return res.status(400).json({ error: 'query is required' });
+        try {
+          const exaResponse = await fetch('https://api.exa.ai/search', {
+            method: 'POST',
+            headers: { 'x-api-key': process.env.EXA_API_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query,
+              type: options.type || 'auto',
+              numResults: options.numResults || 10,
+              category: options.category,
+              includeDomains: options.includeDomains,
+              excludeDomains: options.excludeDomains,
+              startPublishedDate: options.startPublishedDate,
+              endPublishedDate: options.endPublishedDate,
+              contents: { highlights: { maxCharacters: 4000 } },
+            }),
+          });
+          if (!exaResponse.ok) {
+            const errorText = await exaResponse.text();
+            return res.status(exaResponse.status).json({ error: 'Exa request failed', details: errorText });
+          }
+          const data = await exaResponse.json();
+          return res.status(200).json(data);
+        } catch (err) {
+          return res.status(500).json({ error: 'Exa handler error', details: err.message });
+        }
+      }
+      case 'firecrawl': {
+        const { mode, url, urls, schema, prompt, options = {} } = req.body;
+        if (!mode) return res.status(400).json({ error: 'mode is required (scrape or extract)' });
+        try {
+          if (mode === 'scrape') {
+            if (!url) return res.status(400).json({ error: 'url is required for scrape mode' });
+            const fcResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                url,
+                formats: options.formats || ['markdown'],
+                onlyMainContent: options.onlyMainContent !== false,
+                waitFor: options.waitFor || 0,
+              }),
+            });
+            if (!fcResponse.ok) {
+              const errorText = await fcResponse.text();
+              return res.status(fcResponse.status).json({ error: 'Firecrawl scrape failed', details: errorText });
+            }
+            const data = await fcResponse.json();
+            return res.status(200).json(data);
+          }
+          if (mode === 'extract') {
+            if (!urls || !Array.isArray(urls) || urls.length === 0)
+              return res.status(400).json({ error: 'urls array is required for extract mode' });
+            if (!schema && !prompt)
+              return res.status(400).json({ error: 'schema or prompt is required for extract mode' });
+            const fcResponse = await fetch('https://api.firecrawl.dev/v1/extract', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ urls, schema, prompt }),
+            });
+            if (!fcResponse.ok) {
+              const errorText = await fcResponse.text();
+              return res.status(fcResponse.status).json({ error: 'Firecrawl extract failed', details: errorText });
+            }
+            const data = await fcResponse.json();
+            return res.status(200).json(data);
+          }
+          return res.status(400).json({ error: 'mode must be scrape or extract' });
+        } catch (err) {
+          return res.status(500).json({ error: 'Firecrawl handler error', details: err.message });
+        }
+      }
+      case 'draft-outreach': {
+        if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+        const { contact, title, company, email, signal } = req.body || {};
+        if (!contact || !company || !signal) {
+          return res.status(400).json({ error: 'Missing required fields: contact, company, signal' });
+        }
+        // Dedup: skip if a draft already exists for this contact email
+        if (email) {
+          const sbUrl = process.env.SUPABASE_URL;
+          const sbKey = process.env.SUPABASE_ANON_KEY;
+          if (sbUrl && sbKey) {
+            try {
+              const base = sbUrl.replace(/\/$/, '');
+              const sbH = { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` };
+              const r = await fetch(
+                `${base}/rest/v1/outreach_drafts?contact_email=eq.${encodeURIComponent(email)}&select=id,subject,body&limit=1`,
+                { headers: sbH }
+              );
+              const existing = await r.json();
+              if (Array.isArray(existing) && existing.length > 0) {
+                const d = existing[0];
+                return res.status(200).json({ subject: d.subject, body: d.body, existing: true });
+              }
+            } catch { /* dedup check failed — fall through and generate new draft */ }
+          }
+        }
+        const doApiKey = process.env.ANTHROPIC_API_KEY;
+        if (!doApiKey) return res.status(500).json({ error: 'Missing ANTHROPIC_API_KEY' });
+        try {
+          const doSystem = `You are writing cold outreach emails on behalf of Isaac Gonzalez at Fatfish, a full-service event production company in Salt Lake City, Utah. Fatfish handles AV, lighting, staging, décor, video, and experiential events for clients like WGU, Huntsman Cancer Institute, TEDx, and the Utah Jazz.\n\nRules:\n- 3–4 sentences max for the body (not counting sign-off)\n- Tone: direct, confident, specific — no generic agency language or buzzwords\n- Open with a specific reference to the signal provided (treat it as context you "came across")\n- Include one clear CTA: either request a 15-minute call or ask if they have an upcoming event needing production support\n- Sign off as: Isaac Gonzalez | Fatfish | Salt Lake City\n- Return ONLY valid JSON with two fields: "subject" (email subject line, concise, no clickbait) and "body" (the full email text, plain text, no markdown). No other text.`;
+          const doUser = `Write a cold outreach email with these details:\nContact name: ${contact}\nTitle: ${title || 'not provided'}\nCompany: ${company}\nEmail: ${email || 'not provided'}\nSignal / reason for outreach: ${signal}`;
+          const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': doApiKey, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 500, system: doSystem, messages: [{ role: 'user', content: doUser }] }),
+          });
+          const doData = await upstream.json();
+          if (!upstream.ok) return res.status(500).json({ error: doData.error?.message || `Anthropic error ${upstream.status}` });
+          const text = doData.content?.find(b => b.type === 'text')?.text || '';
+          const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+          if (!parsed.subject || !parsed.body) throw new Error('Invalid response shape from Claude');
+          return res.status(200).json({ subject: parsed.subject, body: parsed.body });
+        } catch (err) {
+          return res.status(500).json({ error: err.message });
+        }
+      }
       default:
         return res.status(400).json({ error: `Unknown service: "${service}"` });
     }
@@ -2319,6 +2439,14 @@ CATEGORY 3 — INFORMATIONAL / POLICY PAGE (reject immediately)
 
 Only call save_opportunity for Category 1 results with explicit evidence in the reasoning block.
 
+SOURCE PRIORITY — when the same RFP appears in multiple places:
+- Preferred sources: official .gov / .edu domains, official organization websites, direct PDF links
+- Secondary sources (aggregators): govtribe.com, rfpmart.com, bidbanana.thebidlab.com, highergov.com, bidnet.com, rfpdb.com, bidsync.com
+- Rule 1: If you found the RFP on a primary source, use that URL in source — not the aggregator link
+- Rule 2: If you only have an aggregator link, attempt one follow-up search to locate the primary source. If found, use primary.
+- Rule 3: If multiple aggregator results point to the same RFP (same issuer + title), treat them as ONE opportunity — do not save duplicates
+- Rule 4: If you cannot find the primary source and only have an aggregator link, you may save it but must: set confidence_score ≤ 6, note "[aggregator source — primary URL not found]" in notes, and confirm it is not already in the pipeline via get_existing_opportunities
+
 LOW-VALUE — avoid unless strategic:
 - Commodity AV rental (projector, microphone-only bids)
 - Events where a national incumbent (Encore, PSAV) has an embedded contract
@@ -2641,6 +2769,15 @@ async function handleAgentTools(req, res) {
       // Classification gate — reject non-actionable results at the server level
       if (classification && classification !== 'actionable opportunity')
         return res.json({ saved: false, skipped: true, reason: `classification is "${classification}" — only actionable opportunities may be saved` });
+
+      // Aggregator domain gate — block blind saves from known aggregator sites
+      const AGGREGATOR_DOMAINS = ['govtribe.com', 'rfpmart.com', 'bidbanana.thebidlab.com', 'highergov.com', 'bidnet.com', 'rfpdb.com', 'bidsync.com'];
+      try {
+        const srcDomain = source ? new URL(source).hostname.replace(/^www\./, '') : '';
+        if (AGGREGATOR_DOMAINS.includes(srcDomain))
+          return res.json({ saved: false, skipped: true, reason: `aggregator domain "${srcDomain}" — locate and use the primary source URL (.gov, .edu, or issuing org site) before saving` });
+      } catch { /* invalid URL — let it proceed to existing validation */ }
+
       if (!sbBase || !sbKey) return res.json({ saved: false, skipped: true, reason: 'Supabase not configured' });
 
       // Score threshold enforcement

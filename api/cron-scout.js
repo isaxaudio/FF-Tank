@@ -38,28 +38,50 @@ module.exports = async function handler(req, res) {
     if (AV_VENDORS.some(v => (r.url || '').toLowerCase().includes(v.replace(/ /g, '')))) return true;
     return false;
   };
+
+  // Procurement signal gate — at least one term must appear in title or content
+  const PROCUREMENT_TERMS = ['rfp', 'request for proposal', 'bid', 'solicitation', 'submit proposal', 'invitation to bid', 'procurement', 'contract award', 'proposal submission'];
+  const hasProcurementSignal = (r) => {
+    const text = `${r.url} ${r.title || ''} ${r.content || ''}`.toLowerCase();
+    return PROCUREMENT_TERMS.some(t => text.includes(t));
+  };
+
+  // Domain blocklist — event calendars, social posts, tourism listing sites, aggregators, competitor blogs
+  const NOISE_DOMAINS = ['linkedin.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'tiktok.com', 'eventbrite.com', 'visitsaltlake.com', 'visitdenverfun.com', 'app.getriver.io', 'siliconslopes.com', 'community.summit.ing', 'meetup.com', 'allevents.in', 'rules.utah.gov', 'rfpmart.com', 'highergov.com', 'bidbanana.thebidlab.com', 'instantmarkets.com', 'destinationcolorado.com', 'ndotportal.masterworkslive.com', 'globaltenders.com', 'usesettle.com', 'govdirections.com', 'brightav.com', 'a2gov.org', 'dallascounty.org'];
+  // Path blocklist — specific URL patterns that reliably produce noise regardless of domain
+  const NOISE_PATHS = ['/pmn/'];
+  const isNoiseDomain = (r) => {
+    try {
+      const domain = new URL(r.url).hostname.replace(/^www\./, '');
+      if (NOISE_DOMAINS.some(d => domain === d || domain.endsWith('.' + d))) return true;
+      if (NOISE_PATHS.some(p => r.url.includes(p))) return true;
+      return false;
+    } catch { return false; }
+  };
   const stripMd = (s) => (s || '').replace(/#{1,6}\s*/g, '').replace(/\*{1,3}([^*]*)\*{1,3}/g, '$1').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`+/g, '').trim();
 
   try {
-    const [rfpResults, procurementResults, prospectResults, competitorResults, verticalResults] = await Promise.all([
-      // RFP/bid documents — advanced depth to dig into procurement portals
+    const [rfpResults, procurementResults, prospectResults, competitorResults, verticalResults, pdfResults] = await Promise.all([
+      // Q1 — RFP/bid documents: advanced depth, Utah
       search(
         '"request for proposal" OR "RFP" OR "solicitation" OR "invitation to bid" "audio visual" OR "audiovisual" OR "AV services" OR "event production" OR "production services" OR "staging" Utah',
         'advanced', 8
       ),
-      // University & government procurement portals — major AV buyers in Utah
+      // Q2 — University & government procurement portals, Utah
       search(
         'Utah "bid" OR "procurement" OR "request for proposal" audiovisual OR "AV" OR "event production" OR staging site:utah.edu OR site:uvu.edu OR site:byu.edu OR site:utah.gov OR site:slcgov.com OR site:utahcounty.gov',
         'advanced', 8
       ),
-      // Warm prospects: orgs announcing specific 2026 events in Utah
-      search('"annual conference" OR "awards gala" OR "awards ceremony" OR "annual meeting" OR "summit" OR "product launch" Utah 2026 event venue date registration'),
-      // Competitor intel: who Webb AV, Cornerstone, RMNG, Encore are working with
-      search('"Webb AV" OR "Cornerstone AV" OR "RMNG" OR "Encore" Utah 2025 2026 event conference gala'),
-      // Corporate verticals most likely to hire Fatfish: tech, healthcare, finance, higher ed
-      search('Utah 2026 "annual" "conference" OR "gala" OR "awards" OR "summit" "University of Utah" OR "UVU" OR "BYU" OR "Intermountain" OR "SelectHealth" OR "Goldman Sachs" OR "Adobe" OR "Qualtrics" OR "Domo" OR "Extra Space"'),
+      // Q3 — Regional expansion: Idaho, Wyoming, New Mexico (geographies not covered by Q4)
+      search('"request for proposal" OR "RFP" ("audiovisual services" OR "event production" OR "event staging" OR "conference services" OR "live event production") (Idaho OR Wyoming OR "New Mexico" OR Boise OR "Jackson Hole") 2026 -site:rfpmart.com -site:highergov.com -site:bidbanana.thebidlab.com'),
+      // Q4 — Regional open procurement: Nevada, Colorado, Arizona
+      search('"request for proposal" OR "RFP" ("audiovisual services" OR "event production" OR "event staging" OR "entertainment staging" OR "conference services" OR "live event production") Nevada OR Colorado OR Arizona 2026 -site:rfpmart.com -site:highergov.com -site:bidbanana.thebidlab.com'),
+      // Q5 — Procurement platforms: bidnetdirect, bonfire, publicpurchase, planetbids, civicplus, opengov (region-constrained)
+      search('("event production" OR "audiovisual" OR "event staging" OR "conference production" OR "live event") ("request for proposal" OR "RFP" OR "solicitation") (Utah OR Colorado OR Nevada OR Arizona OR Idaho OR Wyoming OR "New Mexico") site:bonfirehub.com OR site:bidnetdirect.com OR site:publicpurchase.com OR site:planetbids.com OR site:civicplus.com OR site:opengov.com'),
+      // Q1-PDF — Utah PDF variant: fresh RFP documents on .gov/.edu servers
+      search('"request for proposal" ("audiovisual" OR "AV services" OR "event production" OR "staging") Utah 2026 filetype:pdf site:utah.gov OR site:utah.edu OR site:slcgov.com OR site:utahcounty.gov'),
     ]);
-    console.log('[cron-scout] results:', rfpResults.length, procurementResults.length, prospectResults.length, competitorResults.length, verticalResults.length);
+    console.log('[cron-scout] results:', rfpResults.length, procurementResults.length, prospectResults.length, competitorResults.length, verticalResults.length, pdfResults.length);
 
     const allResults = [
       ...rfpResults.map(r => ({ ...r, _type: 'rfp' })),
@@ -67,6 +89,7 @@ module.exports = async function handler(req, res) {
       ...prospectResults.map(r => ({ ...r, _type: 'prospect' })),
       ...competitorResults.map(r => ({ ...r, _type: 'market' })),
       ...verticalResults.map(r => ({ ...r, _type: 'prospect' })),
+      ...pdfResults.map(r => ({ ...r, _type: 'rfp' })),
     ].filter(r => !isNoise(r));
 
     const base = supabaseUrl.replace(/\/$/, '');
@@ -75,6 +98,21 @@ module.exports = async function handler(req, res) {
     const saved = [];
     for (const r of allResults) {
       const source = r.url;
+
+      // Gate 1: block known noise domains (social posts, event calendars, tourism listing sites)
+      if (isNoiseDomain(r)) {
+        console.log('[cron-scout] rejected (noise domain):', source);
+        saved.push({ status: 'rejected', reason: 'noise domain', source });
+        continue;
+      }
+
+      // Gate 2: require at least one procurement intent signal in title or content
+      if (!hasProcurementSignal(r)) {
+        console.log('[cron-scout] rejected (no procurement signal):', source);
+        saved.push({ status: 'rejected', reason: 'no procurement signal', source });
+        continue;
+      }
+
       const existing = await fetch(`${base}/rest/v1/opportunities?source=eq.${encodeURIComponent(source)}&select=id&limit=1`, { headers });
       const existingData = await existing.json();
       if (Array.isArray(existingData) && existingData.length > 0) {
@@ -125,6 +163,13 @@ module.exports = async function handler(req, res) {
           .filter(r => isRelevant(r, account.name));
         for (const r of results) {
           const source = r.url;
+
+          // Block social posts and event listing sites even for target account signals
+          if (isNoiseDomain(r)) {
+            targetSaved.push({ status: 'rejected', reason: 'noise domain', source });
+            continue;
+          }
+
           const existingRes = await fetch(
             `${base}/rest/v1/opportunities?source=eq.${encodeURIComponent(source)}&select=id&limit=1`,
             { headers }
@@ -298,10 +343,12 @@ Historical data: ${JSON.stringify({ clients: Array.isArray(flexClients) ? flexCl
       console.error('[cron-scout] brief generation error:', e.message);
     }
 
-    const inserted = saved.filter(s => s.status === 201).length;
-    const skipped  = saved.filter(s => s.status === 'skipped').length;
+    const inserted        = saved.filter(s => s.status === 201).length;
+    const skipped         = saved.filter(s => s.status === 'skipped').length;
+    const rejectedDomain  = saved.filter(s => s.status === 'rejected' && s.reason === 'noise domain').length;
+    const rejectedNoSignal= saved.filter(s => s.status === 'rejected' && s.reason === 'no procurement signal').length;
     const completedAt = new Date().toISOString();
-    console.log(`[cron-scout] DONE run_id=${runId} inserted=${inserted} skipped=${skipped} targets_scanned=${Array.isArray(accounts) ? accounts.length : 0} brief=${briefGenerated} duration_ms=${Date.now() - new Date(startedAt).getTime()}`);
+    console.log(`[cron-scout] DONE run_id=${runId} inserted=${inserted} skipped=${skipped} rejected_domain=${rejectedDomain} rejected_no_signal=${rejectedNoSignal} targets_scanned=${Array.isArray(accounts) ? accounts.length : 0} brief=${briefGenerated} duration_ms=${Date.now() - new Date(startedAt).getTime()}`);
 
     // Write run record to job_runs for dashboard visibility
     const base2 = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
@@ -316,7 +363,7 @@ Historical data: ${JSON.stringify({ clients: Array.isArray(flexClients) ? flexCl
           input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_cost: 0,
           duration_ms: Date.now() - new Date(startedAt).getTime(),
           created_at: startedAt, completed_at: completedAt,
-          notes: JSON.stringify({ inserted, skipped, targets_scanned: Array.isArray(accounts) ? accounts.length : 0, brief_generated: briefGenerated }),
+          notes: JSON.stringify({ inserted, skipped, rejected_domain: rejectedDomain, rejected_no_signal: rejectedNoSignal, targets_scanned: Array.isArray(accounts) ? accounts.length : 0, brief_generated: briefGenerated }),
         }),
       }).catch(() => {});
     }
@@ -324,12 +371,14 @@ Historical data: ${JSON.stringify({ clients: Array.isArray(flexClients) ? flexCl
     return res.status(200).json({
       run_id: runId,
       ran_at: completedAt,
-      rfp_results: rfpResults.length + procurementResults.length,
+      rfp_results: rfpResults.length + procurementResults.length + pdfResults.length,
       prospect_results: prospectResults.length + verticalResults.length,
       competitor_results: competitorResults.length,
       total_raw: allResults.length,
       inserted,
       skipped,
+      rejected_noise_domain: rejectedDomain,
+      rejected_no_procurement_signal: rejectedNoSignal,
       saved,
       target_accounts_scanned: Array.isArray(accounts) ? accounts.length : 0,
       target_saved: targetSaved,
