@@ -112,6 +112,7 @@ module.exports = async (req, res) => {
       case 'ceo-brain':      return await handleCeoBrain(req, res);
       case 'brief-deliver':  return await handleBriefDeliver(req, res);
       case 'gmail-draft':    return await handleGmailDraft(req, res);
+      case 'send-lead':      return await handleSendLead(req, res);
       case 'vps':            return await handleVpsProxy(req, res);
       case 'openai':         return await handleOpenAI(req, res);
       case 'memory':         return await handleMemory(req, res);
@@ -1682,6 +1683,134 @@ async function handleGmailDraft(req, res) {
     return res.status(draftRes.status).json({ error: draftData.error?.message || 'Gmail API error' });
   }
   return res.json({ ok: true, draftId: draftData.id });
+}
+
+// ─── Send Lead to Sales (Slack #ff-leads) ────────────────────────────────────
+// Pushes ONE approved opportunity to the #ff-leads Slack channel for the sales
+// rep (Taylor Miles), with the why-it-matters, contact, and the ready outreach
+// draft attached. This is the handoff that closes the "76 drafts, 0 sent" gap.
+//
+// Body: {
+//   opportunity: {...} | opportunityId: "uuid",   // the lead (object or id to fetch)
+//   draft: {...},                                  // optional outreach_draft (else looked up by company)
+//   slackWebhook: "https://hooks.slack.com/...",   // #ff-leads webhook (else env)
+//   repName: "Taylor Miles",                       // who it's for
+//   mode: "send" | "preview",                      // preview returns the blocks without posting
+//   markStatus: "priority"                         // status to set on the opp after send (best-effort)
+// }
+const SB_ENV = () => ({
+  base: (process.env.SUPABASE_URL || '').replace(/\/$/, ''),
+  key:  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '',
+});
+const sbHeaders = (key) => ({ 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` });
+
+function truncate(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+// Build the Slack Block Kit payload for one lead. Pure — unit-testable.
+function buildLeadBlocks(opp, draft, repName) {
+  const score = opp.overall_score != null ? `${opp.overall_score}/10` : '—';
+  const signal = (opp.signal || opp.event_type || 'lead').toUpperCase();
+  const company = opp.company || 'Unknown company';
+  const fields = [];
+  const addField = (label, val) => { if (val) fields.push({ type: 'mrkdwn', text: `*${label}*\n${truncate(val, 120)}` }); };
+  addField('Signal', signal);
+  addField('Score', score);
+  addField('Timeline', opp.estimated_timeline || (opp.event_start_date ? `event ${opp.event_start_date}` : null));
+  addField('Budget', opp.estimated_budget_band);
+
+  const blocks = [
+    { type: 'header', text: { type: 'plain_text', text: truncate(`🔥 New lead for ${repName.split(' ')[0]} — ${company}`, 150), emoji: true } },
+    { type: 'section', text: { type: 'mrkdwn', text: `*${truncate(opp.title || company, 200)}*\n${truncate(opp.why_this_matters || opp.notes || '', 600)}` } },
+  ];
+  if (fields.length) blocks.push({ type: 'section', fields: fields.slice(0, 8) });
+
+  const angle = opp.recommended_angle || opp.recommended_next_step;
+  if (angle) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*Angle:* ${truncate(angle, 500)}` } });
+
+  // Contact (from matched outreach draft)
+  if (draft && (draft.contact_name || draft.contact_email || draft.contact_linkedin)) {
+    const bits = [
+      draft.contact_name ? `*${draft.contact_name}*` : null,
+      draft.contact_email || null,
+      draft.contact_linkedin ? `<${draft.contact_linkedin}|LinkedIn>` : null,
+    ].filter(Boolean).join('  ·  ');
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `👤 ${bits}` } });
+  }
+
+  // Ready outreach draft
+  if (draft && draft.body) {
+    const subj = draft.subject ? `*${truncate(draft.subject, 140)}*\n` : '';
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `✉️ *Outreach draft — ready to send*\n${subj}>>> ${truncate(draft.body, 1200)}` } });
+  }
+
+  const ctx = [];
+  if (opp.source) ctx.push(`<${opp.source}|View source>`);
+  ctx.push(`Approved by Isaac · react ✅ to claim`);
+  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: ctx.join('  ·  ') }] });
+  blocks.push({ type: 'divider' });
+  return blocks;
+}
+
+async function handleSendLead(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { opportunity, opportunityId, draft: draftIn, slackWebhook, repName = 'Taylor Miles', mode = 'send', markStatus = 'priority' } = req.body || {};
+  const { base, key } = SB_ENV();
+
+  // Resolve the opportunity (object passed directly, or fetch by id)
+  let opp = opportunity;
+  try {
+    if (!opp && opportunityId && base && key) {
+      const r = await fetch(`${base}/rest/v1/opportunities?id=eq.${opportunityId}&limit=1`, { headers: sbHeaders(key) });
+      opp = (await r.json())?.[0];
+    }
+  } catch (e) { /* fall through to validation */ }
+  if (!opp || !(opp.title || opp.company)) return res.status(400).json({ error: 'opportunity (or opportunityId) with a title/company is required' });
+
+  // Resolve the outreach draft (passed directly, or newest for this company)
+  let draft = draftIn;
+  try {
+    if (!draft && opp.company && base && key) {
+      const q = `${base}/rest/v1/outreach_drafts?company=eq.${encodeURIComponent(opp.company)}&order=created_at.desc&limit=1`;
+      const r = await fetch(q, { headers: sbHeaders(key) });
+      draft = (await r.json())?.[0];
+    }
+  } catch (e) { /* draft is optional */ }
+
+  const blocks = buildLeadBlocks(opp, draft, repName);
+  const fallback = `New lead for ${repName}: ${opp.title || opp.company} (score ${opp.overall_score ?? '—'})`;
+
+  // Preview mode: return the blocks without posting (used to verify formatting)
+  if (mode === 'preview') return res.json({ ok: true, preview: true, fallback, blocks, draftMatched: !!draft });
+
+  const webhook = slackWebhook || process.env.FF_LEADS_SLACK_WEBHOOK || process.env.SLACK_WEBHOOK_URL;
+  if (!webhook) return res.status(400).json({ error: 'No Slack webhook configured (pass slackWebhook or set FF_LEADS_SLACK_WEBHOOK)' });
+
+  // Post to #ff-leads
+  let slack_sent = false, slackErr = null;
+  try {
+    const r = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: fallback, blocks }),
+    });
+    slack_sent = r.ok;
+    if (!r.ok) slackErr = `Slack ${r.status}: ${truncate(await r.text().catch(() => ''), 200)}`;
+  } catch (e) { slackErr = e.message; }
+
+  // Best-effort: advance the opportunity status so the funnel reflects the handoff.
+  let statusUpdated = false;
+  try {
+    if (slack_sent && opp.id && markStatus && base && key) {
+      const r = await fetch(`${base}/rest/v1/opportunities?id=eq.${opp.id}`, {
+        method: 'PATCH', headers: { ...sbHeaders(key), Prefer: 'return=minimal' },
+        body: JSON.stringify({ status: markStatus }),
+      });
+      statusUpdated = r.ok;
+    }
+  } catch (e) { /* non-fatal */ }
+
+  if (!slack_sent) return res.status(502).json({ ok: false, error: slackErr || 'Slack post failed' });
+  return res.json({ ok: true, slack_sent, statusUpdated, draftMatched: !!draft, repName });
 }
 
 // ─── VPS Proxy ────────────────────────────────────────────────────────────────
