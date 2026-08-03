@@ -602,6 +602,45 @@ function AgentRunButton({ onComplete }) {
   );
 }
 
+// ── Lead quality gate ────────────────────────────────────────────────────────
+// The Scout saves raw search results as opportunities (most have no company and
+// no score). These surface only genuinely send-worthy leads for the review queue
+// and rank them (overall_score is usually null, so we compute a heuristic).
+const LEAD_JUNK_RE      = /\b(spotify|apple music|albums?,?\s*songs|on instagram|instagram|youtube|tiktok|soundcloud|bandcamp|discography|lyrics|listen now|stream now|definition of)\b/i;
+const LEAD_BAREFILE_RE  = /^\s*\d[\d_\-]*\.(pdf|docx?|xlsx?)\s*$/i;
+const LEAD_NOISEWORD_RE = /^\s*(los|the|a|an|new|top|best|home|about|faq)\s*$/i;
+const LEAD_SIGNALS      = new Set(["rfp", "venue", "competitor", "event", "new_hire", "hiring", "expansion", "gala", "commencement"]);
+const LEAD_OPEN         = new Set(["new", "priority"]);
+const LEAD_GEO_RE       = /\b(utah|salt lake|slc|provo|ogden|logan|nevada|las vegas|vegas|reno|idaho|boise|california|los angeles|san diego|orange county|irvine|arizona|phoenix|scottsdale|tempe|mesa|tucson)\b/i;
+
+function isSendWorthy(o) {
+  const title = (o.title || "").trim(), company = (o.company || "").trim(), why = (o.why_this_matters || "").trim();
+  const sig = (o.signal || "").toLowerCase();
+  if (o.status && !LEAD_OPEN.has(o.status)) return false;             // already handled/archived
+  if (LEAD_JUNK_RE.test(title) || LEAD_JUNK_RE.test(company)) return false; // music/social noise
+  if (LEAD_NOISEWORD_RE.test(title) || title.length < 8) return false;     // filler / too thin
+  if (LEAD_BAREFILE_RE.test(title)) return false;                    // bare filename, no context
+  const hasCompany  = company.length >= 2 && !LEAD_NOISEWORD_RE.test(company);
+  const scored      = o.overall_score != null && o.overall_score >= 6;
+  const substantive = why.length >= 30;
+  const realType    = LEAD_SIGNALS.has(sig) || hasCompany;
+  return realType && (hasCompany || sig === "rfp" || scored || substantive);
+}
+
+// Heuristic 0–100 quality used for ranking when overall_score is null.
+function leadQuality(o) {
+  if (o.overall_score != null) return Math.min(100, o.overall_score * (o.overall_score <= 10 ? 10 : 1));
+  const t = ((o.title || "") + " " + (o.why_this_matters || "") + " " + (o.notes || "")).toLowerCase();
+  let s = 40;
+  if ((o.signal || "").toLowerCase() === "rfp") s += 22;
+  if (/\b(audio.?visual|\bav\b|production|staging|lighting|led|event|conference|gala|commencement|livestream|broadcast)\b/.test(t)) s += 14;
+  if (/\b(rfp|request for proposal|invitation to bid|\bitb\b|solicitation|notice of award)\b/.test(t)) s += 12;
+  if ((o.company || "").trim().length >= 2) s += 10;
+  if (LEAD_GEO_RE.test(t) || LEAD_GEO_RE.test(o.company || "")) s += 8;
+  if (/\b(vendor portal|definition|navigating|how to|guide|glossary|what is)\b/.test(t)) s -= 25; // pages, not leads
+  return Math.max(0, Math.min(100, s));
+}
+
 function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
   const [activeTab, setActiveTab] = useState("signals"); // "signals" | "targets" | "find"
 
@@ -673,6 +712,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
   const [draftCopied, setDraftCopied] = useState({});
   const [expandedRow, setExpandedRow] = useState(null);
   const [showExpired, setShowExpired] = useState(false);
+  const [sendWorthyOnly, setSendWorthyOnly] = useState(true); // review queue: hide junk by default
   const [qualifyRunning, setQualifyRunning] = useState(false);
   const [brief, setBrief] = useState(null);           // { run, opps }
   const [briefDismissed, setBriefDismissed] = useState(false);
@@ -1139,13 +1179,18 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
 
   // Priority tier: 0=RFP, 1=score>=7, 2=score>=5, 3=everything else
   const oppTier = r => r.signal === "rfp" ? 0 : (r.overall_score ?? 0) >= 7 ? 1 : (r.overall_score ?? 0) >= 5 ? 2 : 3;
-  const expiredFiltered = showExpired ? signalFiltered : signalFiltered.filter(r => !isExpired(r));
+  // Review queue: hide the raw-scout junk (no company, "los"/Spotify noise) by default.
+  const worthyFiltered = sendWorthyOnly ? signalFiltered.filter(isSendWorthy) : signalFiltered;
+  const hiddenJunk = signalFiltered.length - worthyFiltered.length;
+  const expiredFiltered = showExpired ? worthyFiltered : worthyFiltered.filter(r => !isExpired(r));
   const visible = [...expiredFiltered].sort((a, b) => {
     const ea = isExpired(a), eb = isExpired(b);
     if (ea !== eb) return ea ? 1 : -1;
     const ta = oppTier(a), tb = oppTier(b);
     if (ta !== tb) return ta - tb;
     if ((b.overall_score ?? 0) !== (a.overall_score ?? 0)) return (b.overall_score ?? 0) - (a.overall_score ?? 0);
+    // Heuristic quality (real scores are usually null) — best leads rise to the top.
+    if (leadQuality(b) !== leadQuality(a)) return leadQuality(b) - leadQuality(a);
     if ((b.urgency_score ?? 0) !== (a.urgency_score ?? 0)) return (b.urgency_score ?? 0) - (a.urgency_score ?? 0);
     if ((b.confidence_score ?? 0) !== (a.confidence_score ?? 0)) return (b.confidence_score ?? 0) - (a.confidence_score ?? 0);
     // Earliest upcoming event_start_date rises higher
@@ -1389,7 +1434,12 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                 {label}
               </button>
             ))}
-            <div style={{ marginLeft: "auto" }}>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+              <button onClick={() => setSendWorthyOnly(s => !s)}
+                title="Show only real, send-worthy leads (hides raw-scout junk with no company)"
+                style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${sendWorthyOnly ? "#34D39960" : "#1A1A1A"}`, background: sendWorthyOnly ? "#34D39912" : "transparent", color: sendWorthyOnly ? "#34D399" : "#555", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
+                {sendWorthyOnly ? `✓ send-worthy only${hiddenJunk > 0 ? ` · ${hiddenJunk} junk hidden` : ""}` : "show all signals"}
+              </button>
               <button onClick={() => setShowExpired(s => !s)}
                 style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${showExpired ? "#FF6B6B40" : "#1A1A1A"}`, background: showExpired ? "#FF6B6B12" : "transparent", color: showExpired ? "#FF6B6B" : "#444", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
                 {showExpired ? "hide expired" : "show expired"}
