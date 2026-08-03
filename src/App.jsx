@@ -641,6 +641,150 @@ function leadQuality(o) {
   return Math.max(0, Math.min(100, s));
 }
 
+// ── Lead Handoff view — the clean review queue (redesign) ────────────────────
+// Surfaces only send-worthy leads as tidy cards; one click posts a lead to
+// #ff-leads for Taylor with the outreach draft attached.
+function LeadHandoffView({ db }) {
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [cat, setCat] = React.useState("worthy");
+  const [sending, setSending] = React.useState({});
+  const [sent, setSent] = React.useState({});
+  const [dismissed, setDismissed] = React.useState({});
+  const [showNoise, setShowNoise] = React.useState(false);
+  const [toast, setToast] = React.useState(null);
+
+  React.useEffect(() => { (async () => {
+    setLoading(true);
+    try { const d = await db.select("opportunities", { order: "created_at.desc", "created_at": "gte.2026-01-01" }); setRows(Array.isArray(d) ? d : []); }
+    catch (e) { setRows([]); }
+    setLoading(false);
+  })(); }, []);
+
+  const allWorthy = rows.filter(isSendWorthy);
+  const hidden = rows.length - allWorthy.length;
+  const CATS = [
+    { id: "worthy", label: "Send-worthy", fn: () => true },
+    { id: "rfp", label: "Official RFPs", fn: o => (o.signal || "").toLowerCase() === "rfp" },
+    { id: "event", label: "Events", fn: o => /event|gala|commencement|venue/i.test(o.signal || "") },
+    { id: "hire", label: "New hires", fn: o => /hire/i.test(o.signal || "") },
+    { id: "competitor", label: "Competitor", fn: o => (o.signal || "").toLowerCase() === "competitor" },
+  ];
+  const catFn = (CATS.find(c => c.id === cat) || CATS[0]).fn;
+  const source = showNoise ? rows : allWorthy;
+  const list = source.filter(o => !dismissed[o.id]).filter(catFn).sort((a, b) => leadQuality(b) - leadQuality(a));
+
+  const geoOf = o => { const m = ((o.company || "") + " " + (o.title || "") + " " + (o.notes || "")).match(LEAD_GEO_RE); return m ? m[0].replace(/\b\w/g, c => c.toUpperCase()) : ""; };
+  const dateOf = o => { const d = o.signal_date || o.created_at || ""; return typeof d === "string" ? d.slice(5, 10) : ""; };
+  const tagOf = o => { const s = (o.signal || "").toLowerCase();
+    if (s === "rfp") return { t: "RFP", c: "#34D399" };
+    if (/hire/.test(s)) return { t: "HIRE", c: "#A78BFA" };
+    if (/expansion/.test(s)) return { t: "EXPAND", c: "#FB923C" };
+    if (/event|gala|commencement|venue/.test(s)) return { t: "EVENT", c: "#60A5FA" };
+    if (s === "competitor") return { t: "WATCH", c: "#F87171" };
+    return { t: (s || "LEAD").toUpperCase().slice(0, 7), c: "#8A8F98" }; };
+  const scoreOf = o => o.overall_score != null ? o.overall_score : Math.round(leadQuality(o) / 10);
+  const cleanWhy = o => (o.why_this_matters || o.notes || "").replace(/^\[[^\]]*\]\s*/, "").replace(/\s+/g, " ").trim();
+
+  async function send(o) {
+    if (sending[o.id] || sent[o.id]) return;
+    setSending(p => ({ ...p, [o.id]: true }));
+    try {
+      const r = await fetch("/api/index?service=send-lead", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ opportunity: o, repName: "Taylor Miles" }) });
+      const d = await r.json();
+      if (r.ok && d.ok) { setSent(p => ({ ...p, [o.id]: true })); setToast({ ok: true, msg: `Sent to #ff-leads for Taylor${d.draftMatched ? " · draft attached" : ""}` }); }
+      else throw new Error(d.error || "failed");
+    } catch (e) { setToast({ ok: false, msg: `Send failed: ${e.message}` }); }
+    finally { setSending(p => ({ ...p, [o.id]: false })); setTimeout(() => setToast(null), 4500); }
+  }
+
+  const reviewCount = allWorthy.filter(o => !dismissed[o.id] && !sent[o.id]).length;
+  const sentCount = Object.keys(sent).length;
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px 80px" }}>
+      {toast && (
+        <div style={{ position: "fixed", top: 68, right: 28, zIndex: 60, background: toast.ok ? "#0f2f22" : "#3a1414", border: `1px solid ${toast.ok ? "#34D39960" : "#F8717160"}`, color: toast.ok ? "#34D399" : "#F87171", padding: "10px 16px", borderRadius: 9, fontSize: 12, fontFamily: "inherit", boxShadow: "0 8px 30px rgba(0,0,0,.4)" }}>{toast.msg}</div>
+      )}
+
+      {/* Header */}
+      <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 4 }}>Lead Handoff</div>
+      <div style={{ color: "#9aa0a9", fontSize: 13, marginBottom: 22 }}>
+        {loading ? "Loading signals…" : <>{rows.length} scanned · <span style={{ color: "#34D399" }}>{allWorthy.length} send-worthy</span> across UT·NV·ID·SoCal·AZ · {hidden} demoted as noise.</>}
+      </div>
+
+      {/* Funnel strip */}
+      <div style={{ display: "flex", gap: 1, background: "#1a1e24", border: "1px solid #232830", borderRadius: 12, overflow: "hidden", marginBottom: 22 }}>
+        {[{ n: reviewCount, l: "To review", c: "#A78BFA" }, { n: sentCount, l: "Sent to Taylor", c: "#FB923C" }, { n: 0, l: "Rep contacted", c: "#e8e4dc" }, { n: 0, l: "Won", c: "#34D399" }].map((f, i) => (
+          <div key={i} style={{ flex: 1, background: "#111317", padding: "14px 18px" }}>
+            <div style={{ fontFamily: "monospace", fontSize: 24, fontWeight: 600, color: f.c }}>{f.n}</div>
+            <div style={{ fontFamily: "monospace", fontSize: 9.5, letterSpacing: "0.1em", color: "#626873", textTransform: "uppercase", marginTop: 2 }}>{f.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Callout */}
+      <div style={{ border: "1px solid #2b2544", background: "linear-gradient(180deg,rgba(167,139,250,.06),transparent)", borderRadius: 12, padding: "15px 18px", marginBottom: 20 }}>
+        <div style={{ fontFamily: "monospace", fontSize: 12.5, color: "#A78BFA", marginBottom: 5 }}>◆ Surface signal, hide noise</div>
+        <div style={{ color: "#9aa0a9", fontSize: 12.5, lineHeight: 1.5 }}>The raw scout saves everything (mostly junk: “los”, Spotify, Instagram, empty company). Here only real, ranked, geo-relevant leads show — approve one and it posts to #ff-leads for Taylor with the outreach draft attached.</div>
+      </div>
+
+      {/* Category chips */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+        {CATS.map(c => {
+          const on = cat === c.id;
+          const count = allWorthy.filter(c.fn).length;
+          return (
+            <button key={c.id} onClick={() => setCat(c.id)}
+              style={{ fontFamily: "monospace", fontSize: 11, color: on ? "#34D399" : "#9aa0a9", border: `1px solid ${on ? "#34D39960" : "#232830"}`, background: on ? "#1c3a3020" : "transparent", padding: "6px 12px", borderRadius: 999, cursor: "pointer" }}>
+              {c.label} <span style={{ color: on ? "#34D399" : "#626873" }}>{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Lead cards */}
+      <div style={{ border: "1px solid #232830", borderRadius: 14, overflow: "hidden", background: "#111317" }}>
+        {loading && <div style={{ padding: 40, textAlign: "center", color: "#626873", fontSize: 13 }}>Loading…</div>}
+        {!loading && list.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "#626873", fontSize: 13 }}>No leads in this view.</div>}
+        {list.map(o => {
+          const tag = tagOf(o), why = cleanWhy(o), geo = geoOf(o), isSent = sent[o.id];
+          return (
+            <div key={o.id} style={{ display: "flex", gap: 14, padding: "16px 18px", borderBottom: "1px solid #1a1e24", alignItems: "flex-start", opacity: isSent ? 0.5 : 1 }}>
+              <span style={{ fontFamily: "monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", color: tag.c, background: tag.c + "1f", padding: "3px 8px", borderRadius: 5, flexShrink: 0, marginTop: 2 }}>{tag.t}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.005em", marginBottom: 3 }}>{o.company && o.company.trim() ? o.company : (o.title || "Untitled")}</div>
+                {why && <div style={{ color: "#9aa0a9", fontSize: 12.5, lineHeight: 1.45, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{why || o.title}</div>}
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button onClick={() => send(o)} disabled={!!sending[o.id] || !!isSent}
+                    style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "none", background: isSent ? "#1c3a30" : "linear-gradient(135deg,#3ecf8e,#0f766e)", color: isSent ? "#34D399" : "#04140d", fontWeight: 600, cursor: isSent ? "default" : "pointer" }}>
+                    {sending[o.id] ? "◌ Sending…" : isSent ? "✓ Sent to Taylor" : "→ Send to #ff-leads"}
+                  </button>
+                  {o.source && <a href={o.source} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #232830", color: "#9aa0a9", textDecoration: "none" }}>View source</a>}
+                  {!isSent && <button onClick={() => setDismissed(p => ({ ...p, [o.id]: true }))} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid transparent", background: "none", color: "#626873", cursor: "pointer" }}>Skip</button>}
+                </div>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 600, color: scoreOf(o) >= 8 ? "#34D399" : scoreOf(o) >= 6 ? "#FB923C" : "#9aa0a9" }}>{scoreOf(o)}</div>
+                <div style={{ fontFamily: "monospace", fontSize: 10.5, color: "#626873", marginTop: 3 }}>{[geo, dateOf(o)].filter(Boolean).join(" · ")}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Noise footer */}
+      {hidden > 0 && (
+        <div style={{ marginTop: 18, border: "1px dashed #232830", borderRadius: 12, padding: "13px 18px", color: "#626873", fontFamily: "monospace", fontSize: 12, display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ color: "#FB923C" }}>⊘</span>
+          <span><b style={{ color: "#9aa0a9" }}>{hidden} low-value signals hidden</b> — “market” noise, no company/contact (los · Spotify · Instagram).</span>
+          <span onClick={() => setShowNoise(s => !s)} style={{ marginLeft: "auto", color: "#9aa0a9", cursor: "pointer", textDecoration: "underline" }}>{showNoise ? "hide noise" : "show anyway"}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
   const [activeTab, setActiveTab] = useState("signals"); // "signals" | "targets" | "find"
 
@@ -8861,6 +9005,16 @@ Cite URLs.`;
               </div>
             </div>
           </div>
+          <div className="agent-pill" onClick={() => setActiveId("handoff")}
+            style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${"handoff" === activeId ? "#34D39960" : "#111"}`, background: "handoff" === activeId ? "#34D3990A" : "transparent", marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13 }}>◆</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, fontWeight: 500, color: "handoff" === activeId ? "#34D399" : "#A8A4A0" }}>Lead Handoff</div>
+                <div style={{ fontSize: 9, color: "#999", marginTop: 1 }}>review · send to Taylor</div>
+              </div>
+            </div>
+          </div>
           <div style={{ fontSize: 9, color: "#999", letterSpacing: "2px", marginBottom: 4 }}>AGENTS</div>
           {(() => {
             const agentIds = ["builder", "prospector", "monday", "dossier"];
@@ -9018,6 +9172,8 @@ Cite URLs.`;
               agents={agents}
               db={db}
             />
+          ) : activeId === "handoff" ? (
+            <LeadHandoffView db={db} />
           ) : activeId === "opportunities" ? (
             <OpportunitiesView db={db} tavilyKey={tavilyKey} vpsUrl={vpsUrl} agentSecret={agentSecret} />
           ) : activeId === "flex" ? (
