@@ -879,22 +879,36 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
     }
   }
 
+  // Hand an approved lead to the rep: post it to #ff-leads Slack (with the ready
+  // outreach draft attached) via the send-lead endpoint. This is the actual handoff
+  // that closes the "76 drafts, 0 sent" gap. The legacy sales-brief record is kept
+  // as a best-effort side write so nothing that depended on it breaks.
+  const SALES_REP = "Taylor Miles";
   async function sendToSales(row) {
     if (salesLoading[row.id]) return;
     setSalesLoading(prev => ({ ...prev, [row.id]: true }));
     setSalesToast(null);
     try {
-      const res = await fetch("/api/index?service=sales-brief", {
+      // Primary: push the lead to #ff-leads for the rep.
+      const res = await fetch("/api/index?service=send-lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ opportunity: row, assigned_to: "Chase", priority: row.overall_score >= 70 ? "high" : row.overall_score >= 40 ? "medium" : "low" }),
+        body: JSON.stringify({ opportunity: row, repName: SALES_REP }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+      // Best-effort: keep the legacy sales-brief record (assigned to the current rep).
+      fetch("/api/index?service=sales-brief", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ opportunity: row, assigned_to: SALES_REP, priority: row.overall_score >= 70 ? "high" : row.overall_score >= 40 ? "medium" : "low" }),
+      }).catch(() => {});
+
       setSalesSent(prev => ({ ...prev, [row.id]: true }));
-      setSalesToast({ ok: true, msg: `Sales brief created for ${row.company || row.title} — assigned to Chase` });
+      setSalesToast({ ok: true, msg: `Sent to #ff-leads for ${SALES_REP.split(" ")[0]}${data.draftMatched ? " · draft attached" : ""}` });
     } catch (e) {
-      setSalesToast({ ok: false, msg: `Sales brief error: ${e.message}` });
+      setSalesToast({ ok: false, msg: `Send to sales failed: ${e.message}` });
     } finally {
       setSalesLoading(prev => ({ ...prev, [row.id]: false }));
       setTimeout(() => setSalesToast(null), 5000);
@@ -1681,7 +1695,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                                 </button>
                                 <button onClick={() => sendToSales(row)} disabled={!!salesLoading[row.id] || !!salesSent[row.id]}
                                   style={{ fontSize: 9, padding: "4px 12px", background: "#FB923C12", border: "1px solid #FB923C40", borderRadius: 5, color: "#FB923C", cursor: "pointer", fontFamily: "inherit" }}>
-                                  {salesLoading[row.id] ? "◌" : salesSent[row.id] ? "✓ Sent" : "→ Sales Brief"}
+                                  {salesLoading[row.id] ? "◌" : salesSent[row.id] ? "✓ Sent to Taylor" : "→ Send to #ff-leads"}
                                 </button>
                               </div>
                             </div>
@@ -3211,50 +3225,29 @@ function CRMView({ db, apolloKey, gmailRefreshToken }) {
   }
 
   async function forwardToSales(d) {
-    // Extract URL from signal field if present
+    // Forward a ready draft to Taylor by posting it to #ff-leads (the chosen channel),
+    // with the contact + outreach draft attached. Replaces the old email-to-Taylor
+    // handoff so both send buttons (here and in Opportunities) deliver to one place.
     const urlMatch = (d.signal || "").match(/https?:\/\/[^\s]+/);
     const eventUrl = urlMatch ? urlMatch[0] : null;
-
-    const buildBody = () => [
-      `Hey Taylor,`,
-      ``,
-      `Here's a lead to follow up on:`,
-      ``,
-      `COMPANY: ${d.company || "—"}`,
-      `CONTACT: ${d.contact_name || "—"}${d.contact_title ? ` — ${d.contact_title}` : ""}`,
-      d.contact_email    ? `EMAIL: ${d.contact_email}`       : "",
-      d.contact_linkedin ? `LINKEDIN: ${d.contact_linkedin}` : "",
-      eventUrl           ? `EVENT URL: ${eventUrl}`          : "",
-      d.signal           ? `\nSIGNAL: ${d.signal}`           : "",
-      ``,
-      `DRAFT EMAIL TO SEND THEM:`,
-      `Subject: ${d.subject || ""}`,
-      ``,
-      d.body || "",
-      ``,
-      `— Isaac`,
-    ].filter(Boolean).join("\n").trim();
-
-    if (!gmailRefreshToken) {
-      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=taylor%40fatfishmedia.com&su=${encodeURIComponent(`Lead for Taylor: ${d.company || d.contact_name || "New Prospect"}`)}&body=${encodeURIComponent(buildBody())}`, "_blank");
-      return;
-    }
     setFwdSending(prev => ({ ...prev, [d.id]: "sending" }));
     try {
-      const emailBody = buildBody();
-
-      const r = await fetch("/api/index?service=gmail-draft", {
+      const r = await fetch("/api/index?service=send-lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: "taylor@fatfishmedia.com",
-          subject: `Lead for Taylor: ${d.company || d.contact_name || "New Prospect"}`,
-          body: emailBody,
-          refreshToken: gmailRefreshToken,
+          opportunity: {
+            title: d.company || d.contact_name || "New lead",
+            company: d.company,
+            why_this_matters: d.signal || "",
+            source: eventUrl,
+          },
+          draft: d,               // full outreach draft: subject/body/contact
+          repName: "Taylor Miles",
         }),
       });
       const data = await r.json();
-      setFwdSending(prev => ({ ...prev, [d.id]: data.draftId || data.ok || r.ok ? "sent" : "error" }));
+      setFwdSending(prev => ({ ...prev, [d.id]: (r.ok && data.ok) ? "sent" : "error" }));
       setTimeout(() => setFwdSending(prev => ({ ...prev, [d.id]: null })), 4000);
     } catch {
       setFwdSending(prev => ({ ...prev, [d.id]: "error" }));
