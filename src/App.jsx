@@ -684,7 +684,13 @@ function LeadHandoffView({ db }) {
     if (s === "competitor") return { t: "WATCH", c: "#F87171" };
     return { t: (s || "LEAD").toUpperCase().slice(0, 7), c: "#8A8F98" }; };
   const scoreOf = o => o.overall_score != null ? o.overall_score : Math.round(leadQuality(o) / 10);
-  const cleanWhy = o => (o.why_this_matters || o.notes || "").replace(/^\[[^\]]*\]\s*/, "").replace(/\s+/g, " ").trim();
+  const cleanWhy = o => (o.why_this_matters || o.notes || "")
+    .replace(/^\[[^\]]*\]\s*/, "")                              // [market] prefix
+    .replace(/^\s*(rfp|market|venue|competitor|event|hire)\s*:\s*/i, "") // "rfp:" prefix
+    .replace(/#{1,6}\s*/g, "")                                  // ## headers
+    .replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1")                    // **bold**
+    .replace(/\s*[-–]\s*Downloads?:/gi, " ")
+    .replace(/\s+/g, " ").trim();
 
   async function send(o) {
     if (sending[o.id] || sent[o.id]) return;
