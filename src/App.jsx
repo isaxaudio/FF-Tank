@@ -622,6 +622,15 @@ const LEAD_BADDOM_RE    = /(rfpmart|icma\.org|demandstar|idahobids|dealroom|conf
 // AV/event relevance — Fatfish only cares about production/event work.
 const LEAD_RELEVANT_RE  = /\b(audio\s?visual|audiovisual|\bav\b|a\/v|event production|event staging|staging|lighting|live event|livestream|live stream|broadcast|video production|conference|convention|gala|commencement|graduation|expo|trade\s?show|summit|festival|production|experiential)\b/i;
 
+// Venue calendars, ticketing, and roundups: NOT one pitchable lead, but a rich
+// SOURCE to mine for individual upcoming events. Routed to their own section, not junk.
+const LEAD_SOURCE_RE    = /\b(venue calendar|event calendar|events calendar|calendar of events|3-?year calendar|master calendar|ticketing|convention center|conference center|events (page|listing|calendar)|tradeshow calendar|gala calendar|charity event guide|conferences? in (usa|los angeles|california|utah|nevada|arizona|colorado)|events in (california|utah|nevada|arizona|colorado)|list of [\w ]*(events|conferences|expos)|top \d+ [\w ]*(events|conferences)|discover magazines)\b/i;
+function isVenueSource(o) {
+  const src = (o.source || "").toLowerCase();
+  if (/pccticketing|\/calendar|events\/p\d|3-year-calendar|eventbrite|allevents|10times\.com|bizzabo/.test(src)) return true;
+  return LEAD_SOURCE_RE.test(`${o.title || ""} ${o.why_this_matters || ""} ${o.notes || ""}`);
+}
+
 // ── Event-date awareness ─────────────────────────────────────────────────────
 // The scout doesn't extract event dates, so infer one from the text to (a) hide
 // past events and (b) show when the event is. Returns { date: Date|null, future,
@@ -663,6 +672,7 @@ function isSendWorthy(o) {
   const src = o.source || "";
   if (o.status && !LEAD_OPEN.has(o.status)) return false;             // already handled/archived
   if (sig === "competitor") return false;                            // competitors are intel, not leads
+  if (isVenueSource(o)) return false;                                // calendar/roundup → "Sources to mine", not a lead
   if (eventDateInfo(o).past) return false;                            // past event — can't pitch it
   if (LEAD_JUNK_RE.test(title) || LEAD_JUNK_RE.test(company)) return false; // music/social noise
   if (LEAD_NOISE2_RE.test(title) || LEAD_LISTICLE_RE.test(title)) return false;  // portals/guides/agendas/listicles
@@ -751,7 +761,11 @@ function LeadHandoffView({ db }) {
   })(); }, []);
 
   const allWorthy = rows.filter(isSendWorthy);
-  const hidden = rows.length - allWorthy.length;
+  // Venue calendars / event roundups — browse these to find individual events.
+  const srcSeen = new Set();
+  const sources = rows.filter(o => isVenueSource(o) && !dismissed[o.id] && !LEAD_JUNK_RE.test(o.title || "") && !LEAD_COMPET_RE.test(`${o.title || ""} ${o.source || ""}`))
+    .filter(o => { const k = (o.company || o.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 22); if (!k || srcSeen.has(k)) return false; srcSeen.add(k); return true; });
+  const hidden = Math.max(0, rows.length - allWorthy.length - sources.length);
   const CATS = [
     { id: "worthy", label: "Send-worthy", fn: () => true },
     { id: "rfp", label: "Official RFPs", fn: o => (o.signal || "").toLowerCase() === "rfp" },
@@ -901,6 +915,27 @@ function LeadHandoffView({ db }) {
           );
         })}
       </div>
+
+      {/* Sources to mine — venue calendars & event roundups (not single leads) */}
+      {sources.length > 0 && (
+        <div style={{ marginTop: 26 }}>
+          <div style={{ fontFamily: "monospace", fontSize: 11, letterSpacing: "0.1em", color: "#60A5FA", textTransform: "uppercase", marginBottom: 4 }}>🔭 Sources to mine · {sources.length}</div>
+          <div style={{ color: "#626873", fontSize: 12, marginBottom: 12 }}>Venue calendars &amp; event roundups — not one lead, but browse them to pull individual upcoming events into the queue.</div>
+          <div style={{ border: "1px solid #232830", borderRadius: 12, overflow: "hidden", background: "#111317" }}>
+            {sources.slice(0, 15).map(o => (
+              <div key={o.id} style={{ display: "flex", gap: 12, padding: "12px 16px", borderBottom: "1px solid #1a1e24", alignItems: "center" }}>
+                <span style={{ fontFamily: "monospace", fontSize: 9.5, fontWeight: 700, color: "#60A5FA", background: "#60A5FA1f", padding: "3px 8px", borderRadius: 5, flexShrink: 0 }}>SOURCE</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{o.company && o.company.trim() ? o.company : (o.title || "")}</div>
+                  <div style={{ color: "#626873", fontFamily: "monospace", fontSize: 10.5 }}>{(o.source || "").replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}</div>
+                </div>
+                {o.source && <a href={o.source} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #232830", color: "#60A5FA", textDecoration: "none" }}>Browse ↗</a>}
+                <button onClick={() => skip(o)} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 10px", borderRadius: 8, border: "1px solid transparent", background: "none", color: "#626873", cursor: "pointer" }}>Dismiss</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Noise footer */}
       {hidden > 0 && (
