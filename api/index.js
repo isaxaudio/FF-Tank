@@ -46,6 +46,19 @@ const gptMini = async (system, user, maxTokens = 500) => {
 // Extract text content from a GPT-4o-mini response.
 const gptText = (d) => d.choices?.[0]?.message?.content || '';
 
+// Claude Haiku one-shot — cheap text task (extraction, short drafts). Uses the
+// Anthropic key (always configured here; OpenAI is not). Returns plain text.
+const claudeMini = async (system, user, maxTokens = 300) => {
+  const key = ANTHROPIC_KEY();
+  if (!key) throw new Error('ANTHROPIC_API_KEY not set');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST', headers: ANTHROPIC_HEADERS(key),
+    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
+  });
+  const d = await r.json();
+  return (d.content || []).map(b => b.text || '').join('').trim();
+};
+
 // ─── Unified run logger ───────────────────────────────────────────────────────
 // Writes one job_runs row per handler call. Fire-and-forget, never throws.
 // handler  — human name matching the function (e.g. 'handleQualify')
@@ -1844,18 +1857,22 @@ async function handleEnrichLead(req, res) {
   const A = { 'Content-Type': 'application/json', 'x-api-key': apolloKey };
   const evText = `${opp.title || ''} — ${opp.why_this_matters || opp.notes || ''}`.slice(0, 500);
 
-  // 1. Org name — use company if present, else extract with GPT-4o-mini
+  // 1. Org name — company if present; else heuristic (title patterns); else Claude.
   let orgName = (opp.company || '').trim();
   if (!orgName || orgName.length < 2) {
+    const t = opp.title || '';
+    let m = t.match(/\|\s*([A-Z][A-Za-z0-9&.,'\- ]{2,50})\s*$/) || t.match(/\bat\s+([A-Z][A-Za-z0-9&.,'\- ]{2,50})/) || t.match(/\bfor\s+(the\s+)?([A-Z][A-Za-z0-9&.,'\- ]{2,50})/);
+    if (m) orgName = (m[2] || m[1]).trim();
+  }
+  if (!orgName || orgName.length < 2) {
     try {
-      const d = await gptMini(
-        'Extract ONLY the host organization/company name from this event or RFP lead. Reply with just the name, no punctuation, no extra words. If none is identifiable, reply "NONE".',
-        evText, 30);
-      const guess = gptText(d).trim().replace(/^["']|["'.]+$/g, '');
+      const guess = (await claudeMini(
+        'Extract ONLY the host organization or company name from this event/RFP lead — the org that would hire an event-production vendor. Reply with just the name, nothing else. If it is a generic listicle or no single org is identifiable, reply exactly "NONE".',
+        evText, 30)).replace(/^["']|["'.]+$/g, '').trim();
       if (guess && guess.toUpperCase() !== 'NONE' && guess.length >= 2) orgName = guess;
     } catch {}
   }
-  if (!orgName) return res.status(200).json({ ok: false, reason: 'no org name could be derived' });
+  if (!orgName) return res.status(200).json({ ok: false, reason: 'no host org — likely a listicle/aggregator, not a single event' });
 
   // 2. Apollo: org → people (event/marketing titles) → reveal top person's email
   let org = null, person = null, email = null;
@@ -1884,10 +1901,10 @@ async function handleEnrichLead(req, res) {
   // 3. Draft a short, event-specific pitch
   let subject = `Fatfish — production support for your upcoming event`, body = '';
   try {
-    const d = await gptMini(
-      'You write short, warm B2B outreach for Fatfish, a Salt Lake City event production company (AV, staging, lighting, video, experiential). 3-4 sentences, specific to the event, no fluff, ends with a soft ask for 15 minutes. Return JSON: {"subject":"...","body":"..."}',
+    const txt = await claudeMini(
+      'You write short, warm B2B outreach for Fatfish, a Salt Lake City event production company (AV, staging, lighting, video, experiential). 3-4 sentences, specific to the event, no fluff, ends with a soft ask for 15 minutes. Return ONLY JSON: {"subject":"...","body":"..."}',
       `Recipient: ${contactName || 'the events lead'} at ${org.name}. Their event/opportunity: ${evText}`, 320);
-    const j = JSON.parse((gptText(d).match(/\{[\s\S]*\}/) || ['{}'])[0]);
+    const j = JSON.parse((txt.match(/\{[\s\S]*\}/) || ['{}'])[0]);
     if (j.subject) subject = j.subject;
     if (j.body) body = j.body;
   } catch {}
