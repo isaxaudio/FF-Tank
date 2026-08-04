@@ -113,6 +113,7 @@ module.exports = async (req, res) => {
       case 'brief-deliver':  return await handleBriefDeliver(req, res);
       case 'gmail-draft':    return await handleGmailDraft(req, res);
       case 'send-lead':      return await handleSendLead(req, res);
+      case 'enrich-lead':    return await handleEnrichLead(req, res);
       case 'vps':            return await handleVpsProxy(req, res);
       case 'openai':         return await handleOpenAI(req, res);
       case 'memory':         return await handleMemory(req, res);
@@ -1811,6 +1812,99 @@ async function handleSendLead(req, res) {
 
   if (!slack_sent) return res.status(502).json({ ok: false, error: slackErr || 'Slack post failed' });
   return res.json({ ok: true, slack_sent, statusUpdated, draftMatched: !!draft, repName });
+}
+
+// ─── Enrich Lead (Apollo contact + drafted pitch for one upcoming event) ─────
+// Turns a bare event lead into something Taylor can actually act on:
+//   1. derive the org name (from company, else GPT-extract from the title/notes)
+//   2. Apollo: find the org → find the events/marketing decision-maker → reveal email
+//   3. draft a short, event-specific outreach email
+//   4. save an outreach_draft + patch the opportunity (company, contact)
+// Reveal (an Apollo credit) only happens when a real person is found.
+const ENRICH_TITLES = [
+  'Chief Marketing Officer','CMO','VP Marketing','VP of Marketing','Director of Marketing','Marketing Director','Marketing Manager',
+  'Director of Events','Events Director','Event Manager','Head of Events','VP of Events','Corporate Events','Meeting Planner','Conference Director',
+  'Director of Communications','Brand Manager','Executive Director','Chief of Staff',
+];
+
+async function handleEnrichLead(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { opportunity, opportunityId } = req.body || {};
+  const { base, key } = SB_ENV();
+  const apolloKey = process.env.APOLLO_API_KEY;
+  if (!apolloKey) return res.status(400).json({ error: 'APOLLO_API_KEY not set' });
+
+  // Resolve the opportunity
+  let opp = opportunity;
+  if (!opp && opportunityId && base && key) {
+    try { const r = await fetch(`${base}/rest/v1/opportunities?id=eq.${opportunityId}&limit=1`, { headers: sbHeaders(key) }); opp = (await r.json())?.[0]; } catch {}
+  }
+  if (!opp) return res.status(400).json({ error: 'opportunity (or opportunityId) required' });
+
+  const A = { 'Content-Type': 'application/json', 'x-api-key': apolloKey };
+  const evText = `${opp.title || ''} — ${opp.why_this_matters || opp.notes || ''}`.slice(0, 500);
+
+  // 1. Org name — use company if present, else extract with GPT-4o-mini
+  let orgName = (opp.company || '').trim();
+  if (!orgName || orgName.length < 2) {
+    try {
+      const d = await gptMini(
+        'Extract ONLY the host organization/company name from this event or RFP lead. Reply with just the name, no punctuation, no extra words. If none is identifiable, reply "NONE".',
+        evText, 30);
+      const guess = gptText(d).trim().replace(/^["']|["'.]+$/g, '');
+      if (guess && guess.toUpperCase() !== 'NONE' && guess.length >= 2) orgName = guess;
+    } catch {}
+  }
+  if (!orgName) return res.status(200).json({ ok: false, reason: 'no org name could be derived' });
+
+  // 2. Apollo: org → people (event/marketing titles) → reveal top person's email
+  let org = null, person = null, email = null;
+  try {
+    const oR = await fetch('https://api.apollo.io/v1/mixed_companies/search', { method: 'POST', headers: A, body: JSON.stringify({ q_organization_name: orgName, per_page: 3 }) });
+    org = (await oR.json())?.organizations?.[0] || null;
+  } catch {}
+  if (!org) return res.status(200).json({ ok: false, reason: `Apollo found no org for "${orgName}"`, orgName });
+
+  try {
+    const pR = await fetch('https://api.apollo.io/v1/mixed_people/api_search', { method: 'POST', headers: A, body: JSON.stringify({ organization_ids: [org.id], person_titles: ENRICH_TITLES, person_seniorities: ['director','vp','head','c_suite','owner','manager'], per_page: 5 }) });
+    const people = (await pR.json())?.people || [];
+    person = people[0] || null;
+  } catch {}
+  if (!person) return res.status(200).json({ ok: false, reason: `no decision-maker found at ${org.name}`, orgName: org.name });
+
+  try {
+    const mR = await fetch('https://api.apollo.io/v1/people/match', { method: 'POST', headers: A, body: JSON.stringify({ id: person.id, reveal_personal_emails: true }) });
+    const m = (await mR.json())?.person || {};
+    email = m.email || (m.personal_emails || [])[0] || null;
+    person = { ...person, ...m };
+  } catch {}
+
+  const contactName = [person.first_name, person.last_name].filter(Boolean).join(' ') || person.name || '';
+
+  // 3. Draft a short, event-specific pitch
+  let subject = `Fatfish — production support for your upcoming event`, body = '';
+  try {
+    const d = await gptMini(
+      'You write short, warm B2B outreach for Fatfish, a Salt Lake City event production company (AV, staging, lighting, video, experiential). 3-4 sentences, specific to the event, no fluff, ends with a soft ask for 15 minutes. Return JSON: {"subject":"...","body":"..."}',
+      `Recipient: ${contactName || 'the events lead'} at ${org.name}. Their event/opportunity: ${evText}`, 320);
+    const j = JSON.parse((gptText(d).match(/\{[\s\S]*\}/) || ['{}'])[0]);
+    if (j.subject) subject = j.subject;
+    if (j.body) body = j.body;
+  } catch {}
+  if (!body) body = `Hi ${contactName ? contactName.split(' ')[0] : 'there'} — saw ${org.name}'s upcoming event and wanted to introduce Fatfish. We handle full-service production (AV, staging, lighting, video) for events across the Mountain West and would love to help. Could we grab 15 minutes this week?`;
+
+  // 4. Save outreach_draft + patch opportunity
+  let draftSaved = false;
+  if (base && key) {
+    try {
+      await fetch(`${base}/rest/v1/outreach_drafts`, { method: 'POST', headers: { ...sbHeaders(key), Prefer: 'return=minimal' },
+        body: JSON.stringify({ company: org.name, subject, body, contact_name: contactName, contact_email: email, contact_linkedin: person.linkedin_url || null, created_at: new Date().toISOString() }) });
+      draftSaved = true;
+    } catch {}
+    if (opp.id) { try { await fetch(`${base}/rest/v1/opportunities?id=eq.${opp.id}`, { method: 'PATCH', headers: { ...sbHeaders(key), Prefer: 'return=minimal' }, body: JSON.stringify({ company: org.name }) }); } catch {} }
+  }
+
+  return res.json({ ok: true, company: org.name, contact: { name: contactName, title: person.title || '', email, linkedin: person.linkedin_url || null }, draft: { subject, body }, draftSaved });
 }
 
 // ─── VPS Proxy ────────────────────────────────────────────────────────────────
