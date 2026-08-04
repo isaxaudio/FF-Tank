@@ -607,11 +607,20 @@ function AgentRunButton({ onComplete }) {
 // no score). These surface only genuinely send-worthy leads for the review queue
 // and rank them (overall_score is usually null, so we compute a heuristic).
 const LEAD_JUNK_RE      = /\b(spotify|apple music|albums?,?\s*songs|on instagram|instagram|youtube|tiktok|soundcloud|bandcamp|discography|lyrics|listen now|stream now|definition of)\b/i;
-const LEAD_BAREFILE_RE  = /^\s*\d[\d_\-]*\.(pdf|docx?|xlsx?)\s*$/i;
+const LEAD_BAREFILE_RE  = /^\s*[\w-]{1,12}\.(pdf|docx?|xlsx?)\s*$/i;   // bare filename incl. "25-918B.pdf"
 const LEAD_NOISEWORD_RE = /^\s*(los|the|a|an|new|top|best|home|about|faq)\s*$/i;
-const LEAD_SIGNALS      = new Set(["rfp", "venue", "competitor", "event", "new_hire", "hiring", "expansion", "gala", "commencement"]);
+const LEAD_SIGNALS      = new Set(["rfp", "venue", "event", "new_hire", "hiring", "expansion", "gala", "commencement"]); // NOT competitor
 const LEAD_OPEN         = new Set(["new", "priority"]);
 const LEAD_GEO_RE       = /\b(utah|salt lake|slc|provo|ogden|logan|nevada|las vegas|vegas|reno|idaho|boise|california|los angeles|san diego|orange county|irvine|arizona|phoenix|scottsdale|tempe|mesa|tucson)\b/i;
+// Portal/listing/guide/agenda/award pages — not a specific pitchable opportunity.
+const LEAD_NOISE2_RE    = /\b(vendor portal|bid postings?|bid information|bid advertisements?|bid opportunities|solicitation opportunities|open solicitations|^solicitations\b|bids?\s*&\s*rfps?|rfp results|government rfp|requests for proposals \||bid,?\s*tender|notice to offeror|quality clauses|suppliers?\s*[–-]\s*purchasing|purchasing$|procurement$|planning tools|floor plans|navigating|how to|guide to|glossary|staff training|read the latest|news ::|webcasts|regular meeting agenda|board of trustees|notice of intent to award|award contract|^resolution\b|faq\b|session details|vacation planning|things to do|^home\b|home\s*[-–]\s*)\b/i;
+// Listicles / calendars / roundups — aggregators, not one event.
+const LEAD_LISTICLE_RE  = /\b(list of|top \d+|top [\w ]{0,20}conferences?|conferences? to attend|calendar\b|near you|archives\b|conferences in |events in |gala calendar|tradeshow calendar|charity event guide|discover magazines|industry summit -)\b/i;
+// Competitors (theirs/us) — intel, never a lead.
+const LEAD_COMPET_RE    = /\b(fatfish|webb\s*(audio|av|production)|rmng|cornerstone av|\bencore\b|\bpsav\b|skylark|mountain av|trifecta|visual sound|all pro audio|bw events|productionhub|exhibit options|freeman|cynosure)\b/i;
+const LEAD_BADDOM_RE    = /(rfpmart|icma\.org|demandstar|idahobids|dealroom|conferencealerts)/i;
+// AV/event relevance — Fatfish only cares about production/event work.
+const LEAD_RELEVANT_RE  = /\b(audio\s?visual|audiovisual|\bav\b|a\/v|event production|event staging|staging|lighting|live event|livestream|live stream|broadcast|video production|conference|convention|gala|commencement|graduation|expo|trade\s?show|summit|festival|production|experiential)\b/i;
 
 // ── Event-date awareness ─────────────────────────────────────────────────────
 // The scout doesn't extract event dates, so infer one from the text to (a) hide
@@ -651,16 +660,22 @@ function eventDateInfo(o) {
 function isSendWorthy(o) {
   const title = (o.title || "").trim(), company = (o.company || "").trim(), why = (o.why_this_matters || "").trim();
   const sig = (o.signal || "").toLowerCase();
+  const src = o.source || "";
   if (o.status && !LEAD_OPEN.has(o.status)) return false;             // already handled/archived
+  if (sig === "competitor") return false;                            // competitors are intel, not leads
   if (eventDateInfo(o).past) return false;                            // past event — can't pitch it
   if (LEAD_JUNK_RE.test(title) || LEAD_JUNK_RE.test(company)) return false; // music/social noise
+  if (LEAD_NOISE2_RE.test(title) || LEAD_LISTICLE_RE.test(title)) return false;  // portals/guides/agendas/listicles
+  if (LEAD_COMPET_RE.test(title) || LEAD_COMPET_RE.test(company) || LEAD_COMPET_RE.test(src) || LEAD_BADDOM_RE.test(src)) return false; // competitors / aggregator domains
   if (LEAD_NOISEWORD_RE.test(title) || title.length < 8) return false;     // filler / too thin
-  if (LEAD_BAREFILE_RE.test(title)) return false;                    // bare filename, no context
+  if (LEAD_BAREFILE_RE.test(title) || /^\[pdf\]/i.test(title)) return false; // bare filename
+  const relevant    = LEAD_RELEVANT_RE.test(`${title} ${why}`);      // AV/event term in title/why (notes unreliable)
+  if (sig === "rfp" && !relevant) return false;                      // off-topic RFP (security, energy, architecture…)
   const hasCompany  = company.length >= 2 && !LEAD_NOISEWORD_RE.test(company);
   const scored      = o.overall_score != null && o.overall_score >= 6;
   const substantive = why.length >= 30;
   const realType    = LEAD_SIGNALS.has(sig) || hasCompany;
-  return realType && (hasCompany || sig === "rfp" || scored || substantive);
+  return realType && (relevant || hasCompany || sig === "rfp" || scored || substantive);
 }
 
 // Heuristic 0–100 quality used for ranking when overall_score is null.
@@ -748,13 +763,16 @@ function LeadHandoffView({ db }) {
   const source = showNoise ? rows : allWorthy;
   // Rank: soonest upcoming event first (dated leads), then by quality; undated leads
   // (open RFPs) fall in by quality after the dated ones.
-  const list = source.filter(o => !dismissed[o.id]).filter(catFn).sort((a, b) => {
+  const ranked = source.filter(o => !dismissed[o.id]).filter(catFn).sort((a, b) => {
     const da = eventDateInfo(a).date, db = eventDateInfo(b).date;
     if (da && db) return da - db;                 // both dated → soonest first
     if (da && !db) return -1;                     // dated future beats undated
     if (!da && db) return 1;
     return (leadQuality(b) + learnedBoost(b)) - (leadQuality(a) + learnedBoost(a)); // quality + what Isaac approves
   });
+  // Collapse duplicates of the same org/event (keep the highest-ranked one).
+  const dedupSeen = new Set();
+  const list = ranked.filter(o => { const k = ((o.company || o.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 22)); if (!k || dedupSeen.has(k)) return false; dedupSeen.add(k); return true; });
 
   const geoOf = o => { const m = ((o.company || "") + " " + (o.title || "") + " " + (o.notes || "")).match(LEAD_GEO_RE); return m ? m[0].replace(/\b\w/g, c => c.toUpperCase()) : ""; };
   const tagOf = o => { const s = (o.signal || "").toLowerCase();
