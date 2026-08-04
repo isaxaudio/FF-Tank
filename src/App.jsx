@@ -676,6 +676,10 @@ function isSendWorthy(o) {
   if (sig === "competitor") return false;                            // competitors are intel, not leads
   if (isVenueSource(o)) return false;                                // calendar/roundup → "Sources to mine", not a lead
   if (eventDateInfo(o).past) return false;                            // past event — can't pitch it
+  // Every row now carries a Haiku fit score (scout writes it at save time; the whole table was
+  // backfilled 2026-08-04), so a low score REJECTS rather than merely failing to promote. Without
+  // this the regex path still lets sub-5 rows through on hasCompany/sig==="rfp" alone.
+  if (o.overall_score != null && o.overall_score < 5) return false;
   if (LEAD_JUNK_RE.test(title) || LEAD_JUNK_RE.test(company)) return false; // music/social noise
   if (LEAD_NOISE2_RE.test(title) || LEAD_LISTICLE_RE.test(title)) return false;  // portals/guides/agendas/listicles
   if (LEAD_COMPET_RE.test(title) || LEAD_COMPET_RE.test(company) || LEAD_COMPET_RE.test(src) || LEAD_BADDOM_RE.test(src)) return false; // competitors / aggregator domains
