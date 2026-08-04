@@ -637,7 +637,9 @@ function isVenueSource(o) {
 // label } — future is true for undated leads too (an open RFP is a future action).
 const MONTHS = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
 function parseEventDate(o) {
-  const text = `${o.event_start_date || ""} ${o.title || ""} ${o.why_this_matters || ""} ${o.notes || ""} ${o.estimated_timeline || ""}`;
+  // `deadline` is where the Scout writes the qualified event date (event_start_date is not a real
+  // column on this table — see api/cron-scout.js). Checked first so the structured value wins.
+  const text = `${o.deadline || ""} ${o.event_start_date || ""} ${o.title || ""} ${o.why_this_matters || ""} ${o.notes || ""} ${o.estimated_timeline || ""}`;
   // 1) explicit ISO date
   let m = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
   if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
@@ -755,6 +757,8 @@ function LeadHandoffView({ db }) {
 
   React.useEffect(() => { (async () => {
     setLoading(true);
+    // Keep handled rows in `rows` — isSendWorthy already gates the queue on LEAD_OPEN, and the
+    // funnel below needs the sent/archived ones to report real counts instead of session-only ones.
     try { const d = await db.select("opportunities", { order: "created_at.desc", "created_at": "gte.2026-01-01" }); setRows(Array.isArray(d) ? d : []); }
     catch (e) { setRows([]); }
     setLoading(false);
@@ -763,7 +767,7 @@ function LeadHandoffView({ db }) {
   const allWorthy = rows.filter(isSendWorthy);
   // Venue calendars / event roundups — browse these to find individual events.
   const srcSeen = new Set();
-  const sources = rows.filter(o => isVenueSource(o) && !dismissed[o.id] && !LEAD_JUNK_RE.test(o.title || "") && !LEAD_COMPET_RE.test(`${o.title || ""} ${o.source || ""}`))
+  const sources = rows.filter(o => isVenueSource(o) && !dismissed[o.id] && (!o.status || LEAD_OPEN.has(o.status)) && !LEAD_JUNK_RE.test(o.title || "") && !LEAD_COMPET_RE.test(`${o.title || ""} ${o.source || ""}`))
     .filter(o => { const k = (o.company || o.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 22); if (!k || srcSeen.has(k)) return false; srcSeen.add(k); return true; });
   const hidden = Math.max(0, rows.length - allWorthy.length - sources.length);
   const CATS = [
@@ -812,17 +816,26 @@ function LeadHandoffView({ db }) {
       // Auto-enrich (find contact + draft) if we don't have one, so Taylor gets a reachable lead.
       let oo = o;
       if (!enriched[o.id] && !(o.company && o.company.trim())) { const e = await enrich(o, true); if (e && e.company) oo = { ...o, company: e.company }; }
-      const r = await fetch("/api/index?service=send-lead", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ opportunity: oo, repName: "Taylor Miles" }) });
+      // Server marks status atomically AFTER Slack confirms delivery — one write, no double-send race.
+      const r = await fetch("/api/index?service=send-lead", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ opportunity: oo, repName: "Taylor Miles", markStatus: "contacted" }) });
       const d = await r.json();
       if (r.ok && d.ok) { setSent(p => ({ ...p, [o.id]: true })); recordFeedback(o, 1); setToast({ ok: true, msg: `Sent to #ff-leads for Taylor${d.draftMatched ? " · draft attached" : ""}` }); }
       else throw new Error(d.error || "failed");
     } catch (e) { setToast({ ok: false, msg: `Send failed: ${e.message}` }); }
     finally { setSending(p => ({ ...p, [o.id]: false })); setTimeout(() => setToast(null), 4500); }
   }
-  function skip(o) { recordFeedback(o, -1); setDismissed(p => ({ ...p, [o.id]: true })); }
+  // Archive server-side so a skip sticks across reloads; if that write fails the local dismiss
+  // still hides it for this session, so the reviewer is never blocked.
+  async function skip(o) { recordFeedback(o, -1); setDismissed(p => ({ ...p, [o.id]: true })); try { await db.update("opportunities", o.id, { status: "archived" }); } catch (e) { console.warn("archive failed, dismissed locally only:", e.message); } }
 
   const reviewCount = allWorthy.filter(o => !dismissed[o.id] && !sent[o.id]).length;
-  const sentCount = Object.keys(sent).length;
+  // Real counts, not session-only: send marks the row `contacted` server-side and skip marks it
+  // `archived`, so these now survive a reload. Union with this session's ids because `rows` still
+  // holds the pre-send status until the next load.
+  const sentIds = new Set(Object.keys(sent));
+  rows.forEach(o => { if (o.status === "contacted") sentIds.add(String(o.id)); });
+  const sentCount = sentIds.size;
+  const skippedCount = rows.filter(o => o.status === "archived").length;
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px 80px" }}>
@@ -833,7 +846,7 @@ function LeadHandoffView({ db }) {
       {/* Header */}
       <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 4 }}>Lead Handoff</div>
       <div style={{ color: "#9aa0a9", fontSize: 13, marginBottom: 22 }}>
-        {loading ? "Loading signals…" : <>{rows.length} scanned · <span style={{ color: "#34D399" }}>{allWorthy.length} upcoming &amp; send-worthy</span> across UT·NV·ID·SoCal·AZ · past events &amp; {hidden} junk hidden.</>}
+        {loading ? "Loading signals…" : <>{rows.length} scanned · <span style={{ color: "#34D399" }}>{allWorthy.length} upcoming &amp; send-worthy</span> across UT·NV·ID·SoCal·AZ · past events &amp; {hidden} junk hidden{skippedCount ? ` · ${skippedCount} skipped` : ""}.</>}
       </div>
 
       {/* Funnel strip */}

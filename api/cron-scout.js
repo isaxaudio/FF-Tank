@@ -110,6 +110,11 @@ module.exports = async function handler(req, res) {
     const headers = { 'Content-Type': 'application/json', 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` };
 
     const saved = [];
+    const candidates = [];  // survivors → batch-qualified with Haiku, then inserted with real columns
+    // Inserts are deferred until after qualification, so the DB dedup below can't see rows added
+    // earlier in THIS run. The 6 queries overlap heavily and the target scan can re-surface the same
+    // URL, so track sources in-run too or the same lead lands twice.
+    const seenSources = new Set();
     for (const r of allResults) {
       const source = r.url;
 
@@ -134,6 +139,11 @@ module.exports = async function handler(req, res) {
         continue;
       }
 
+      if (seenSources.has(source)) {
+        saved.push({ status: 'skipped', reason: 'duplicate in run', source });
+        continue;
+      }
+
       const existing = await fetch(`${base}/rest/v1/opportunities?source=eq.${encodeURIComponent(source)}&select=id&limit=1`, { headers });
       const existingData = await existing.json();
       if (Array.isArray(existingData) && existingData.length > 0) {
@@ -141,24 +151,9 @@ module.exports = async function handler(req, res) {
         saved.push({ status: 'skipped', source });
         continue;
       }
-      const evDate = parseEventDate(r);
-      const row = {
-        title: stripMd(r.title) || r.url,
-        source,
-        status: 'new',
-        signal: r._type,   // 'rfp' | 'event' → drives the UI tag + filtering
-        // Lead the notes with the detected event date so the UI surfaces & ranks it.
-        notes: `[${r._type}]${evDate ? ` (event ${evDate.toISOString().slice(0,10)})` : ''} ${stripMd(r.content).slice(0, 460)}`,
-        created_at: new Date().toISOString(),
-      };
-      const sbRes = await fetch(`${base}/rest/v1/opportunities`, {
-        method: 'POST',
-        headers: { ...headers, 'Prefer': 'return=representation' },
-        body: JSON.stringify(row),
-      });
-      const sbData = await sbRes.json();
-      console.log('[cron-scout] Supabase insert status:', sbRes.status);
-      saved.push({ status: sbRes.status, data: sbData });
+      // Survivor — defer insert until after batch qualification (populates company/score/date/why).
+      seenSources.add(source);
+      candidates.push({ r, type: r._type, evDate: parseEventDate(r), source, company: null, bucket: saved });
     }
 
     // ── Scan active target accounts ───────────────────────────────────────────
@@ -194,6 +189,11 @@ module.exports = async function handler(req, res) {
             continue;
           }
 
+          if (seenSources.has(source)) {
+            targetSaved.push({ status: 'skipped', reason: 'duplicate in run', source });
+            continue;
+          }
+
           const existingRes = await fetch(
             `${base}/rest/v1/opportunities?source=eq.${encodeURIComponent(source)}&select=id&limit=1`,
             { headers }
@@ -203,20 +203,18 @@ module.exports = async function handler(req, res) {
             targetSaved.push({ status: 'skipped', source });
             continue;
           }
-          const row = {
-            title: stripMd(r.title) || r.url,
-            source,
-            status: 'new',
-            company: account.name,
-            signal: `[target] ${stripMd(r.content).slice(0, 480)}`,
-            created_at: new Date().toISOString(),
-          };
-          const sbRes = await fetch(`${base}/rest/v1/opportunities`, {
-            method: 'POST',
-            headers: { ...headers, 'Prefer': 'return=representation' },
-            body: JSON.stringify(row),
-          });
-          targetSaved.push({ status: sbRes.status });
+          // Same quality bar as the main scan: must be a real event/procurement signal, and not already past.
+          if (!hasProcurementSignal(r) && !hasEventSignal(r)) {
+            targetSaved.push({ status: 'rejected', reason: 'no event/procurement signal', source });
+            continue;
+          }
+          if (isPastEvent(r)) {
+            targetSaved.push({ status: 'rejected', reason: 'past event', source });
+            continue;
+          }
+          // Survivor — defer insert until after batch qualification. company already known (the target account).
+          seenSources.add(source);
+          candidates.push({ r, type: hasProcurementSignal(r) ? 'rfp' : 'event', evDate: parseEventDate(r), source, company: account.name, bucket: targetSaved });
         }
         await fetch(`${base}/rest/v1/target_accounts?id=eq.${account.id}`, {
           method: 'PATCH',
@@ -224,6 +222,78 @@ module.exports = async function handler(req, res) {
           body: JSON.stringify({ last_scanned: new Date().toISOString() }),
         });
       }
+    }
+
+    // ── Batch-qualify survivors with Haiku, then insert with real columns populated ──
+    // Cheap Haiku calls score + structure the run, so filtering moves server-side and the
+    // client-side regex stack becomes a safety net instead of load-bearing.
+    // Chunked: one oversized batch would blow past max_tokens, truncate the JSON, and lose
+    // scoring for EVERY candidate. Per-chunk failure only costs that chunk.
+    const qualKey = process.env.ANTHROPIC_API_KEY;
+    const QUAL_CHUNK = 20;
+    const qmap = {};
+    if (candidates.length && qualKey) {
+      const sys = `You qualify B2B sales leads for Fatfish, a full-service event-production company (AV, staging, lighting, video, experiential) in Salt Lake City, Utah. For each numbered item, identify the organization hosting the event or issuing the RFP, the event date, a 0-10 fit score, and a one-line reason. Score high (7-10) for real upcoming events or AV/production/staging RFPs Fatfish could bid; low (0-4) for generic directory/listing pages, news articles, past events, or off-topic RFPs (security, IT, construction, energy). Return ONLY a JSON array, no prose.`;
+      for (let start = 0; start < candidates.length; start += QUAL_CHUNK) {
+        const chunk = candidates.slice(start, start + QUAL_CHUNK);
+        try {
+          // Index by absolute position so the model's `i` maps straight back into `candidates`.
+          const listing = chunk.map((c, j) =>
+            `${start + j}. [${c.type}] ${stripMd(c.r.title || '').slice(0, 120)}${c.company ? ` @ ${c.company}` : ''}\n   ${stripMd(c.r.content || '').slice(0, 300)}`
+          ).join('\n');
+          const usr = `Items:\n${listing}\n\nReturn a JSON array, one object per item, using each item's number as "i":\n[{"i":${start},"company":"<org name or null>","event_date":"<YYYY-MM-DD or null>","score":<0-10 integer>,"why":"<reason, <=140 chars>"}]`;
+          const cr = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': qualKey, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 4000, system: sys, messages: [{ role: 'user', content: usr }] }),
+          });
+          const cd = await cr.json();
+          if (cd && cd.error) throw new Error(cd.error.message || 'anthropic error');
+          const txt = (cd && cd.content && cd.content[0] && cd.content[0].text) || '[]';
+          const arr = JSON.parse(txt.slice(txt.indexOf('['), txt.lastIndexOf(']') + 1));
+          for (const o of arr) if (o && typeof o.i === 'number' && candidates[o.i]) qmap[o.i] = o;
+        } catch (e) {
+          console.error(`[cron-scout] Haiku qualify failed for chunk ${start}-${start + chunk.length - 1} — those insert unscored (no leads lost):`, e.message);
+        }
+      }
+      console.log('[cron-scout] Haiku qualified', Object.keys(qmap).length, 'of', candidates.length, 'candidates');
+    }
+
+    for (let i = 0; i < candidates.length; i++) {
+      const c = candidates[i];
+      const q = qmap[i] || {};
+      const score = (typeof q.score === 'number') ? q.score : null;
+      // Drop clearly low-fit leads at the source — but ONLY when Haiku actually scored them.
+      if (score != null && score < 5) {
+        c.bucket.push({ status: 'rejected', reason: `low fit (${score})`, source: c.source });
+        continue;
+      }
+      let evDate = c.evDate;
+      if (!evDate && q.event_date && !isNaN(new Date(q.event_date))) evDate = new Date(q.event_date);
+      const company = c.company || (q.company && String(q.company).toLowerCase() !== 'null' ? String(q.company).slice(0, 120) : null);
+      const originTag = c.company ? 'target' : c.type;   // preserve target-account provenance in notes
+      const row = {
+        title: stripMd(c.r.title) || c.r.url,
+        source: c.source,
+        status: 'new',
+        signal: c.type,   // 'rfp' | 'event' → drives UI tag, chips, learning key
+        company,
+        overall_score: score,
+        why_this_matters: (q.why && String(q.why).trim()) ? String(q.why).slice(0, 300) : null,
+        // NOTE: `event_start_date` does NOT exist on this table (CLAUDE.md's schema is aspirational —
+        // PostgREST 400s the whole insert with PGRST204). `deadline` is the real, unused date column,
+        // and it already feeds the Slack lead card's "Deadline / timing" line.
+        deadline: evDate ? evDate.toISOString().slice(0, 10) : null,
+        // notes still carry the date inline so the UI's text-based date parser keeps working.
+        notes: `[${originTag}]${evDate ? ` (event ${evDate.toISOString().slice(0, 10)})` : ''} ${stripMd(c.r.content).slice(0, 460)}`,
+        created_at: new Date().toISOString(),
+      };
+      const sbRes = await fetch(`${base}/rest/v1/opportunities`, {
+        method: 'POST',
+        headers: { ...headers, 'Prefer': 'return=representation' },
+        body: JSON.stringify(row),
+      });
+      c.bucket.push({ status: sbRes.status });
     }
 
     // ── Weekly Intelligence Brief (auto-generate on Monday run) ─────────────
