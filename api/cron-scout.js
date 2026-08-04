@@ -39,12 +39,30 @@ module.exports = async function handler(req, res) {
     return false;
   };
 
-  // Procurement signal gate — at least one term must appear in title or content
+  // Signal gates — a result must show procurement intent OR be a real upcoming event.
   const PROCUREMENT_TERMS = ['rfp', 'request for proposal', 'bid', 'solicitation', 'submit proposal', 'invitation to bid', 'procurement', 'contract award', 'proposal submission'];
-  const hasProcurementSignal = (r) => {
-    const text = `${r.url} ${r.title || ''} ${r.content || ''}`.toLowerCase();
-    return PROCUREMENT_TERMS.some(t => text.includes(t));
+  const EVENT_TERMS = ['gala', 'fundraiser', 'benefit', 'conference', 'summit', 'convention', 'commencement', 'graduation', 'trade show', 'tradeshow', 'expo', 'annual meeting', 'awards', 'festival', 'product launch', 'symposium', 'forum', 'kickoff', 'sales meeting', 'user conference'];
+  const hasProcurementSignal = (r) => { const t = `${r.url} ${r.title || ''} ${r.content || ''}`.toLowerCase(); return PROCUREMENT_TERMS.some(x => t.includes(x)); };
+  const hasEventSignal = (r) => { const t = `${r.title || ''} ${r.content || ''}`.toLowerCase(); return EVENT_TERMS.some(x => t.includes(x)); };
+
+  // ── Future-event gate ────────────────────────────────────────────────────────
+  // The whole point: pitch events that HAVEN'T happened yet. Extract an event date
+  // from the text; reject anything clearly in the past. Undated leads (open RFPs)
+  // pass — their deadline is ahead. Years are dynamic so queries never go stale.
+  const NOW = new Date(); NOW.setHours(0, 0, 0, 0);
+  const YR = NOW.getFullYear(), NEXT = YR + 1;
+  const MO = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+  const parseEventDate = (r) => {
+    const text = `${r.title || ''} ${r.content || ''}`;
+    let m = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/); if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+    m = text.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})\b/i); if (m) return new Date(+m[3], MO[m[1].slice(0,3).toLowerCase()], +m[2]);
+    m = text.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(20\d{2})\b/i); if (m) return new Date(+m[2], MO[m[1].slice(0,3).toLowerCase()], 15);
+    m = text.match(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/); if (m) return new Date(+m[3], +m[1]-1, +m[2]);
+    m = text.match(/\b(spring|summer|fall|autumn|winter)\s+(20\d{2})\b/i); if (m) { const s = {spring:3,summer:6,fall:9,autumn:9,winter:11}[m[1].toLowerCase()]; return new Date(+m[2], s, 1); }
+    m = text.match(/\b(2027|2028)\b/); if (m) return new Date(+m[1], 0, 1);
+    return null;
   };
+  const isPastEvent = (r) => { const d = parseEventDate(r); return d && !isNaN(d) && d < NOW; };
 
   // Domain blocklist — event calendars, social posts, tourism listing sites, aggregators, competitor blogs
   const NOISE_DOMAINS = ['linkedin.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'tiktok.com', 'eventbrite.com', 'visitsaltlake.com', 'visitdenverfun.com', 'app.getriver.io', 'siliconslopes.com', 'community.summit.ing', 'meetup.com', 'allevents.in', 'rules.utah.gov', 'rfpmart.com', 'highergov.com', 'bidbanana.thebidlab.com', 'instantmarkets.com', 'destinationcolorado.com', 'ndotportal.masterworkslive.com', 'globaltenders.com', 'usesettle.com', 'govdirections.com', 'brightav.com', 'a2gov.org', 'dallascounty.org'];
@@ -61,35 +79,31 @@ module.exports = async function handler(req, res) {
   const stripMd = (s) => (s || '').replace(/#{1,6}\s*/g, '').replace(/\*{1,3}([^*]*)\*{1,3}/g, '$1').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`+/g, '').trim();
 
   try {
-    const [rfpResults, procurementResults, prospectResults, competitorResults, verticalResults, pdfResults] = await Promise.all([
-      // Q1 — RFP/bid documents: advanced depth, Utah
-      search(
-        '"request for proposal" OR "RFP" OR "solicitation" OR "invitation to bid" "audio visual" OR "audiovisual" OR "AV services" OR "event production" OR "production services" OR "staging" Utah',
-        'advanced', 8
-      ),
-      // Q2 — University & government procurement portals, Utah
-      search(
-        'Utah "bid" OR "procurement" OR "request for proposal" audiovisual OR "AV" OR "event production" OR staging site:utah.edu OR site:uvu.edu OR site:byu.edu OR site:utah.gov OR site:slcgov.com OR site:utahcounty.gov',
-        'advanced', 8
-      ),
-      // Q3 — Regional expansion: Idaho, Wyoming, New Mexico (geographies not covered by Q4)
-      search('"request for proposal" OR "RFP" ("audiovisual services" OR "event production" OR "event staging" OR "conference services" OR "live event production") (Idaho OR Wyoming OR "New Mexico" OR Boise OR "Jackson Hole") 2026 -site:rfpmart.com -site:highergov.com -site:bidbanana.thebidlab.com'),
-      // Q4 — Regional open procurement: Nevada, Colorado, Arizona
-      search('"request for proposal" OR "RFP" ("audiovisual services" OR "event production" OR "event staging" OR "entertainment staging" OR "conference services" OR "live event production") Nevada OR Colorado OR Arizona 2026 -site:rfpmart.com -site:highergov.com -site:bidbanana.thebidlab.com'),
-      // Q5 — Procurement platforms: bidnetdirect, bonfire, publicpurchase, planetbids, civicplus, opengov (region-constrained)
-      search('("event production" OR "audiovisual" OR "event staging" OR "conference production" OR "live event") ("request for proposal" OR "RFP" OR "solicitation") (Utah OR Colorado OR Nevada OR Arizona OR Idaho OR Wyoming OR "New Mexico") site:bonfirehub.com OR site:bidnetdirect.com OR site:publicpurchase.com OR site:planetbids.com OR site:civicplus.com OR site:opengov.com'),
-      // Q1-PDF — Utah PDF variant: fresh RFP documents on .gov/.edu servers
-      search('"request for proposal" ("audiovisual" OR "AV services" OR "event production" OR "staging") Utah 2026 filetype:pdf site:utah.gov OR site:utah.edu OR site:slcgov.com OR site:utahcounty.gov'),
+    // Region shorthand reused across queries. Dynamic years keep results forward-looking.
+    const REGION = '(Utah OR Nevada OR "Las Vegas" OR Idaho OR "Southern California" OR "Los Angeles" OR "San Diego" OR Arizona OR Phoenix OR Colorado OR Wyoming)';
+    const [rfpResults, galaResults, conferenceResults, higherEdResults, corporateResults, procurementResults] = await Promise.all([
+      // Q1 — Upcoming production/AV RFPs across the region (dynamic years)
+      search(`"request for proposal" OR "RFP" OR "invitation to bid" ("audio visual" OR "audiovisual" OR "AV services" OR "event production" OR "staging" OR "live event production") ${REGION} ${YR} OR ${NEXT}`, 'advanced', 8),
+      // Q2 — Upcoming galas / fundraisers / benefits needing production
+      search(`upcoming ("gala" OR "fundraiser" OR "benefit event" OR "annual dinner" OR "awards gala") (nonprofit OR foundation OR university OR hospital) ${REGION} ${YR} OR ${NEXT}`, 'advanced', 8),
+      // Q3 — Upcoming conferences / summits / conventions / expos needing AV & staging
+      search(`upcoming ("conference" OR "summit" OR "convention" OR "expo" OR "trade show" OR "annual meeting") ${REGION} (${YR} OR ${NEXT}) "register" OR "agenda" OR "speakers" OR "venue"`, 'advanced', 8),
+      // Q4 — Higher-ed commencements & major university events (Fatfish niche)
+      search(`("commencement" OR "graduation ceremony" OR "convocation" OR "university event" OR "homecoming") ${REGION} (${YR} OR ${NEXT}) site:.edu OR "livestream" OR "ceremony"`, 'advanced', 8),
+      // Q5 — Corporate events: product launches, user conferences, sales kickoffs, annual meetings
+      search(`upcoming ("product launch" OR "user conference" OR "sales kickoff" OR "annual meeting" OR "customer event" OR "brand activation") (corporate OR company) ${REGION} ${YR} OR ${NEXT}`, 'basic', 8),
+      // Q6 — Government/education procurement portals (open bids)
+      search(`("event production" OR "audiovisual" OR "event staging" OR "conference production") ("request for proposal" OR "RFP" OR "solicitation") ${REGION} site:bonfirehub.com OR site:bidnetdirect.com OR site:publicpurchase.com OR site:planetbids.com OR site:opengov.com`, 'basic', 8),
     ]);
-    console.log('[cron-scout] results:', rfpResults.length, procurementResults.length, prospectResults.length, competitorResults.length, verticalResults.length, pdfResults.length);
+    console.log('[cron-scout] results:', rfpResults.length, galaResults.length, conferenceResults.length, higherEdResults.length, corporateResults.length, procurementResults.length);
 
     const allResults = [
       ...rfpResults.map(r => ({ ...r, _type: 'rfp' })),
+      ...galaResults.map(r => ({ ...r, _type: 'event' })),
+      ...conferenceResults.map(r => ({ ...r, _type: 'event' })),
+      ...higherEdResults.map(r => ({ ...r, _type: 'event' })),
+      ...corporateResults.map(r => ({ ...r, _type: 'event' })),
       ...procurementResults.map(r => ({ ...r, _type: 'rfp' })),
-      ...prospectResults.map(r => ({ ...r, _type: 'prospect' })),
-      ...competitorResults.map(r => ({ ...r, _type: 'market' })),
-      ...verticalResults.map(r => ({ ...r, _type: 'prospect' })),
-      ...pdfResults.map(r => ({ ...r, _type: 'rfp' })),
     ].filter(r => !isNoise(r));
 
     const base = supabaseUrl.replace(/\/$/, '');
@@ -106,10 +120,17 @@ module.exports = async function handler(req, res) {
         continue;
       }
 
-      // Gate 2: require at least one procurement intent signal in title or content
-      if (!hasProcurementSignal(r)) {
-        console.log('[cron-scout] rejected (no procurement signal):', source);
+      // Gate 2: require procurement intent OR a real event signal (galas, conferences…)
+      if (!hasProcurementSignal(r) && !hasEventSignal(r)) {
+        console.log('[cron-scout] rejected (no procurement/event signal):', source);
         saved.push({ status: 'rejected', reason: 'no procurement signal', source });
+        continue;
+      }
+
+      // Gate 3: reject events that have already happened — we can only pitch what's ahead.
+      if (isPastEvent(r)) {
+        console.log('[cron-scout] rejected (past event):', source);
+        saved.push({ status: 'rejected', reason: 'past event', source });
         continue;
       }
 
@@ -120,11 +141,14 @@ module.exports = async function handler(req, res) {
         saved.push({ status: 'skipped', source });
         continue;
       }
+      const evDate = parseEventDate(r);
       const row = {
         title: stripMd(r.title) || r.url,
         source,
         status: 'new',
-        notes: `[${r._type}] ${stripMd(r.content).slice(0, 480)}`,
+        signal: r._type,   // 'rfp' | 'event' → drives the UI tag + filtering
+        // Lead the notes with the detected event date so the UI surfaces & ranks it.
+        notes: `[${r._type}]${evDate ? ` (event ${evDate.toISOString().slice(0,10)})` : ''} ${stripMd(r.content).slice(0, 460)}`,
         created_at: new Date().toISOString(),
       };
       const sbRes = await fetch(`${base}/rest/v1/opportunities`, {
@@ -155,7 +179,7 @@ module.exports = async function handler(req, res) {
         const domainHint = account.domain ? account.domain.replace(/^https?:\/\//, '').replace(/^www\./, '') : null;
         const exclude = domainHint ? ` -site:${domainHint}` : '';
         const queries = [
-          `"${account.name}" event conference summit announcement 2026${exclude}`,
+          `"${account.name}" (upcoming OR ${YR} OR ${NEXT}) event OR conference OR summit OR gala OR "annual meeting" OR launch${exclude}`,
         ];
         const results = (await Promise.all(queries.map(search)))
           .flat()
