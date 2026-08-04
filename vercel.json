@@ -3,7 +3,8 @@
   "outputDirectory": "dist",
   "functions": {
     "api/agent-stream.js": { "maxDuration": 300 },
-    "api/cron-exec-movement.js": { "maxDuration": 300 }
+    "api/cron-exec-movement.js": { "maxDuration": 300 },
+    "api/cron-scout.js": { "maxDuration": 300 }
   },
   "crons": [
     {
