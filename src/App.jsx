@@ -689,6 +689,22 @@ function LeadHandoffView({ db }) {
   const [dismissed, setDismissed] = React.useState({});
   const [showNoise, setShowNoise] = React.useState(false);
   const [toast, setToast] = React.useState(null);
+  const [enriching, setEnriching] = React.useState({});
+  const [enriched, setEnriched] = React.useState({}); // id → { company, contact:{name,title,email}, draft }
+
+  // Find the decision-maker + draft a pitch (Apollo + GPT) for one lead.
+  async function enrich(o, quiet) {
+    if (enriching[o.id]) return enriched[o.id];
+    setEnriching(p => ({ ...p, [o.id]: true }));
+    try {
+      const r = await fetch("/api/index?service=enrich-lead", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ opportunity: o }) });
+      const d = await r.json();
+      if (d.ok) { setEnriched(p => ({ ...p, [o.id]: d })); if (!quiet) setToast({ ok: true, msg: `Found ${d.contact?.name || "a contact"} at ${d.company}${d.contact?.email ? " · email revealed" : ""}` }); return d; }
+      if (!quiet) setToast({ ok: false, msg: d.reason || "No contact found" });
+      return null;
+    } catch (e) { if (!quiet) setToast({ ok: false, msg: `Enrich failed: ${e.message}` }); return null; }
+    finally { setEnriching(p => ({ ...p, [o.id]: false })); setTimeout(() => setToast(null), 4500); }
+  }
 
   React.useEffect(() => { (async () => {
     setLoading(true);
@@ -739,7 +755,10 @@ function LeadHandoffView({ db }) {
     if (sending[o.id] || sent[o.id]) return;
     setSending(p => ({ ...p, [o.id]: true }));
     try {
-      const r = await fetch("/api/index?service=send-lead", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ opportunity: o, repName: "Taylor Miles" }) });
+      // Auto-enrich (find contact + draft) if we don't have one, so Taylor gets a reachable lead.
+      let oo = o;
+      if (!enriched[o.id] && !(o.company && o.company.trim())) { const e = await enrich(o, true); if (e && e.company) oo = { ...o, company: e.company }; }
+      const r = await fetch("/api/index?service=send-lead", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ opportunity: oo, repName: "Taylor Miles" }) });
       const d = await r.json();
       if (r.ok && d.ok) { setSent(p => ({ ...p, [o.id]: true })); setToast({ ok: true, msg: `Sent to #ff-leads for Taylor${d.draftMatched ? " · draft attached" : ""}` }); }
       else throw new Error(d.error || "failed");
@@ -804,11 +823,20 @@ function LeadHandoffView({ db }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.005em", marginBottom: 3 }}>{o.company && o.company.trim() ? o.company : (o.title || "Untitled")}</div>
                 {why && <div style={{ color: "#9aa0a9", fontSize: 12.5, lineHeight: 1.45, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{why || o.title}</div>}
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                {enriched[o.id] && (() => { const c = enriched[o.id].contact || {}; return (
+                  <div style={{ marginTop: 9, fontFamily: "monospace", fontSize: 11.5, color: "#9aa0a9", background: "#171a1f", border: "1px solid #1a1e24", borderRadius: 8, padding: "8px 11px" }}>
+                    👤 <span style={{ color: "#e8e4dc" }}>{c.name || "contact"}</span>{c.title ? ` · ${c.title}` : ""}{c.email ? <span style={{ color: "#34D399" }}>{"  ·  " + c.email}</span> : <span style={{ color: "#FB923C" }}>{"  ·  no email"}</span>} <span style={{ color: "#626873" }}>@ {enriched[o.id].company}</span>
+                  </div>
+                ); })()}
+                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                   <button onClick={() => send(o)} disabled={!!sending[o.id] || !!isSent}
                     style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "none", background: isSent ? "#1c3a30" : "linear-gradient(135deg,#3ecf8e,#0f766e)", color: isSent ? "#34D399" : "#04140d", fontWeight: 600, cursor: isSent ? "default" : "pointer" }}>
                     {sending[o.id] ? "◌ Sending…" : isSent ? "✓ Sent to Taylor" : "→ Send to #ff-leads"}
                   </button>
+                  {!isSent && !enriched[o.id] && <button onClick={() => enrich(o)} disabled={!!enriching[o.id]}
+                    style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #2b2544", background: "#2b254420", color: "#A78BFA", cursor: enriching[o.id] ? "default" : "pointer" }}>
+                    {enriching[o.id] ? "◌ Finding…" : "✦ Find contact"}
+                  </button>}
                   {o.source && <a href={o.source} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #232830", color: "#9aa0a9", textDecoration: "none" }}>View source</a>}
                   {!isSent && <button onClick={() => setDismissed(p => ({ ...p, [o.id]: true }))} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid transparent", background: "none", color: "#626873", cursor: "pointer" }}>Skip</button>}
                 </div>
