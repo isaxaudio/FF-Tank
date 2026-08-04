@@ -613,10 +613,46 @@ const LEAD_SIGNALS      = new Set(["rfp", "venue", "competitor", "event", "new_h
 const LEAD_OPEN         = new Set(["new", "priority"]);
 const LEAD_GEO_RE       = /\b(utah|salt lake|slc|provo|ogden|logan|nevada|las vegas|vegas|reno|idaho|boise|california|los angeles|san diego|orange county|irvine|arizona|phoenix|scottsdale|tempe|mesa|tucson)\b/i;
 
+// ── Event-date awareness ─────────────────────────────────────────────────────
+// The scout doesn't extract event dates, so infer one from the text to (a) hide
+// past events and (b) show when the event is. Returns { date: Date|null, future,
+// label } — future is true for undated leads too (an open RFP is a future action).
+const MONTHS = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+function parseEventDate(o) {
+  const text = `${o.event_start_date || ""} ${o.title || ""} ${o.why_this_matters || ""} ${o.notes || ""} ${o.estimated_timeline || ""}`;
+  // 1) explicit ISO date
+  let m = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  // 2) Month DD, YYYY  or  Month YYYY
+  m = text.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})\b/i);
+  if (m) return new Date(+m[3], MONTHS[m[1].slice(0,3).toLowerCase()], +m[2]);
+  m = text.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(20\d{2})\b/i);
+  if (m) return new Date(+m[2], MONTHS[m[1].slice(0,3).toLowerCase()], 15);
+  // 3) MM/DD/YYYY
+  m = text.match(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/);
+  if (m) return new Date(+m[3], +m[1] - 1, +m[2]);
+  // 4) Season YYYY
+  m = text.match(/\b(spring|summer|fall|autumn|winter)\s+(20\d{2})\b/i);
+  if (m) { const s = { spring:3, summer:6, fall:9, autumn:9, winter:11 }[m[1].toLowerCase()]; return new Date(+m[2], s, 1); }
+  // 5) bare future year
+  m = text.match(/\b(2027|2028)\b/);
+  if (m) return new Date(+m[1], 0, 1);
+  return null;
+}
+function eventDateInfo(o) {
+  const d = parseEventDate(o);
+  const now = new Date(); now.setHours(0,0,0,0);
+  if (!d || isNaN(d)) return { date: null, future: true, past: false, label: "" };  // undated = still actionable
+  const past = d < now;
+  const label = d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  return { date: d, future: !past, past, label };
+}
+
 function isSendWorthy(o) {
   const title = (o.title || "").trim(), company = (o.company || "").trim(), why = (o.why_this_matters || "").trim();
   const sig = (o.signal || "").toLowerCase();
   if (o.status && !LEAD_OPEN.has(o.status)) return false;             // already handled/archived
+  if (eventDateInfo(o).past) return false;                            // past event — can't pitch it
   if (LEAD_JUNK_RE.test(title) || LEAD_JUNK_RE.test(company)) return false; // music/social noise
   if (LEAD_NOISEWORD_RE.test(title) || title.length < 8) return false;     // filler / too thin
   if (LEAD_BAREFILE_RE.test(title)) return false;                    // bare filename, no context
@@ -672,10 +708,17 @@ function LeadHandoffView({ db }) {
   ];
   const catFn = (CATS.find(c => c.id === cat) || CATS[0]).fn;
   const source = showNoise ? rows : allWorthy;
-  const list = source.filter(o => !dismissed[o.id]).filter(catFn).sort((a, b) => leadQuality(b) - leadQuality(a));
+  // Rank: soonest upcoming event first (dated leads), then by quality; undated leads
+  // (open RFPs) fall in by quality after the dated ones.
+  const list = source.filter(o => !dismissed[o.id]).filter(catFn).sort((a, b) => {
+    const da = eventDateInfo(a).date, db = eventDateInfo(b).date;
+    if (da && db) return da - db;                 // both dated → soonest first
+    if (da && !db) return -1;                     // dated future beats undated
+    if (!da && db) return 1;
+    return leadQuality(b) - leadQuality(a);        // both undated → quality
+  });
 
   const geoOf = o => { const m = ((o.company || "") + " " + (o.title || "") + " " + (o.notes || "")).match(LEAD_GEO_RE); return m ? m[0].replace(/\b\w/g, c => c.toUpperCase()) : ""; };
-  const dateOf = o => { const d = o.signal_date || o.created_at || ""; return typeof d === "string" ? d.slice(5, 10) : ""; };
   const tagOf = o => { const s = (o.signal || "").toLowerCase();
     if (s === "rfp") return { t: "RFP", c: "#34D399" };
     if (/hire/.test(s)) return { t: "HIRE", c: "#A78BFA" };
@@ -716,7 +759,7 @@ function LeadHandoffView({ db }) {
       {/* Header */}
       <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 4 }}>Lead Handoff</div>
       <div style={{ color: "#9aa0a9", fontSize: 13, marginBottom: 22 }}>
-        {loading ? "Loading signals…" : <>{rows.length} scanned · <span style={{ color: "#34D399" }}>{allWorthy.length} send-worthy</span> across UT·NV·ID·SoCal·AZ · {hidden} demoted as noise.</>}
+        {loading ? "Loading signals…" : <>{rows.length} scanned · <span style={{ color: "#34D399" }}>{allWorthy.length} upcoming &amp; send-worthy</span> across UT·NV·ID·SoCal·AZ · past events &amp; {hidden} junk hidden.</>}
       </div>
 
       {/* Funnel strip */}
@@ -770,9 +813,11 @@ function LeadHandoffView({ db }) {
                   {!isSent && <button onClick={() => setDismissed(p => ({ ...p, [o.id]: true }))} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid transparent", background: "none", color: "#626873", cursor: "pointer" }}>Skip</button>}
                 </div>
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 600, color: scoreOf(o) >= 8 ? "#34D399" : scoreOf(o) >= 6 ? "#FB923C" : "#9aa0a9" }}>{scoreOf(o)}</div>
-                <div style={{ fontFamily: "monospace", fontSize: 10.5, color: "#626873", marginTop: 3 }}>{[geo, dateOf(o)].filter(Boolean).join(" · ")}</div>
+              <div style={{ textAlign: "right", flexShrink: 0, minWidth: 96 }}>
+                {(() => { const ev = eventDateInfo(o); return ev.label
+                  ? <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 600, color: "#60A5FA" }}>📅 {ev.label}</div>
+                  : <div style={{ fontFamily: "monospace", fontSize: 11, color: "#FB923C" }}>open / no date</div>; })()}
+                <div style={{ fontFamily: "monospace", fontSize: 10.5, color: "#626873", marginTop: 4 }}>{geo || "—"} · score {scoreOf(o)}</div>
               </div>
             </div>
           );
