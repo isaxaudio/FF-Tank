@@ -691,6 +691,28 @@ function LeadHandoffView({ db }) {
   const [toast, setToast] = React.useState(null);
   const [enriching, setEnriching] = React.useState({});
   const [enriched, setEnriched] = React.useState({}); // id → { company, contact:{name,title,email}, draft }
+  const [weights, setWeights] = React.useState({});   // signal → net learned score (from approve/skip history)
+
+  // Learning loop: record approve (+1) / skip (-1) so the queue learns what Isaac wants.
+  async function recordFeedback(o, rating) {
+    try { await db.insert("opportunity_feedback", { opportunity_id: o.id, rating, created_at: new Date().toISOString() }); } catch {}
+  }
+  // Load feedback → per-signal net weight (≥2 ratings to count), applied to ranking.
+  React.useEffect(() => { (async () => {
+    try {
+      const fb = await db.select("opportunity_feedback", { select: "opportunity_id,rating", order: "created_at.desc", limit: 500 });
+      if (!Array.isArray(fb) || !fb.length) return;
+      const ids = [...new Set(fb.map(f => f.opportunity_id))];
+      const opps = await db.select("opportunities", { id: `in.(${ids.join(",")})`, select: "id,signal" });
+      const sigOf = Object.fromEntries((Array.isArray(opps) ? opps : []).map(o => [o.id, (o.signal || "none").toLowerCase()]));
+      const agg = {};
+      for (const f of fb) { const s = sigOf[f.opportunity_id]; if (!s) continue; (agg[s] = agg[s] || { net: 0, n: 0 }); agg[s].net += f.rating; agg[s].n++; }
+      const w = {};
+      for (const [s, a] of Object.entries(agg)) if (a.n >= 2) w[s] = Math.max(-15, Math.min(15, Math.round((a.net / a.n) * 12)));
+      setWeights(w);
+    } catch {}
+  })(); }, []);
+  const learnedBoost = o => weights[(o.signal || "none").toLowerCase()] || 0;
 
   // Find the decision-maker + draft a pitch (Apollo + GPT) for one lead.
   async function enrich(o, quiet) {
@@ -731,7 +753,7 @@ function LeadHandoffView({ db }) {
     if (da && db) return da - db;                 // both dated → soonest first
     if (da && !db) return -1;                     // dated future beats undated
     if (!da && db) return 1;
-    return leadQuality(b) - leadQuality(a);        // both undated → quality
+    return (leadQuality(b) + learnedBoost(b)) - (leadQuality(a) + learnedBoost(a)); // quality + what Isaac approves
   });
 
   const geoOf = o => { const m = ((o.company || "") + " " + (o.title || "") + " " + (o.notes || "")).match(LEAD_GEO_RE); return m ? m[0].replace(/\b\w/g, c => c.toUpperCase()) : ""; };
@@ -760,11 +782,12 @@ function LeadHandoffView({ db }) {
       if (!enriched[o.id] && !(o.company && o.company.trim())) { const e = await enrich(o, true); if (e && e.company) oo = { ...o, company: e.company }; }
       const r = await fetch("/api/index?service=send-lead", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ opportunity: oo, repName: "Taylor Miles" }) });
       const d = await r.json();
-      if (r.ok && d.ok) { setSent(p => ({ ...p, [o.id]: true })); setToast({ ok: true, msg: `Sent to #ff-leads for Taylor${d.draftMatched ? " · draft attached" : ""}` }); }
+      if (r.ok && d.ok) { setSent(p => ({ ...p, [o.id]: true })); recordFeedback(o, 1); setToast({ ok: true, msg: `Sent to #ff-leads for Taylor${d.draftMatched ? " · draft attached" : ""}` }); }
       else throw new Error(d.error || "failed");
     } catch (e) { setToast({ ok: false, msg: `Send failed: ${e.message}` }); }
     finally { setSending(p => ({ ...p, [o.id]: false })); setTimeout(() => setToast(null), 4500); }
   }
+  function skip(o) { recordFeedback(o, -1); setDismissed(p => ({ ...p, [o.id]: true })); }
 
   const reviewCount = allWorthy.filter(o => !dismissed[o.id] && !sent[o.id]).length;
   const sentCount = Object.keys(sent).length;
@@ -796,6 +819,15 @@ function LeadHandoffView({ db }) {
         <div style={{ fontFamily: "monospace", fontSize: 12.5, color: "#A78BFA", marginBottom: 5 }}>◆ Surface signal, hide noise</div>
         <div style={{ color: "#9aa0a9", fontSize: 12.5, lineHeight: 1.5 }}>The raw scout saves everything (mostly junk: “los”, Spotify, Instagram, empty company). Here only real, ranked, geo-relevant leads show — approve one and it posts to #ff-leads for Taylor with the outreach draft attached.</div>
       </div>
+      {Object.keys(weights).length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, fontFamily: "monospace", fontSize: 11.5, color: "#626873", flexWrap: "wrap" }}>
+          <span style={{ color: "#34D399" }}>📈 Learning from your picks:</span>
+          {Object.entries(weights).sort((a, b) => b[1] - a[1]).map(([s, w]) => (
+            <span key={s} style={{ color: w > 0 ? "#34D399" : "#FB923C" }}>{s} {w > 0 ? "▲" : "▼"}{Math.abs(w)}</span>
+          ))}
+          <span style={{ color: "#626873" }}>· the queue re-ranks toward what you send</span>
+        </div>
+      )}
 
       {/* Category chips */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
@@ -838,7 +870,7 @@ function LeadHandoffView({ db }) {
                     {enriching[o.id] ? "◌ Finding…" : "✦ Find contact"}
                   </button>}
                   {o.source && <a href={o.source} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #232830", color: "#9aa0a9", textDecoration: "none" }}>View source</a>}
-                  {!isSent && <button onClick={() => setDismissed(p => ({ ...p, [o.id]: true }))} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid transparent", background: "none", color: "#626873", cursor: "pointer" }}>Skip</button>}
+                  {!isSent && <button onClick={() => skip(o)} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid transparent", background: "none", color: "#626873", cursor: "pointer" }}>Skip</button>}
                 </div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0, minWidth: 96 }}>
