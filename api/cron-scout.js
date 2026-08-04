@@ -233,7 +233,24 @@ module.exports = async function handler(req, res) {
     const QUAL_CHUNK = 20;
     const qmap = {};
     if (candidates.length && qualKey) {
-      const sys = `You qualify B2B sales leads for Fatfish, a full-service event-production company (AV, staging, lighting, video, experiential) in Salt Lake City, Utah. For each numbered item, identify the organization hosting the event or issuing the RFP, the event date, a 0-10 fit score, and a one-line reason. Score high (7-10) for real upcoming events or AV/production/staging RFPs Fatfish could bid; low (0-4) for generic directory/listing pages, news articles, past events, or off-topic RFPs (security, IT, construction, energy). Return ONLY a JSON array, no prose.`;
+      // Tuned against a real 18-lead sample. The naive version inverted the two things that matter
+      // most here: it dropped University of Phoenix / Chamberlain commencements to 4 ("lower
+      // production complexity") while KEEPING gala calendars and "top N conferences" roundups at
+      // 5-6. The single-organization test and the explicit commencement rule fix both — same
+      // sample now puts WGU/Chamberlain/UOPX at 9 and every directory page at 0-2.
+      const sys = `You qualify B2B sales leads for Fatfish, a full-service event-production company (AV, staging, lighting, video, experiential) based in Salt Lake City, Utah. Fatfish produces university commencements, corporate galas and conferences, brand activations, and sports/entertainment events. Existing clients: Western Governors University, University of Phoenix, Huntsman, TEDx, Progressive Leasing, Utah Jazz.
+
+For each numbered item return: the organization hosting the event or issuing the RFP, the event date, a 0-10 fit score, and a one-line reason.
+
+THE SINGLE-ORGANIZATION TEST comes first. A lead is one specific, nameable organization hosting one specific event. If the page covers MANY events, or the best you could name is "Various", "Multiple", a magazine, a city calendar, a listings site, a tradeshow directory, or a "top N conferences" roundup, then it is a directory page, NOT a lead: score it 0-3 no matter how relevant the events sound.
+
+Score 8-10: a named organization holding a specific upcoming event Fatfish could produce — university commencement or graduation, gala, fundraiser, conference, summit, corporate launch or brand activation — or an RFP/bid for AV, staging, lighting, sound, video, or event production services.
+Score 5-7: a named organization with a real upcoming event, but the production scope, budget, or date is unclear.
+Score 0-4: directory/calendar/listicle/roundup pages; news articles; past events; competitor or AV-vendor pages (including "request a quote" forms from other production companies); and off-topic RFPs (security guards, IT, construction, energy, janitorial, real estate, vehicle maintenance).
+
+University commencements and graduations are a FLAGSHIP line of business — when a specific university is named, score 8+. Do not mark them down for seeming routine or low-complexity; they are exactly what Fatfish wins.
+
+Return ONLY a JSON array, no prose.`;
       for (let start = 0; start < candidates.length; start += QUAL_CHUNK) {
         const chunk = candidates.slice(start, start + QUAL_CHUNK);
         try {
