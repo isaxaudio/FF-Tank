@@ -2198,10 +2198,12 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
   async function loadAll() {
     setLoadingData(true);
     try {
+      // selectAll, not select: flex_clients is 1,169 rows and flex_projects 2,035 — both past
+      // PostgREST's 1,000-row ceiling, which would quietly drop data out of every figure below.
       const [c, v, p] = await Promise.all([
-        db.select("flex_clients", { order: "created_at.desc" }),
-        db.select("flex_venues", {}),
-        db.select("flex_projects", { order: "event_date.desc" }),
+        db.selectAll("flex_clients", { order: "created_at.desc" }),
+        db.selectAll("flex_venues", {}),
+        db.selectAll("flex_projects", { order: "event_date.desc" }),
       ]);
       const clientData = Array.isArray(c) ? c : [];
       setClients(clientData);
@@ -2275,6 +2277,16 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
 
   async function syncFromFlex() {
     if (!flexApiKey) { setToast({ ok: false, msg: "Add Flex API key in Settings first" }); setTimeout(() => setToast(null), 4000); return; }
+    // This sync still reads the shallow /api/contact endpoint: it writes className ("CONTACT") into
+    // `industry`, brings back no revenue or dates, and spends ~1,100 calls against Flex's hard limit
+    // of 2,000 requests per hour. Make the damage explicit before anyone spends the quota on it.
+    if (!window.confirm(
+      "Heads up — this is the OLD contact sync.\n\n" +
+      "• It re-writes industry to \"CONTACT\" on ~1,100 rows\n" +
+      "• It returns no revenue, dates or project history\n" +
+      "• It burns ~1,100 of Flex's 2,000 requests/hour limit\n\n" +
+      "Your booked-value figures will survive it, but you gain nothing. Run it anyway?"
+    )) return;
     setSyncing(true);
     try {
       const r = await fetch("/api/index?service=flex-sync", {
@@ -2410,14 +2422,41 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
     }
   }
 
-  // Computed stats
-  const repeatClients = clients.filter(c => (c.total_events || 0) > 1).length;
-  const industryMap = {};
-  clients.forEach(c => { if (c.industry) industryMap[c.industry] = (industryMap[c.industry] || 0) + 1; });
-  const topIndustries = Object.entries(industryMap).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const venueFreq = {};
-  projects.forEach(p => { if (p.venue_name) venueFreq[p.venue_name] = (venueFreq[p.venue_name] || 0) + 1; });
-  const topVenuesList = Object.entries(venueFreq).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  // Computed stats.
+  // `clients` still holds ~900 legacy Flex contacts that were never booked, so anything money-related
+  // works off billed — the rows carrying real aggregates from project history.
+  const INTERNAL_RE = /^(fat fish media( group)?|clear lamp( av)?)$/i;
+  const billed = clients.filter(c => c.total_revenue != null && !INTERNAL_RE.test((c.name || "").trim()));
+  const repeatClients = billed.filter(c => (c.total_events || 0) > 1).length;
+  const totalBooked = billed.reduce((s, c) => s + (Number(c.total_revenue) || 0), 0);
+  const totalJobs = billed.reduce((s, c) => s + (c.total_events || 0), 0);
+  const monthsSince = d => (d ? (Date.now() - new Date(d + "T00:00:00").getTime()) / 2629800000 : 9999);
+  const activeClients = billed.filter(c => monthsSince(c.last_event_date) <= 12);
+  const winback = billed.filter(c => monthsSince(c.last_event_date) > 12)
+    .sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
+  const winbackValue = winback.reduce((s, c) => s + (Number(c.total_revenue) || 0), 0);
+  const topClients = billed.slice().sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0)).slice(0, 8);
+  const maxClientRev = topClients.length ? (Number(topClients[0].total_revenue) || 1) : 1;
+  const concentration = totalBooked ? (Number(topClients[0]?.total_revenue || 0) / totalBooked * 100) : 0;
+
+  // Booked value per calendar year, straight off project rows.
+  // Same rules as the client aggregates above, so the two never disagree: real external client,
+  // cancelled work excluded (status is carried in notes).
+  const yearMap = {};
+  projects.forEach(p => {
+    if (!p.event_date) return;
+    const name = (p.client_name || "").trim();
+    if (!name || INTERNAL_RE.test(name)) return;
+    if (/cancel|void|declin/i.test(p.notes || "")) return;
+    const y = String(p.event_date).slice(0, 4);
+    (yearMap[y] = yearMap[y] || { rev: 0, jobs: 0 });
+    yearMap[y].rev += Number(p.budget_estimate) || 0;
+    yearMap[y].jobs += 1;
+  });
+  const years = Object.entries(yearMap).sort((a, b) => a[0].localeCompare(b[0]));
+  const maxYearRev = Math.max(1, ...years.map(([, v]) => v.rev));
+
+  const usd = n => n >= 1000000 ? `$${(n / 1000000).toFixed(2)}M` : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${Math.round(n)}`;
   const hasData = clients.length > 0 || venues.length > 0 || projects.length > 0;
 
   const ACCENT = { overview: "#FB923C", industries: "#34D399", markets: "#A78BFA", growth: "#4ECDC4", content: "#F7C948" };
@@ -2472,7 +2511,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
       <div style={{ padding: "14px 20px", borderBottom: "1px solid #111", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 8, flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: "#FB923C" }}>Flex Intel</div>
-          <div style={{ fontSize: 9, color: "#444" }}>{loadingData ? "loading…" : `${clients.length} clients · ${projects.length} projects · ${venues.length} venues`}</div>
+          <div style={{ fontSize: 9, color: "#444" }}>{loadingData ? "loading…" : `${billed.length} billed clients · ${projects.length} projects · ${usd(totalBooked)} booked`}</div>
         </div>
         <div style={{ display: "flex", gap: 2, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 6, padding: 2 }}>
           {[
@@ -2519,10 +2558,11 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
             {/* Stat cards */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {[
-                { label: "Clients", value: clients.length, color: "#FB923C" },
-                { label: "Venues", value: venues.length, color: "#A78BFA" },
-                { label: "Projects", value: projects.length, color: "#34D399" },
-                { label: "Repeat Clients", value: repeatClients, color: "#4ECDC4" },
+                { label: "Booked value", value: usd(totalBooked), color: "#34D399" },
+                { label: "Clients", value: billed.length, color: "#FB923C" },
+                { label: "Jobs", value: totalJobs, color: "#A78BFA" },
+                { label: "Active 12mo", value: activeClients.length, color: "#4ECDC4" },
+                { label: "Repeat", value: repeatClients, color: "#F7C948" },
               ].map(s => (
                 <div key={s.label} style={{ flex: "1 1 100px", minWidth: 90, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
                   <div style={{ fontSize: 26, fontWeight: 700, color: s.color, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loadingData ? "—" : s.value}</div>
@@ -2548,27 +2588,72 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
               </div>
             </div>
 
-            {/* Top Industries + Top Venues */}
-            {hasData && (
+            {/* Who pays the bills + how it trends by year */}
+            {billed.length > 0 && (
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 200px", background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
-                  <div style={{ fontSize: 9, color: "#34D399", letterSpacing: "2px", marginBottom: 14 }}>TOP INDUSTRIES</div>
-                  {topIndustries.length > 0 ? topIndustries.map(([ind, n]) => (
-                    <div key={ind} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
-                      <span style={{ fontSize: 11, color: "#A8A4A0" }}>{ind}</span>
-                      <span style={{ fontSize: 9, color: "#34D399", background: "#34D39915", padding: "2px 8px", borderRadius: 10 }}>{n}</span>
+                <div style={{ flex: "1 1 320px", background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+                    <span style={{ fontSize: 9, color: "#34D399", letterSpacing: "2px" }}>TOP CLIENTS BY BOOKED VALUE</span>
+                    <span style={{ fontSize: 9, color: concentration > 25 ? "#FB923C" : "#444" }}>
+                      top client = {concentration.toFixed(0)}% of revenue
+                    </span>
+                  </div>
+                  {topClients.map(c => (
+                    <div key={c.id} style={{ marginBottom: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 11, marginBottom: 3 }}>
+                        <span style={{ color: "#A8A4A0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                        <span style={{ color: "#E8E4DC", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                          {usd(Number(c.total_revenue) || 0)} <span style={{ color: "#444" }}>· {c.total_events || 0}j</span>
+                        </span>
+                      </div>
+                      <div style={{ height: 4, background: "#141414", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${((Number(c.total_revenue) || 0) / maxClientRev * 100).toFixed(1)}%`, background: "#34D399" }} />
+                      </div>
                     </div>
-                  )) : <div style={{ fontSize: 10, color: "#333" }}>No industry tags yet — enrich client records.</div>}
+                  ))}
                 </div>
-                <div style={{ flex: "1 1 200px", background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
-                  <div style={{ fontSize: 9, color: "#A78BFA", letterSpacing: "2px", marginBottom: 14 }}>TOP VENUES</div>
-                  {topVenuesList.length > 0 ? topVenuesList.map(([v, n]) => (
-                    <div key={v} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9, gap: 8 }}>
-                      <span style={{ fontSize: 11, color: "#A8A4A0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v}</span>
-                      <span style={{ fontSize: 9, color: "#A78BFA", background: "#A78BFA15", padding: "2px 8px", borderRadius: 10, flexShrink: 0 }}>{n}</span>
+
+                <div style={{ flex: "1 1 240px", background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
+                  <div style={{ fontSize: 9, color: "#A78BFA", letterSpacing: "2px", marginBottom: 14 }}>BOOKED BY YEAR</div>
+                  {years.length ? years.map(([y, v]) => (
+                    <div key={y} style={{ marginBottom: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+                        <span style={{ color: "#A8A4A0" }}>{y}</span>
+                        <span style={{ color: "#E8E4DC", fontVariantNumeric: "tabular-nums" }}>
+                          {usd(v.rev)} <span style={{ color: "#444" }}>· {v.jobs}j</span>
+                        </span>
+                      </div>
+                      <div style={{ height: 4, background: "#141414", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${(v.rev / maxYearRev * 100).toFixed(1)}%`, background: "#A78BFA" }} />
+                      </div>
                     </div>
-                  )) : <div style={{ fontSize: 10, color: "#333" }}>Add projects with venue names to see patterns.</div>}
+                  )) : <div style={{ fontSize: 10, color: "#333" }}>No dated projects yet.</div>}
                 </div>
+              </div>
+            )}
+
+            {/* Win-back: clients who paid before and have gone quiet */}
+            {winback.length > 0 && (
+              <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderLeft: "3px solid #FB923C", borderRadius: 8, padding: "16px 18px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
+                  <span style={{ fontSize: 9, color: "#FB923C", letterSpacing: "2px" }}>◇ WIN-BACK · NO BOOKING IN 12 MONTHS</span>
+                  <span style={{ fontSize: 9, color: "#666" }}>{winback.length} clients · {usd(winbackValue)} of past business</span>
+                </div>
+                <div style={{ fontSize: 10, color: "#555", marginBottom: 14 }}>They already bought from you once. Warmer than anything the Scout finds cold.</div>
+                {winback.slice(0, 10).map(c => (
+                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: "1px solid #131313", fontSize: 11, flexWrap: "wrap" }}>
+                    <span style={{ color: "#A8A4A0", flex: "1 1 150px" }}>
+                      {c.name}
+                      {(c.contact_email || c.location) && (
+                        <span style={{ color: "#555", fontSize: 10 }}> · {c.contact_email || c.location}</span>
+                      )}
+                    </span>
+                    <span style={{ color: "#E8E4DC", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                      {usd(Number(c.total_revenue) || 0)}
+                      <span style={{ color: "#444" }}> · last {c.last_event_date || "—"}</span>
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -8368,6 +8453,18 @@ export default function FFTank() {
     },
     insert(table, data) { return this._req("POST", table, data, null); },
     select(table, filters) { return this._req("GET", table, null, filters); },
+    // PostgREST caps a response at 1,000 rows, so plain select() silently truncates any table
+    // bigger than that (flex_projects is 2,035; opportunities is 7,300+). Page until exhausted.
+    async selectAll(table, filters, pageSize = 1000) {
+      const out = [];
+      for (let offset = 0; offset < 100000; offset += pageSize) {
+        const page = await this._req("GET", table, null, { ...(filters || {}), limit: pageSize, offset });
+        if (!Array.isArray(page) || page.length === 0) break;
+        out.push(...page);
+        if (page.length < pageSize) break;
+      }
+      return out;
+    },
     update(table, id, data) { return this._req("PATCH", table, data, { id: `eq.${id}` }); },
     delete(table, id) { return this._req("DELETE", table, null, { id: `eq.${id}` }); },
   };
