@@ -2480,11 +2480,11 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
         {!hasData && <div style={{ fontSize: 10, color: "#333", padding: "20px 0" }}>Sync Flex data first to generate insights.</div>}
         {hasData && !content && !isGen && (
           <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "24px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 10, color: "#444" }}>Click Generate to analyze {clients.length} clients · {projects.length} projects · {venues.length} venues</div>
+            <div style={{ fontSize: 10, color: "#444" }}>Click Generate to analyze {billed.length} billed clients · {projects.length} projects</div>
             <div style={{ fontSize: 9, color: "#333" }}>Uses Claude to surface patterns and strategic recommendations from your historical data.</div>
           </div>
         )}
-        {isGen && <div style={{ fontSize: 10, color: "#555", padding: "20px 0" }}>◌ Analyzing {clients.length} clients across all historical records…</div>}
+        {isGen && <div style={{ fontSize: 10, color: "#555", padding: "20px 0" }}>◌ Analyzing {billed.length} billed clients across all historical records…</div>}
         {content && !isGen && (
           <>
             <pre style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.85, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{content}</pre>
@@ -2583,7 +2583,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
               <div style={{ padding: "16px 18px" }}>
                 {!hasData && <div style={{ fontSize: 10, color: "#333" }}>Sync Flex data first.</div>}
                 {hasData && !insights.overview && generating !== "overview" && <div style={{ fontSize: 10, color: "#444" }}>Generate an executive summary of your historical client work, top patterns, and strategic positioning.</div>}
-                {generating === "overview" && <div style={{ fontSize: 10, color: "#555" }}>◌ Analyzing {clients.length} clients across all sectors…</div>}
+                {generating === "overview" && <div style={{ fontSize: 10, color: "#555" }}>◌ Analyzing {billed.length} billed clients across all sectors…</div>}
                 {insights.overview && generating !== "overview" && <pre style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.8, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{insights.overview}</pre>}
               </div>
             </div>
