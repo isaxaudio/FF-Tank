@@ -713,6 +713,7 @@ function leadQuality(o) {
 // #ff-leads for Taylor with the outreach draft attached.
 function LeadHandoffView({ db }) {
   const [rows, setRows] = React.useState([]);
+  const [totals, setTotals] = React.useState({ scanned: null, contacted: 0, archived: 0, loaded: 0 });
   const [loading, setLoading] = React.useState(true);
   const [cat, setCat] = React.useState("worthy");
   const [sending, setSending] = React.useState({});
@@ -759,12 +760,33 @@ function LeadHandoffView({ db }) {
     finally { setEnriching(p => ({ ...p, [o.id]: false })); setTimeout(() => setToast(null), 4500); }
   }
 
+  // `opportunities` is 7,400+ rows and PostgREST caps a response at 1,000, so loading the table
+  // and filtering in the browser silently hid ~85% of the queue. Filter server-side to the rows
+  // that could plausibly qualify, and fetch the funnel totals as counts rather than rows.
+  const OPEN_Q = "or(status.is.null,status.in.(new,priority))";
+  // Venue calendars are deliberately scored low, so they'd never survive the score gate — but the
+  // "Sources to mine" section needs them. Pull them on their own, without the score filter.
+  const VENUE_Q = "or(source.ilike.*calendar*,source.ilike.*eventbrite*,source.ilike.*allevents*," +
+                  "source.ilike.*10times*,source.ilike.*bizzabo*,source.ilike.*pccticketing*)";
+
   React.useEffect(() => { (async () => {
     setLoading(true);
-    // Keep handled rows in `rows` — isSendWorthy already gates the queue on LEAD_OPEN, and the
-    // funnel below needs the sent/archived ones to report real counts instead of session-only ones.
-    try { const d = await db.select("opportunities", { order: "created_at.desc", "created_at": "gte.2026-01-01" }); setRows(Array.isArray(d) ? d : []); }
-    catch (e) { setRows([]); }
+    try {
+      const [cands, venues, total, contacted, archived] = await Promise.all([
+        db.selectAll("opportunities", {
+          order: "created_at.desc",
+          and: `(${OPEN_Q},or(overall_score.gte.5,overall_score.is.null))`,
+        }),
+        db.selectAll("opportunities", { order: "created_at.desc", and: `(${OPEN_Q},${VENUE_Q})` }),
+        db.count("opportunities", {}),
+        db.count("opportunities", { status: "eq.contacted" }),
+        db.count("opportunities", { status: "eq.archived" }),
+      ]);
+      const byId = new Map();
+      [...(cands || []), ...(venues || [])].forEach(o => byId.set(o.id, o));
+      setRows([...byId.values()]);
+      setTotals({ scanned: total, contacted: contacted || 0, archived: archived || 0, loaded: byId.size });
+    } catch (e) { console.error("lead queue load failed:", e); setRows([]); }
     setLoading(false);
   })(); }, []);
 
@@ -836,10 +858,10 @@ function LeadHandoffView({ db }) {
   // Real counts, not session-only: send marks the row `contacted` server-side and skip marks it
   // `archived`, so these now survive a reload. Union with this session's ids because `rows` still
   // holds the pre-send status until the next load.
-  const sentIds = new Set(Object.keys(sent));
-  rows.forEach(o => { if (o.status === "contacted") sentIds.add(String(o.id)); });
-  const sentCount = sentIds.size;
-  const skippedCount = rows.filter(o => o.status === "archived").length;
+  // Counted server-side: handled rows are filtered out of `rows` by the query, so they can't be
+  // tallied from it. Union with this session's sends, which the counts won't reflect until reload.
+  const sentCount = Math.max(totals.contacted, 0) + Object.keys(sent).filter(id => !rows.some(r => String(r.id) === id && r.status === "contacted")).length;
+  const skippedCount = totals.archived;
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px 80px" }}>
@@ -850,7 +872,10 @@ function LeadHandoffView({ db }) {
       {/* Header */}
       <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 4 }}>Lead Handoff</div>
       <div style={{ color: "#9aa0a9", fontSize: 13, marginBottom: 22 }}>
-        {loading ? "Loading signals…" : <>{rows.length} scanned · <span style={{ color: "#34D399" }}>{allWorthy.length} upcoming &amp; send-worthy</span> across UT·NV·ID·SoCal·AZ · past events &amp; {hidden} junk hidden{skippedCount ? ` · ${skippedCount} skipped` : ""}.</>}
+        {loading ? "Loading signals…" : <>
+          {(totals.scanned ?? rows.length).toLocaleString()} scanned · <span style={{ color: "#34D399" }}>{allWorthy.length} upcoming &amp; send-worthy</span> across UT·NV·ID·SoCal·AZ ·
+          {" "}{totals.scanned ? `${(totals.scanned - totals.loaded).toLocaleString()} low-fit filtered before download` : "filtered"} · {hidden} more hidden here{skippedCount ? ` · ${skippedCount} skipped` : ""}.
+        </>}
       </div>
 
       {/* Funnel strip */}
@@ -8455,6 +8480,20 @@ export default function FFTank() {
     select(table, filters) { return this._req("GET", table, null, filters); },
     // PostgREST caps a response at 1,000 rows, so plain select() silently truncates any table
     // bigger than that (flex_projects is 2,035; opportunities is 7,300+). Page until exhausted.
+    // Exact row count without downloading the rows — reads PostgREST's Content-Range header.
+    count(table, filters) {
+      const url = supabaseUrl || localStorage.getItem("supabaseUrl") || "";
+      const key = supabaseAnonKey || localStorage.getItem("supabaseAnonKey") || "";
+      if (!url || !key) return Promise.resolve(null);
+      const qs = "?" + new URLSearchParams({ select: "id", ...(filters || {}) }).toString();
+      return fetch(`${url.replace(/\/$/, "")}/rest/v1/${table}${qs}`, {
+        headers: { "apikey": key, "Authorization": `Bearer ${key}`, "Prefer": "count=exact", "Range": "0-0" },
+      }).then(r => {
+        const cr = r.headers.get("content-range") || "";
+        const n = parseInt(cr.split("/")[1], 10);
+        return Number.isFinite(n) ? n : null;
+      }).catch(() => null);
+    },
     async selectAll(table, filters, pageSize = 1000) {
       const out = [];
       for (let offset = 0; offset < 100000; offset += pageSize) {
