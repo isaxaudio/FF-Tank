@@ -1063,6 +1063,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
   const [expandedRow, setExpandedRow] = useState(null);
   const [showExpired, setShowExpired] = useState(false);
   const [sendWorthyOnly, setSendWorthyOnly] = useState(true); // review queue: hide junk by default
+  const [totalSignals, setTotalSignals] = useState(null);   // true row count, not the page cap
   const [qualifyRunning, setQualifyRunning] = useState(false);
   const [brief, setBrief] = useState(null);           // { run, opps }
   const [briefDismissed, setBriefDismissed] = useState(false);
@@ -1084,12 +1085,22 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
   const [newTarget, setNewTarget] = useState({ name: "", domain: "", industry: "", notes: "" });
   const [addingTarget, setAddingTarget] = useState(false);
 
-  async function load() {
+  // opportunities is 7,400+ rows against PostgREST's 1,000-row response cap, so a plain select()
+  // showed an arbitrary first page and called it the whole table. With "send-worthy only" on (the
+  // default) the gate runs server-side; toggling to "show all signals" pages the full table.
+  async function load(worthyOnly = sendWorthyOnly) {
     setLoading(true);
     setError(null);
     try {
-      const data = await db.select("opportunities", { order: "created_at.desc", "created_at": "gte.2026-01-01" });
+      const filters = worthyOnly
+        ? { order: "created_at.desc", and: "(or(status.is.null,status.in.(new,priority)),or(overall_score.gte.5,overall_score.is.null))" }
+        : { order: "created_at.desc", "created_at": "gte.2026-01-01" };
+      const [data, total] = await Promise.all([
+        db.selectAll("opportunities", filters),
+        db.count("opportunities", {}),
+      ]);
       setRows(Array.isArray(data) ? data : []);
+      setTotalSignals(total);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -1196,6 +1207,12 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
   }
 
   useEffect(() => { load(); loadBrief(); }, []);
+  // The send-worthy gate is applied in the query, so flipping it needs a refetch.
+  const firstLoad = useRef(true);
+  useEffect(() => {
+    if (firstLoad.current) { firstLoad.current = false; return; }
+    load(sendWorthyOnly);
+  }, [sendWorthyOnly]);
 
   async function runCron(name) {
     // Route through VPS bridge → OpenClaw skill (fire-and-forget).
@@ -1788,7 +1805,9 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
               <button onClick={() => setSendWorthyOnly(s => !s)}
                 title="Show only real, send-worthy leads (hides raw-scout junk with no company)"
                 style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${sendWorthyOnly ? "#34D39960" : "#1A1A1A"}`, background: sendWorthyOnly ? "#34D39912" : "transparent", color: sendWorthyOnly ? "#34D399" : "#555", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
-                {sendWorthyOnly ? `✓ send-worthy only${hiddenJunk > 0 ? ` · ${hiddenJunk} junk hidden` : ""}` : "show all signals"}
+                {sendWorthyOnly
+                  ? `✓ send-worthy only${totalSignals ? ` · ${(totalSignals - rows.length).toLocaleString()} low-fit filtered` : ""}${hiddenJunk > 0 ? ` · ${hiddenJunk} junk hidden` : ""}`
+                  : `show all signals${totalSignals ? ` · ${totalSignals.toLocaleString()} total` : ""}`}
               </button>
               <button onClick={() => setShowExpired(s => !s)}
                 style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${showExpired ? "#FF6B6B40" : "#1A1A1A"}`, background: showExpired ? "#FF6B6B12" : "transparent", color: showExpired ? "#FF6B6B" : "#444", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
