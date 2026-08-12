@@ -1029,13 +1029,17 @@ function TargetAccountsView({ db }) {
   }
   React.useEffect(() => { load(); }, []);
 
+  // cron-scout scans `target_accounts?status=eq.active` — `is_monitored` is decorative and nothing
+  // reads it, so the toggle drives `status`. Otherwise the badge claims monitoring that never runs.
+  const isMonitored = a => a.status === "active";
+
   async function toggleMonitor(a) {
     setBusy(p => ({ ...p, [a.id]: true }));
-    const next = !a.is_monitored;
+    const next = isMonitored(a) ? "target" : "active";
     try {
-      await db.update("target_accounts", a.id, { is_monitored: next });
-      setRows(rs => rs.map(r => r.id === a.id ? { ...r, is_monitored: next } : r));
-      setToast({ ok: true, msg: `${a.name} ${next ? "added to" : "removed from"} Scout monitoring` });
+      await db.update("target_accounts", a.id, { status: next, is_monitored: next === "active" });
+      setRows(rs => rs.map(r => r.id === a.id ? { ...r, status: next, is_monitored: next === "active" } : r));
+      setToast({ ok: true, msg: `${a.name} ${next === "active" ? "added to" : "removed from"} the Scout scan list` });
     } catch (e) { setToast({ ok: false, msg: e.message }); }
     finally { setBusy(p => ({ ...p, [a.id]: false })); setTimeout(() => setToast(null), 3500); }
   }
@@ -1062,7 +1066,7 @@ function TargetAccountsView({ db }) {
     return hay.indexOf(ql) > -1;
   });
 
-  const monitored = rows.filter(r => r.is_monitored).length;
+  const monitored = rows.filter(isMonitored).length;
   const withContact = rows.filter(r => contactsOf(r).length).length;
   const clients = rows.filter(r => r.existing_relationship || r.tier === "existing_client").length;
 
@@ -1081,7 +1085,7 @@ function TargetAccountsView({ db }) {
       <div style={{ padding: "14px 20px", borderBottom: "1px solid #111", flexShrink: 0 }}>
         <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: "#4ECDC4" }}>Target Accounts</div>
         <div style={{ fontSize: 9, color: "#444" }}>
-          {loading ? "loading…" : `${rows.length} accounts · ${withContact} with a named contact · ${monitored} monitored by Scout`}
+          {loading ? "loading…" : `${rows.length} accounts · ${withContact} with a named contact · ${monitored} on the Scout scan list`}
         </div>
       </div>
 
@@ -1097,7 +1101,7 @@ function TargetAccountsView({ db }) {
             { n: tCounts.target_a || 0, l: "Tier A", c: "#34D399" },
             { n: tCounts.target_b || 0, l: "Tier B", c: "#A78BFA" },
             { n: clients, l: "Existing clients", c: "#FB923C" },
-            { n: monitored, l: "Monitored", c: "#F7C948" }].map(s => (
+            { n: monitored, l: "Scout scanning", c: "#F7C948" }].map(s => (
             <div key={s.l} style={{ flex: "1 1 110px", minWidth: 100, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px" }}>
               <div style={{ fontSize: 24, fontWeight: 700, color: s.c, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loading ? "—" : s.n}</div>
               <div style={{ fontSize: 9, color: "#444", letterSpacing: "1.4px", marginTop: 6, textTransform: "uppercase" }}>{s.l}</div>
@@ -1158,9 +1162,9 @@ function TargetAccountsView({ db }) {
                 {a.why_fit && <div style={{ fontSize: 9.5, color: "#555", marginTop: 8, lineHeight: 1.6 }}>{a.why_fit}</div>}
                 <button onClick={() => toggleMonitor(a)} disabled={!!busy[a.id]}
                   style={{ marginTop: 10, fontSize: 9, padding: "4px 10px", borderRadius: 5, cursor: busy[a.id] ? "wait" : "pointer", fontFamily: "inherit",
-                    border: `1px solid ${a.is_monitored ? "#34D39940" : "#1A1A1A"}`,
-                    background: a.is_monitored ? "#34D39910" : "transparent", color: a.is_monitored ? "#34D399" : "#555" }}>
-                  {a.is_monitored ? "✓ Scout monitoring" : "+ Monitor"}
+                    border: `1px solid ${isMonitored(a) ? "#34D39940" : "#1A1A1A"}`,
+                    background: isMonitored(a) ? "#34D39910" : "transparent", color: isMonitored(a) ? "#34D399" : "#555" }}>
+                  {isMonitored(a) ? "✓ Scout scanning" : "+ Add to scan list"}
                 </button>
               </div>
             );
