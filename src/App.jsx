@@ -991,6 +991,186 @@ function LeadHandoffView({ db }) {
   );
 }
 
+// Target Accounts — the named-account list the Scout can't discover on its own.
+// Corporate internal events never surface as RFPs or public listings, so this market has to be
+// targeted deliberately rather than found. Reads target_accounts; extra contacts live in
+// metadata.contacts because the table only has one contact_name/contact_title pair.
+const TA_VERTICALS = {
+  fintech:     { label: "Fintech",        color: "#34D399" },
+  saas:        { label: "Vertical SaaS",  color: "#A78BFA" },
+  directsales: { label: "Direct sales",   color: "#FB923C" },
+  health:      { label: "Health/medtech", color: "#4ECDC4" },
+  enterprise:  { label: "Enterprise",     color: "#8A8578" },
+  edu:         { label: "Higher ed",      color: "#F7C948" },
+  other:       { label: "Other",          color: "#8A8578" },
+};
+const TA_TIERS = {
+  existing_client: { label: "client",    color: "#FB923C" },
+  warm:            { label: "warm",      color: "#F7C948" },
+  target_a:        { label: "target A",  color: "#34D399" },
+  target_b:        { label: "target B",  color: "#A78BFA" },
+  watchlist:       { label: "watchlist", color: "#626873" },
+};
+
+function TargetAccountsView({ db }) {
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [q, setQ] = React.useState("");
+  const [vert, setVert] = React.useState("");
+  const [tier, setTier] = React.useState("");
+  const [busy, setBusy] = React.useState({});
+  const [toast, setToast] = React.useState(null);
+
+  async function load() {
+    setLoading(true);
+    try { setRows(await db.selectAll("target_accounts", { order: "created_at.desc" }) || []); }
+    catch (e) { console.error("target accounts load failed:", e); setRows([]); }
+    setLoading(false);
+  }
+  React.useEffect(() => { load(); }, []);
+
+  async function toggleMonitor(a) {
+    setBusy(p => ({ ...p, [a.id]: true }));
+    const next = !a.is_monitored;
+    try {
+      await db.update("target_accounts", a.id, { is_monitored: next });
+      setRows(rs => rs.map(r => r.id === a.id ? { ...r, is_monitored: next } : r));
+      setToast({ ok: true, msg: `${a.name} ${next ? "added to" : "removed from"} Scout monitoring` });
+    } catch (e) { setToast({ ok: false, msg: e.message }); }
+    finally { setBusy(p => ({ ...p, [a.id]: false })); setTimeout(() => setToast(null), 3500); }
+  }
+
+  const contactsOf = a => {
+    const extra = a.metadata && Array.isArray(a.metadata.contacts) ? a.metadata.contacts : [];
+    if (extra.length) return extra;
+    return a.contact_name ? [{ name: a.contact_name, title: a.contact_title }] : [];
+  };
+
+  const vCounts = {}, tCounts = {};
+  rows.forEach(r => {
+    if (r.vertical) vCounts[r.vertical] = (vCounts[r.vertical] || 0) + 1;
+    if (r.tier) tCounts[r.tier] = (tCounts[r.tier] || 0) + 1;
+  });
+
+  const ql = q.trim().toLowerCase();
+  const list = rows.filter(r => {
+    if (vert && r.vertical !== vert) return false;
+    if (tier && r.tier !== tier) return false;
+    if (!ql) return true;
+    const hay = [r.name, r.company_name, r.city, r.vertical, r.contact_name, r.contact_title,
+      ...contactsOf(r).map(c => `${c.name} ${c.title}`)].join(" ").toLowerCase();
+    return hay.indexOf(ql) > -1;
+  });
+
+  const monitored = rows.filter(r => r.is_monitored).length;
+  const withContact = rows.filter(r => contactsOf(r).length).length;
+  const clients = rows.filter(r => r.existing_relationship || r.tier === "existing_client").length;
+
+  const chip = (active, color, label, onClick, key) => (
+    <button key={key} onClick={onClick}
+      style={{ fontSize: 9, letterSpacing: "0.5px", padding: "4px 11px", borderRadius: 999, cursor: "pointer",
+        fontFamily: "inherit", textTransform: "uppercase",
+        border: `1px solid ${active ? color + "70" : "#1A1A1A"}`,
+        background: active ? color + "14" : "transparent", color: active ? color : "#555" }}>
+      {label}
+    </button>
+  );
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "14px 20px", borderBottom: "1px solid #111", flexShrink: 0 }}>
+        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: "#4ECDC4" }}>Target Accounts</div>
+        <div style={{ fontSize: 9, color: "#444" }}>
+          {loading ? "loading…" : `${rows.length} accounts · ${withContact} with a named contact · ${monitored} monitored by Scout`}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "22px 24px 70px" }}>
+        {toast && (
+          <div style={{ position: "fixed", top: 66, right: 26, zIndex: 60, fontSize: 10, padding: "8px 14px", borderRadius: 7,
+            background: toast.ok ? "#34D39912" : "#FF6B6B12", border: `1px solid ${toast.ok ? "#34D39940" : "#FF6B6B40"}`,
+            color: toast.ok ? "#34D399" : "#FF6B6B" }}>{toast.msg}</div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+          {[{ n: rows.length, l: "Accounts", c: "#4ECDC4" },
+            { n: tCounts.target_a || 0, l: "Tier A", c: "#34D399" },
+            { n: tCounts.target_b || 0, l: "Tier B", c: "#A78BFA" },
+            { n: clients, l: "Existing clients", c: "#FB923C" },
+            { n: monitored, l: "Monitored", c: "#F7C948" }].map(s => (
+            <div key={s.l} style={{ flex: "1 1 110px", minWidth: 100, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: s.c, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loading ? "—" : s.n}</div>
+              <div style={{ fontSize: 9, color: "#444", letterSpacing: "1.4px", marginTop: 6, textTransform: "uppercase" }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderLeft: "3px solid #34D399", borderRadius: 8, padding: "13px 16px", marginBottom: 18, fontSize: 11, color: "#8A8578", lineHeight: 1.7 }}>
+          <span style={{ color: "#E8E4DC" }}>Corporate internal events never appear as RFPs or public listings</span> — the Scout structurally can't find this market, so it has to be targeted. Entry pattern that works: LoanPro opened at $36k and booked $99,573 a year later; Socure opened at $1,733 and booked $96,538 ten days later. Lead with the sales kickoff, not the flagship.
+        </div>
+
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search company, person, title, city…"
+            style={{ flex: 1, minWidth: 200, fontSize: 11, padding: "7px 11px", background: "rgba(4,14,34,0.62)", color: "#E8E4DC", border: "1px solid #1A1A1A", borderRadius: 6, fontFamily: "inherit" }} />
+          <span style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{list.length} shown</span>
+        </div>
+
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+          {chip(!vert, "#E8E4DC", `all ${rows.length}`, () => setVert(""), "v-all")}
+          {Object.keys(TA_VERTICALS).filter(v => vCounts[v]).map(v =>
+            chip(vert === v, TA_VERTICALS[v].color, `${TA_VERTICALS[v].label} ${vCounts[v]}`, () => setVert(vert === v ? "" : v), "v-" + v))}
+        </div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 18 }}>
+          {chip(!tier, "#E8E4DC", "any tier", () => setTier(""), "t-all")}
+          {Object.keys(TA_TIERS).filter(t => tCounts[t]).map(t =>
+            chip(tier === t, TA_TIERS[t].color, `${TA_TIERS[t].label} ${tCounts[t]}`, () => setTier(tier === t ? "" : t), "t-" + t))}
+        </div>
+
+        {loading && <div style={{ fontSize: 10, color: "#444" }}>loading accounts…</div>}
+        {!loading && !list.length && <div style={{ fontSize: 10, color: "#444", padding: "26px 0", textAlign: "center" }}>Nothing matches that filter.</div>}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 9 }}>
+          {list.map(a => {
+            const v = TA_VERTICALS[a.vertical] || TA_VERTICALS.other;
+            const t = TA_TIERS[a.tier] || null;
+            const people = contactsOf(a);
+            const isClient = a.existing_relationship || a.tier === "existing_client";
+            return (
+              <div key={a.id} style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A",
+                borderLeft: isClient ? "3px solid #FB923C" : "1px solid #1A1A1A", borderRadius: 9, padding: "13px 15px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "#E8E4DC" }}>{a.name}</span>
+                  <span style={{ fontSize: 9, color: "#555", whiteSpace: "nowrap" }}>{a.city || ""}</span>
+                </div>
+                <div style={{ display: "flex", gap: 5, margin: "7px 0 9px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 8.5, letterSpacing: "0.7px", textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, border: `1px solid ${v.color}50`, color: v.color }}>{v.label}</span>
+                  {t && <span style={{ fontSize: 8.5, letterSpacing: "0.7px", textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, border: `1px solid ${t.color}50`, color: t.color }}>{t.label}</span>}
+                </div>
+                {people.length ? people.slice(0, 4).map((p, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "3px 0", borderTop: i ? "1px solid #141414" : "none", fontSize: 10.5 }}>
+                    <span style={{ color: "#A8A4A0", whiteSpace: "nowrap" }}>{p.name}</span>
+                    <span style={{ color: "#626873", textAlign: "right" }}>{p.title}</span>
+                  </div>
+                )) : <div style={{ fontSize: 10, color: "#3a3a3a" }}>no named contact yet</div>}
+                {isClient && a.relationship_notes && (
+                  <div style={{ fontSize: 9.5, color: "#FB923C", marginTop: 8 }}>◆ {a.relationship_notes}</div>
+                )}
+                {a.why_fit && <div style={{ fontSize: 9.5, color: "#555", marginTop: 8, lineHeight: 1.6 }}>{a.why_fit}</div>}
+                <button onClick={() => toggleMonitor(a)} disabled={!!busy[a.id]}
+                  style={{ marginTop: 10, fontSize: 9, padding: "4px 10px", borderRadius: 5, cursor: busy[a.id] ? "wait" : "pointer", fontFamily: "inherit",
+                    border: `1px solid ${a.is_monitored ? "#34D39940" : "#1A1A1A"}`,
+                    background: a.is_monitored ? "#34D39910" : "transparent", color: a.is_monitored ? "#34D399" : "#555" }}>
+                  {a.is_monitored ? "✓ Scout monitoring" : "+ Monitor"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
   const [activeTab, setActiveTab] = useState("signals"); // "signals" | "targets" | "find"
 
@@ -9406,6 +9586,15 @@ Cite URLs.`;
                 )}
               </div>
             </div>
+            <div className="agent-pill" onClick={() => setActiveId("targets")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"targets" === activeId ? "#4ECDC450" : "#111"}`, background: "targets" === activeId ? "#4ECDC408" : "transparent" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13 }}>◇</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: "targets" === activeId ? "#4ECDC4" : "#A8A4A0" }}>Target Accounts</div>
+                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>named accounts · contacts</div>
+                </div>
+              </div>
+            </div>
             <div className="agent-pill" onClick={() => setActiveId("flex")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"flex" === activeId ? "#FB923C50" : "#111"}`, background: "flex" === activeId ? "#FB923C0A" : "transparent" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 13 }}>◐</span>
@@ -9512,6 +9701,8 @@ Cite URLs.`;
             <LeadHandoffView db={db} />
           ) : activeId === "opportunities" ? (
             <OpportunitiesView db={db} tavilyKey={tavilyKey} vpsUrl={vpsUrl} agentSecret={agentSecret} />
+          ) : activeId === "targets" ? (
+            <TargetAccountsView db={db} />
           ) : activeId === "flex" ? (
             <FlexView db={db} flexApiKey={flexApiKey} onNavigate={setActiveId} apolloKey={apolloKey} />
           ) : activeId === "brain" ? (
