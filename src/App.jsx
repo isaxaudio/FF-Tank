@@ -995,22 +995,28 @@ function LeadHandoffView({ db }) {
 // Corporate internal events never surface as RFPs or public listings, so this market has to be
 // targeted deliberately rather than found. Reads target_accounts; extra contacts live in
 // metadata.contacts because the table only has one contact_name/contact_title pair.
+// Target Accounts — the named-account list the Scout can't discover on its own.
+// Corporate internal events never surface as RFPs or public listings, so this market has to be
+// targeted deliberately. Reads target_accounts; extra contacts live in metadata.contacts because
+// the table only has one contact_name/contact_title pair.
 const TA_VERTICALS = {
-  fintech:     { label: "Fintech",        color: "#34D399" },
-  saas:        { label: "Vertical SaaS",  color: "#A78BFA" },
-  directsales: { label: "Direct sales",   color: "#FB923C" },
-  health:      { label: "Health/medtech", color: "#4ECDC4" },
-  enterprise:  { label: "Enterprise",     color: "#8A8578" },
-  edu:         { label: "Higher ed",      color: "#F7C948" },
-  other:       { label: "Other",          color: "#8A8578" },
+  fintech:     { label: "Fintech",        color: "#34D399", why: "Same profile as LoanPro ($171k) and Socure ($113k) — both opened small and grew to six figures within a year." },
+  saas:        { label: "Vertical SaaS",  color: "#A78BFA", why: "Mid-market SaaS staffs a field/event marketer rather than an events department — no entrenched AV incumbent." },
+  directsales: { label: "Direct sales",   color: "#FB923C", why: "Largest event budgets in Utah. These staff VP-level global events where tech staffs event marketers. Modere is a dormant client here." },
+  health:      { label: "Health/medtech", color: "#4ECDC4", why: "Recurring conference and exhibit calendar." },
+  enterprise:  { label: "Enterprise",     color: "#8A8578", why: "Likely held by Webb or Cornerstone on the flagship. Approach on second-tier events — kickoff, roadshow, partner day." },
+  edu:         { label: "Higher ed",      color: "#F7C948", why: "Adjacent to the WGU and Juan Diego strength." },
+  other:       { label: "Other",          color: "#8A8578", why: "Large regional employers with a standing internal event calendar." },
 };
+// Ordered by how much attention each deserves — drives the default sort.
 const TA_TIERS = {
-  existing_client: { label: "client",    color: "#FB923C" },
-  warm:            { label: "warm",      color: "#F7C948" },
-  target_a:        { label: "target A",  color: "#34D399" },
-  target_b:        { label: "target B",  color: "#A78BFA" },
-  watchlist:       { label: "watchlist", color: "#626873" },
+  existing_client: { label: "client",    color: "#FB923C", rank: 0 },
+  target_a:        { label: "target A",  color: "#34D399", rank: 1 },
+  target_b:        { label: "target B",  color: "#A78BFA", rank: 2 },
+  warm:            { label: "warm",      color: "#F7C948", rank: 3 },
+  watchlist:       { label: "watchlist", color: "#626873", rank: 4 },
 };
+const TA_PAGE = 60;
 
 function TargetAccountsView({ db }) {
   const [rows, setRows] = React.useState([]);
@@ -1018,6 +1024,10 @@ function TargetAccountsView({ db }) {
   const [q, setQ] = React.useState("");
   const [vert, setVert] = React.useState("");
   const [tier, setTier] = React.useState("");
+  const [onlyContact, setOnlyContact] = React.useState(false);
+  const [onlyScanning, setOnlyScanning] = React.useState(false);
+  const [sort, setSort] = React.useState("priority");
+  const [shown, setShown] = React.useState(TA_PAGE);
   const [busy, setBusy] = React.useState({});
   const [toast, setToast] = React.useState(null);
 
@@ -1030,7 +1040,7 @@ function TargetAccountsView({ db }) {
   React.useEffect(() => { load(); }, []);
 
   // cron-scout scans `target_accounts?status=eq.active` — `is_monitored` is decorative and nothing
-  // reads it, so the toggle drives `status`. Otherwise the badge claims monitoring that never runs.
+  // reads it, so the toggle drives `status`. Otherwise the badge claims a scan that never runs.
   const isMonitored = a => a.status === "active";
 
   async function toggleMonitor(a) {
@@ -1045,30 +1055,65 @@ function TargetAccountsView({ db }) {
   }
 
   const contactsOf = a => {
-    const extra = a.metadata && Array.isArray(a.metadata.contacts) ? a.metadata.contacts : [];
-    if (extra.length) return extra;
+    const extra = a.metadata && Array.isArray(a.metadata.contacts) ? a.metadata.contacts : null;
+    if (extra && extra.length) return extra;
     return a.contact_name ? [{ name: a.contact_name, title: a.contact_title }] : [];
   };
+  const liSearch = (person, company) =>
+    "https://www.linkedin.com/search/results/people/?keywords=" + encodeURIComponent(`${person} ${company}`);
+
+  // The table carries duplicate rows for some companies (Real Salt Lake x4, Podium x3…). Collapse
+  // by name and keep the richest record so the list doesn't show the same account repeatedly.
+  const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const merged = React.useMemo(() => {
+    const by = new Map();
+    rows.forEach(r => {
+      const k = norm(r.name || r.company_name);
+      if (!k) return;
+      const prev = by.get(k);
+      const score = contactsOf(r).length * 10 + (isMonitored(r) ? 5 : 0) + (r.tier ? 2 : 0) + (r.why_fit ? 1 : 0);
+      if (!prev || score > prev._score) by.set(k, { ...r, _score: score, _dupes: (prev ? prev._dupes + 1 : 0) });
+      else by.set(k, { ...prev, _dupes: prev._dupes + 1 });
+    });
+    return [...by.values()];
+  }, [rows]);
 
   const vCounts = {}, tCounts = {};
-  rows.forEach(r => {
+  merged.forEach(r => {
     if (r.vertical) vCounts[r.vertical] = (vCounts[r.vertical] || 0) + 1;
     if (r.tier) tCounts[r.tier] = (tCounts[r.tier] || 0) + 1;
   });
 
   const ql = q.trim().toLowerCase();
-  const list = rows.filter(r => {
+  const filtered = merged.filter(r => {
     if (vert && r.vertical !== vert) return false;
     if (tier && r.tier !== tier) return false;
+    if (onlyContact && !contactsOf(r).length) return false;
+    if (onlyScanning && !isMonitored(r)) return false;
     if (!ql) return true;
-    const hay = [r.name, r.company_name, r.city, r.vertical, r.contact_name, r.contact_title,
-      ...contactsOf(r).map(c => `${c.name} ${c.title}`)].join(" ").toLowerCase();
+    const hay = [r.name, r.city, r.vertical, ...contactsOf(r).map(c => `${c.name} ${c.title}`)].join(" ").toLowerCase();
     return hay.indexOf(ql) > -1;
   });
 
-  const monitored = rows.filter(isMonitored).length;
-  const withContact = rows.filter(r => contactsOf(r).length).length;
-  const clients = rows.filter(r => r.existing_relationship || r.tier === "existing_client").length;
+  const list = React.useMemo(() => {
+    const arr = filtered.slice();
+    const rank = r => (TA_TIERS[r.tier] ? TA_TIERS[r.tier].rank : 9);
+    if (sort === "name") arr.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    else if (sort === "contacts") arr.sort((a, b) => contactsOf(b).length - contactsOf(a).length || String(a.name).localeCompare(String(b.name)));
+    else arr.sort((a, b) =>
+      rank(a) - rank(b) ||
+      (contactsOf(b).length ? 1 : 0) - (contactsOf(a).length ? 1 : 0) ||
+      contactsOf(b).length - contactsOf(a).length ||
+      String(a.name).localeCompare(String(b.name)));
+    return arr;
+  }, [filtered, sort]);
+
+  React.useEffect(() => { setShown(TA_PAGE); }, [q, vert, tier, onlyContact, onlyScanning, sort]);
+
+  const scanning = merged.filter(isMonitored).length;
+  const withContact = merged.filter(r => contactsOf(r).length).length;
+  const clients = merged.filter(r => r.existing_relationship || r.tier === "existing_client").length;
+  const dupes = rows.length - merged.length;
 
   const chip = (active, color, label, onClick, key) => (
     <button key={key} onClick={onClick}
@@ -1082,94 +1127,130 @@ function TargetAccountsView({ db }) {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "14px 20px", borderBottom: "1px solid #111", flexShrink: 0 }}>
-        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: "#4ECDC4" }}>Target Accounts</div>
-        <div style={{ fontSize: 9, color: "#444" }}>
-          {loading ? "loading…" : `${rows.length} accounts · ${withContact} with a named contact · ${monitored} on the Scout scan list`}
+      <div style={{ padding: "12px 20px", borderBottom: "1px solid #111", flexShrink: 0, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: "#4ECDC4" }}>Target Accounts</div>
+          <div style={{ fontSize: 9, color: "#444" }}>
+            {loading ? "loading…" : `${merged.length} accounts · ${withContact} reachable · ${scanning} on the Scout scan list`}
+          </div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {[{ n: tCounts.target_a || 0, l: "tier A", c: "#34D399" },
+            { n: tCounts.target_b || 0, l: "tier B", c: "#A78BFA" },
+            { n: clients, l: "clients", c: "#FB923C" },
+            { n: scanning, l: "scanning", c: "#F7C948" }].map(s => (
+            <div key={s.l} style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: s.c, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loading ? "—" : s.n}</div>
+              <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", textTransform: "uppercase", marginTop: 2 }}>{s.l}</div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "22px 24px 70px" }}>
+      {/* Sticky control bar — filtering is the main job on this page, so it stays reachable */}
+      <div style={{ padding: "10px 20px", borderBottom: "1px solid #111", flexShrink: 0, background: "rgba(4,14,34,0.35)" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search company, person, title, city…"
+            style={{ flex: 1, minWidth: 190, fontSize: 11, padding: "6px 11px", background: "rgba(4,14,34,0.62)", color: "#E8E4DC", border: "1px solid #1A1A1A", borderRadius: 6, fontFamily: "inherit" }} />
+          <select value={sort} onChange={e => setSort(e.target.value)}
+            style={{ fontSize: 10, padding: "6px 9px", background: "rgba(4,14,34,0.62)", color: "#A8A4A0", border: "1px solid #1A1A1A", borderRadius: 6, fontFamily: "inherit" }}>
+            <option value="priority">sort: priority</option>
+            <option value="contacts">sort: most contacts</option>
+            <option value="name">sort: name</option>
+          </select>
+          {chip(onlyContact, "#34D399", "has contact", () => setOnlyContact(v => !v), "f-c")}
+          {chip(onlyScanning, "#F7C948", "scanning", () => setOnlyScanning(v => !v), "f-s")}
+          <span style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{list.length} shown</span>
+        </div>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
+          {chip(!vert, "#E8E4DC", `all ${merged.length}`, () => setVert(""), "v-all")}
+          {Object.keys(TA_VERTICALS).filter(v => vCounts[v]).map(v =>
+            chip(vert === v, TA_VERTICALS[v].color, `${TA_VERTICALS[v].label} ${vCounts[v]}`, () => setVert(vert === v ? "" : v), "v-" + v))}
+        </div>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {chip(!tier, "#E8E4DC", "any tier", () => setTier(""), "t-all")}
+          {Object.keys(TA_TIERS).filter(t => tCounts[t]).map(t =>
+            chip(tier === t, TA_TIERS[t].color, `${TA_TIERS[t].label} ${tCounts[t]}`, () => setTier(tier === t ? "" : t), "t-" + t))}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 70px" }}>
         {toast && (
           <div style={{ position: "fixed", top: 66, right: 26, zIndex: 60, fontSize: 10, padding: "8px 14px", borderRadius: 7,
             background: toast.ok ? "#34D39912" : "#FF6B6B12", border: `1px solid ${toast.ok ? "#34D39940" : "#FF6B6B40"}`,
             color: toast.ok ? "#34D399" : "#FF6B6B" }}>{toast.msg}</div>
         )}
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-          {[{ n: rows.length, l: "Accounts", c: "#4ECDC4" },
-            { n: tCounts.target_a || 0, l: "Tier A", c: "#34D399" },
-            { n: tCounts.target_b || 0, l: "Tier B", c: "#A78BFA" },
-            { n: clients, l: "Existing clients", c: "#FB923C" },
-            { n: monitored, l: "Scout scanning", c: "#F7C948" }].map(s => (
-            <div key={s.l} style={{ flex: "1 1 110px", minWidth: 100, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px" }}>
-              <div style={{ fontSize: 24, fontWeight: 700, color: s.c, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loading ? "—" : s.n}</div>
-              <div style={{ fontSize: 9, color: "#444", letterSpacing: "1.4px", marginTop: 6, textTransform: "uppercase" }}>{s.l}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderLeft: "3px solid #34D399", borderRadius: 8, padding: "13px 16px", marginBottom: 18, fontSize: 11, color: "#8A8578", lineHeight: 1.7 }}>
-          <span style={{ color: "#E8E4DC" }}>Corporate internal events never appear as RFPs or public listings</span> — the Scout structurally can't find this market, so it has to be targeted. Entry pattern that works: LoanPro opened at $36k and booked $99,573 a year later; Socure opened at $1,733 and booked $96,538 ten days later. Lead with the sales kickoff, not the flagship.
-        </div>
-
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search company, person, title, city…"
-            style={{ flex: 1, minWidth: 200, fontSize: 11, padding: "7px 11px", background: "rgba(4,14,34,0.62)", color: "#E8E4DC", border: "1px solid #1A1A1A", borderRadius: 6, fontFamily: "inherit" }} />
-          <span style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{list.length} shown</span>
-        </div>
-
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
-          {chip(!vert, "#E8E4DC", `all ${rows.length}`, () => setVert(""), "v-all")}
-          {Object.keys(TA_VERTICALS).filter(v => vCounts[v]).map(v =>
-            chip(vert === v, TA_VERTICALS[v].color, `${TA_VERTICALS[v].label} ${vCounts[v]}`, () => setVert(vert === v ? "" : v), "v-" + v))}
-        </div>
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 18 }}>
-          {chip(!tier, "#E8E4DC", "any tier", () => setTier(""), "t-all")}
-          {Object.keys(TA_TIERS).filter(t => tCounts[t]).map(t =>
-            chip(tier === t, TA_TIERS[t].color, `${TA_TIERS[t].label} ${tCounts[t]}`, () => setTier(tier === t ? "" : t), "t-" + t))}
-        </div>
+        {/* Rationale belongs to the vertical, not to each card — one line, only when relevant */}
+        {vert && TA_VERTICALS[vert] && (
+          <div style={{ fontSize: 10.5, color: "#8A8578", borderLeft: `2px solid ${TA_VERTICALS[vert].color}60`, paddingLeft: 10, marginBottom: 14, lineHeight: 1.7 }}>
+            {TA_VERTICALS[vert].why}
+          </div>
+        )}
+        {!vert && (
+          <div style={{ fontSize: 10.5, color: "#8A8578", borderLeft: "2px solid #34D39960", paddingLeft: 10, marginBottom: 14, lineHeight: 1.7 }}>
+            The Scout can&apos;t find corporate internal events — no RFP, no public listing — so these are worked by name.
+            <span style={{ color: "#626873" }}> Entry pattern: LoanPro opened at $36k → $99,573 a year later; Socure at $1,733 → $96,538 ten days later. Lead with the kickoff, not the flagship.</span>
+          </div>
+        )}
 
         {loading && <div style={{ fontSize: 10, color: "#444" }}>loading accounts…</div>}
         {!loading && !list.length && <div style={{ fontSize: 10, color: "#444", padding: "26px 0", textAlign: "center" }}>Nothing matches that filter.</div>}
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 9 }}>
-          {list.map(a => {
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8 }}>
+          {list.slice(0, shown).map(a => {
             const v = TA_VERTICALS[a.vertical] || TA_VERTICALS.other;
-            const t = TA_TIERS[a.tier] || null;
+            const t = TA_TIERS[a.tier];
             const people = contactsOf(a);
             const isClient = a.existing_relationship || a.tier === "existing_client";
             return (
               <div key={a.id} style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A",
-                borderLeft: isClient ? "3px solid #FB923C" : "1px solid #1A1A1A", borderRadius: 9, padding: "13px 15px" }}>
+                borderLeft: isClient ? "3px solid #FB923C" : t ? `3px solid ${t.color}45` : "1px solid #1A1A1A",
+                borderRadius: 9, padding: "11px 13px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
                   <span style={{ fontSize: 12.5, fontWeight: 600, color: "#E8E4DC" }}>{a.name}</span>
                   <span style={{ fontSize: 9, color: "#555", whiteSpace: "nowrap" }}>{a.city || ""}</span>
                 </div>
-                <div style={{ display: "flex", gap: 5, margin: "7px 0 9px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 8.5, letterSpacing: "0.7px", textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, border: `1px solid ${v.color}50`, color: v.color }}>{v.label}</span>
-                  {t && <span style={{ fontSize: 8.5, letterSpacing: "0.7px", textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, border: `1px solid ${t.color}50`, color: t.color }}>{t.label}</span>}
+                <div style={{ display: "flex", gap: 4, margin: "6px 0 8px", flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 8.5, letterSpacing: "0.7px", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, border: `1px solid ${v.color}50`, color: v.color }}>{v.label}</span>
+                  {t && <span style={{ fontSize: 8.5, letterSpacing: "0.7px", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, border: `1px solid ${t.color}50`, color: t.color }}>{t.label}</span>}
+                  {isMonitored(a) && <span style={{ fontSize: 8.5, color: "#F7C948" }}>◉ scanning</span>}
                 </div>
                 {people.length ? people.slice(0, 4).map((p, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "3px 0", borderTop: i ? "1px solid #141414" : "none", fontSize: 10.5 }}>
-                    <span style={{ color: "#A8A4A0", whiteSpace: "nowrap" }}>{p.name}</span>
-                    <span style={{ color: "#626873", textAlign: "right" }}>{p.title}</span>
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "2px 0", fontSize: 10.5 }}>
+                    <a href={liSearch(p.name, a.name)} target="_blank" rel="noopener noreferrer"
+                      style={{ color: "#A8A4A0", whiteSpace: "nowrap", textDecoration: "none", borderBottom: "1px dotted #333" }}
+                      title={`Find ${p.name} on LinkedIn`}>{p.name}</a>
+                    <span style={{ color: "#626873", textAlign: "right", fontSize: 10 }}>{p.title}</span>
                   </div>
-                )) : <div style={{ fontSize: 10, color: "#3a3a3a" }}>no named contact yet</div>}
+                )) : <div style={{ fontSize: 10, color: "#3a3a3a" }}>no named contact — enrich to reach</div>}
                 {isClient && a.relationship_notes && (
-                  <div style={{ fontSize: 9.5, color: "#FB923C", marginTop: 8 }}>◆ {a.relationship_notes}</div>
+                  <div style={{ fontSize: 9.5, color: "#FB923C", marginTop: 7 }}>◆ {a.relationship_notes}</div>
                 )}
-                {a.why_fit && <div style={{ fontSize: 9.5, color: "#555", marginTop: 8, lineHeight: 1.6 }}>{a.why_fit}</div>}
                 <button onClick={() => toggleMonitor(a)} disabled={!!busy[a.id]}
-                  style={{ marginTop: 10, fontSize: 9, padding: "4px 10px", borderRadius: 5, cursor: busy[a.id] ? "wait" : "pointer", fontFamily: "inherit",
+                  style={{ marginTop: 9, fontSize: 9, padding: "3px 9px", borderRadius: 5, cursor: busy[a.id] ? "wait" : "pointer", fontFamily: "inherit",
                     border: `1px solid ${isMonitored(a) ? "#34D39940" : "#1A1A1A"}`,
                     background: isMonitored(a) ? "#34D39910" : "transparent", color: isMonitored(a) ? "#34D399" : "#555" }}>
-                  {isMonitored(a) ? "✓ Scout scanning" : "+ Add to scan list"}
+                  {isMonitored(a) ? "✓ scanning" : "+ add to scan list"}
                 </button>
               </div>
             );
           })}
         </div>
+
+        {list.length > shown && (
+          <div style={{ textAlign: "center", marginTop: 16 }}>
+            <button onClick={() => setShown(s => s + TA_PAGE)}
+              style={{ fontSize: 10, padding: "7px 18px", borderRadius: 6, border: "1px solid #1A1A1A", background: "transparent", color: "#8A8578", cursor: "pointer", fontFamily: "inherit" }}>
+              Show {Math.min(TA_PAGE, list.length - shown)} more · {list.length - shown} remaining
+            </button>
+          </div>
+        )}
+        {dupes > 0 && (
+          <div style={{ fontSize: 9, color: "#3a3a3a", marginTop: 18, textAlign: "center" }}>
+            {dupes} duplicate row{dupes === 1 ? "" : "s"} collapsed by name
+          </div>
+        )}
       </div>
     </div>
   );
