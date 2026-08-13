@@ -157,8 +157,14 @@ module.exports = async function handler(req, res) {
     }
 
     // ── Scan active target accounts ───────────────────────────────────────────
+    // One Tavily search per account, sequentially — so this scales with the list and would blow
+    // the 300s budget once the target list grows past ~30. Rotate instead: take the N
+    // least-recently-scanned each run (last_scanned is PATCHed below), so a list of any size gets
+    // full coverage over consecutive runs at constant cost per run.
+    const TARGET_SCAN_LIMIT = 25;
     const accsRes = await fetch(
-      `${base}/rest/v1/target_accounts?status=eq.active&select=id,name,domain`,
+      `${base}/rest/v1/target_accounts?status=eq.active&select=id,name,domain` +
+      `&order=last_scanned.asc.nullsfirst&limit=${TARGET_SCAN_LIMIT}`,
       { headers }
     );
     const accounts = await accsRes.json();
@@ -492,6 +498,7 @@ Historical data: ${JSON.stringify({ clients: Array.isArray(flexClients) ? flexCl
       rejected_past_event: saved.filter(s => s.status === 'rejected' && s.reason === 'past event').length,
       saved,
       target_accounts_scanned: Array.isArray(accounts) ? accounts.length : 0,
+      target_scan_limit: TARGET_SCAN_LIMIT,   // rotation cap — the rest are picked up next run
       target_saved: targetSaved,
       brief_generated: briefGenerated,
     });
