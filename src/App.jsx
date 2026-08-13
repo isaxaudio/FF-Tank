@@ -1008,12 +1008,14 @@ const TA_VERTICALS = {
   edu:         { label: "Higher ed",      color: "#F7C948", why: "Adjacent to the WGU and Juan Diego strength." },
   other:       { label: "Other",          color: "#8A8578", why: "Large regional employers with a standing internal event calendar." },
 };
-// Ordered by how much attention each deserves — drives the default sort.
+// Drives the default sort. This is a prospecting page, so the accounts to go after lead —
+// existing clients sort below them as context, not as the thing you open the page to work on.
+// (Dormant-client win-back lives in Flex Intel, which has the revenue history to rank it.)
 const TA_TIERS = {
-  existing_client: { label: "client",    color: "#FB923C", rank: 0 },
-  target_a:        { label: "target A",  color: "#34D399", rank: 1 },
-  target_b:        { label: "target B",  color: "#A78BFA", rank: 2 },
-  warm:            { label: "warm",      color: "#F7C948", rank: 3 },
+  target_a:        { label: "target A",  color: "#34D399", rank: 0 },
+  target_b:        { label: "target B",  color: "#A78BFA", rank: 1 },
+  warm:            { label: "warm",      color: "#F7C948", rank: 2 },
+  existing_client: { label: "client",    color: "#FB923C", rank: 3 },
   watchlist:       { label: "watchlist", color: "#626873", rank: 4 },
 };
 const TA_PAGE = 60;
