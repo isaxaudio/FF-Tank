@@ -937,8 +937,13 @@ function LeadHandoffView({ db }) {
                 ); })()}
                 <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                   <button onClick={() => send(o)} disabled={!!sending[o.id] || !!isSent}
-                    style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "none", background: isSent ? TC.accentDeep : "linear-gradient(135deg,#3ecf8e,#0f766e)", color: isSent ? TC.accentDeep : TC.accentDeep, fontWeight: 600, cursor: isSent ? "default" : "pointer" }}>
-                    {sending[o.id] ? "◌ Sending…" : isSent ? "✓ Sent to Taylor" : "→ Send to #ff-leads"}
+                    style={{ fontSize: 12.5, padding: "9px 18px", borderRadius: 999, border: "none",
+                      display: "inline-flex", alignItems: "center", gap: 8,
+                      background: isSent ? TC.accentPill : TC.ink, color: isSent ? TC.accentInk : TC.onInk,
+                      fontWeight: 500, cursor: isSent ? "default" : "pointer",
+                      transition: "background 140ms ease" }}>
+                    {!isSent && !sending[o.id] && <span style={{ width: 7, height: 7, borderRadius: 999, background: TC.accent }} />}
+                    {sending[o.id] ? "Sending…" : isSent ? "✓ Sent to Taylor" : "Send to #ff-leads"}
                   </button>
                   {!isSent && !enriched[o.id] && <button onClick={() => enrich(o)} disabled={!!enriching[o.id]}
                     style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #2b2544", background: "#2b254420", color: TC.ink, cursor: enriching[o.id] ? "default" : "pointer" }}>
