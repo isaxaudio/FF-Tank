@@ -715,6 +715,9 @@ function leadQuality(o) {
 function LeadHandoffView({ db }) {
   const [rows, setRows] = React.useState([]);
   const [totals, setTotals] = React.useState({ scanned: null, contacted: 0, archived: 0, loaded: 0 });
+  const [queueIndex, setQueueIndex] = React.useState(0);
+  const [sortMode, setSortMode] = React.useState("ranked");
+  const [flexClients, setFlexClients] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [cat, setCat] = React.useState("worthy");
   const [sending, setSending] = React.useState({});
@@ -773,7 +776,7 @@ function LeadHandoffView({ db }) {
   React.useEffect(() => { (async () => {
     setLoading(true);
     try {
-      const [cands, venues, total, contacted, archived] = await Promise.all([
+      const [cands, venues, total, contacted, archived, fx] = await Promise.all([
         db.selectAll("opportunities", {
           order: "created_at.desc",
           and: `(${OPEN_Q},or(overall_score.gte.5,overall_score.is.null))`,
@@ -782,15 +785,33 @@ function LeadHandoffView({ db }) {
         db.count("opportunities", {}),
         db.count("opportunities", { status: "eq.contacted" }),
         db.count("opportunities", { status: "eq.archived" }),
+        db.selectAll("flex_clients", { select: "name,total_revenue,total_events,last_event_date", total_revenue: "not.is.null" }),
       ]);
       const byId = new Map();
       [...(cands || []), ...(venues || [])].forEach(o => byId.set(o.id, o));
       setRows([...byId.values()]);
       setTotals({ scanned: total, contacted: contacted || 0, archived: archived || 0, loaded: byId.size });
+      setFlexClients(fx || []);
     } catch (e) { console.error("lead queue load failed:", e); setRows([]); }
     setLoading(false);
   })(); }, []);
 
+  const usdShort = n => n >= 1000000 ? `$${(n / 1000000).toFixed(2)}M` : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${Math.round(n || 0)}`;
+  // The single most decisive fact on a lead card: have we worked with them before?
+  const flexKey = s2 => String(s2 || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 20);
+  const flexMap = React.useMemo(() => {
+    const m = new Map();
+    flexClients.forEach(c => { const k = flexKey(c.name); if (k && c.total_revenue) m.set(k, c); });
+    return m;
+  }, [flexClients]);
+  const flexMatch = o => {
+    const k = flexKey(o.company || o.title);
+    if (!k) return null;
+    if (flexMap.has(k)) return flexMap.get(k);
+    for (const [kk, v] of flexMap) if (kk.length > 6 && (k.includes(kk) || kk.includes(k))) return v;
+    return null;
+  };
+  const workedToday = Object.keys(sent).length + Object.keys(dismissed).length;
   const allWorthy = rows.filter(isSendWorthy);
   // Venue calendars / event roundups — browse these to find individual events.
   const srcSeen = new Set();
@@ -809,6 +830,14 @@ function LeadHandoffView({ db }) {
   // Rank: soonest upcoming event first (dated leads), then by quality; undated leads
   // (open RFPs) fall in by quality after the dated ones.
   const ranked = source.filter(o => !dismissed[o.id]).filter(catFn).sort((a, b) => {
+    // Sort tabs drive the queue order; "ranked" keeps the original soonest-then-quality logic.
+    if (sortMode === "newest") return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+    if (sortMode === "soonest") {
+      const da = eventDateInfo(a).date, db2 = eventDateInfo(b).date;
+      if (da && db2) return da - db2;
+      if (da) return -1;
+      if (db2) return 1;
+    }
     const da = eventDateInfo(a).date, db = eventDateInfo(b).date;
     if (da && db) return da - db;                 // both dated → soonest first
     if (da && !db) return -1;                     // dated future beats undated
@@ -879,90 +908,144 @@ function LeadHandoffView({ db }) {
         </>}
       </div>
 
-      {/* Funnel strip */}
-      <div style={{ display: "flex", gap: 1, background: TC.line, border: "1px solid #232830", borderRadius: 12, overflow: "hidden", marginBottom: 22 }}>
-        {[{ n: reviewCount, l: "To review", c: TC.ink }, { n: sentCount, l: "Sent to Taylor", c: TC.warnInk }, { n: 0, l: "Rep contacted", c: TC.warnInk }, { n: 0, l: "Won", c: TC.accentDeep }].map((f, i) => (
-          <div key={i} style={{ flex: 1, background: TC.card, padding: "14px 18px" }}>
-            <div style={{ fontFamily: "monospace", fontSize: 24, fontWeight: 600, color: f.c }}>{f.n}</div>
-            <div style={{ fontFamily: "monospace", fontSize: 9.5, letterSpacing: "0.1em", color: TC.faint, textTransform: "uppercase", marginTop: 2 }}>{f.l}</div>
-          </div>
+      {/* Sort tabs — underline, not pills. Switching resets to the top of the queue. */}
+      <div style={{ display: "flex", gap: 26, marginBottom: 22, borderBottom: `1px solid ${TC.line}` }}>
+        {[{ id: "ranked", label: "Ranked" }, { id: "soonest", label: "Soonest" }, { id: "newest", label: "Newest" }].map(t => (
+          <span key={t.id} onClick={() => { setSortMode(t.id); setQueueIndex(0); }}
+            style={{ fontSize: 14.5, fontWeight: 500, paddingBottom: 10, cursor: "pointer",
+              color: sortMode === t.id ? TC.ink : TC.faint,
+              borderBottom: `2px solid ${sortMode === t.id ? TC.ink : "transparent"}`, marginBottom: -1 }}>
+            {t.label}
+          </span>
         ))}
       </div>
 
-      {/* Callout */}
-      <div style={{ border: "1px solid #2b2544", background: "linear-gradient(180deg,rgba(167,139,250,.06),transparent)", borderRadius: 12, padding: "15px 18px", marginBottom: 20 }}>
-        <div style={{ fontFamily: "monospace", fontSize: 12.5, color: TC.ink, marginBottom: 5 }}>◆ Surface signal, hide noise</div>
-        <div style={{ color: TC.muted, fontSize: 12.5, lineHeight: 1.5 }}>The raw scout saves everything (mostly junk: “los”, Spotify, Instagram, empty company). Here only real, ranked, geo-relevant leads show — approve one and it posts to #ff-leads for Taylor with the outreach draft attached.</div>
-      </div>
-      {Object.keys(weights).length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, fontFamily: "monospace", fontSize: 11.5, color: TC.faint, flexWrap: "wrap" }}>
-          <span style={{ color: TC.accentDeep }}>📈 Learning from your picks:</span>
-          {Object.entries(weights).sort((a, b) => b[1] - a[1]).map(([s, w]) => (
-            <span key={s} style={{ color: w > 0 ? TC.accentDeep : TC.warnInk }}>{s} {w > 0 ? "▲" : "▼"}{Math.abs(w)}</span>
-          ))}
-          <span style={{ color: TC.faint }}>· the queue re-ranks toward what you send</span>
+      {/* One decision at a time. The 500+ queue never renders at once — "up next" is a peek. */}
+      {list.length === 0 ? (
+        <div style={{ background: TC.card, borderRadius: 26, padding: "40px 32px", textAlign: "center", color: TC.muted, fontSize: 14 }}>
+          Queue clear — nothing left matching these filters.
         </div>
-      )}
+      ) : (() => {
+        const o = list[Math.min(queueIndex, list.length - 1)];
+        const ev = eventDateInfo(o);
+        const score = o.overall_score;
+        const strong = score != null && score >= 8;
+        const geoOf = r => (r.city || r.state || "").trim();
+        const rel = flexMatch(o);
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.7fr) minmax(0,1fr)", gap: 22, alignItems: "start" }}>
 
-      {/* Category chips */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
-        {CATS.map(c => {
-          const on = cat === c.id;
-          const count = allWorthy.filter(c.fn).length;
-          return (
-            <button key={c.id} onClick={() => setCat(c.id)}
-              style={{ fontFamily: "monospace", fontSize: 11, color: on ? TC.accentDeep : TC.muted, border: `1px solid ${on ? "#34D39960" : TC.line}`, background: on ? "#1c3a3020" : "transparent", padding: "6px 12px", borderRadius: 999, cursor: "pointer" }}>
-              {c.label} <span style={{ color: on ? TC.accentDeep : TC.faint }}>{count}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Lead cards */}
-      <div style={{ border: "1px solid #232830", borderRadius: 14, overflow: "hidden", background: TC.card }}>
-        {loading && <div style={{ padding: 40, textAlign: "center", color: TC.faint, fontSize: 13 }}>Loading…</div>}
-        {!loading && list.length === 0 && <div style={{ padding: 40, textAlign: "center", color: TC.faint, fontSize: 13 }}>No leads in this view.</div>}
-        {list.map(o => {
-          const tag = tagOf(o), why = cleanWhy(o), geo = geoOf(o), isSent = sent[o.id];
-          return (
-            <div key={o.id} style={{ display: "flex", gap: 14, padding: "16px 18px", borderBottom: "1px solid #1a1e24", alignItems: "flex-start", opacity: isSent ? 0.5 : 1 }}>
-              <span style={{ fontFamily: "monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", color: tag.c, background: tag.c + "1f", padding: "3px 8px", borderRadius: 5, flexShrink: 0, marginTop: 2 }}>{tag.t}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.005em", marginBottom: 3 }}>{o.company && o.company.trim() ? o.company : (o.title || "Untitled")}</div>
-                {why && <div style={{ color: TC.muted, fontSize: 12.5, lineHeight: 1.45, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{why || o.title}</div>}
-                {enriched[o.id] && (() => { const c = enriched[o.id].contact || {}; return (
-                  <div style={{ marginTop: 9, fontFamily: "monospace", fontSize: 11.5, color: TC.muted, background: TC.card, border: "1px solid #1a1e24", borderRadius: 8, padding: "8px 11px" }}>
-                    👤 <span style={{ color: TC.warnInk }}>{c.name || "contact"}</span>{c.title ? ` · ${c.title}` : ""}{c.email ? <span style={{ color: TC.accentDeep }}>{"  ·  " + c.email}</span> : <span style={{ color: TC.warnInk }}>{"  ·  no email"}</span>} <span style={{ color: TC.faint }}>@ {enriched[o.id].company}</span>
-                  </div>
-                ); })()}
-                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                  <button onClick={() => send(o)} disabled={!!sending[o.id] || !!isSent}
-                    style={{ fontSize: 12.5, padding: "9px 18px", borderRadius: 999, border: "none",
-                      display: "inline-flex", alignItems: "center", gap: 8,
-                      background: isSent ? TC.accentPill : TC.ink, color: isSent ? TC.accentInk : TC.onInk,
-                      fontWeight: 500, cursor: isSent ? "default" : "pointer",
-                      transition: "background 140ms ease" }}>
-                    {!isSent && !sending[o.id] && <span style={{ width: 7, height: 7, borderRadius: 999, background: TC.accent }} />}
-                    {sending[o.id] ? "Sending…" : isSent ? "✓ Sent to Taylor" : "Send to #ff-leads"}
-                  </button>
-                  {!isSent && !enriched[o.id] && <button onClick={() => enrich(o)} disabled={!!enriching[o.id]}
-                    style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #2b2544", background: "#2b254420", color: TC.ink, cursor: enriching[o.id] ? "default" : "pointer" }}>
-                    {enriching[o.id] ? "◌ Finding…" : "✦ Find contact"}
-                  </button>}
-                  {o.source && <a href={o.source} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #232830", color: TC.muted, textDecoration: "none" }}>View source</a>}
-                  {!isSent && <button onClick={() => skip(o)} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid transparent", background: "none", color: TC.faint, cursor: "pointer" }}>Skip</button>}
-                </div>
+            <div style={{ background: TC.card, borderRadius: 26, padding: "30px 32px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "2px", color: TC.muted }}>
+                  NEXT LEAD · RANK {Math.min(queueIndex, list.length - 1) + 1} OF {list.length}
+                </span>
+                {score != null && (
+                  <span style={{ fontSize: 13, fontWeight: 600, padding: "5px 13px", borderRadius: 999,
+                    background: strong ? TC.accentPill : TC.elevated, color: strong ? TC.accentInk : TC.sub }}>{score}</span>
+                )}
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0, minWidth: 96 }}>
-                {(() => { const ev = eventDateInfo(o); return ev.label
-                  ? <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 600, color: TC.ink }}>📅 {ev.label}</div>
-                  : <div style={{ fontFamily: "monospace", fontSize: 11, color: TC.warnInk }}>open / no date</div>; })()}
-                <div style={{ fontFamily: "monospace", fontSize: 10.5, color: TC.faint, marginTop: 4 }}>{geo || "—"} · score {scoreOf(o)}</div>
+
+              <div style={{ fontSize: 32, fontWeight: 500, letterSpacing: "-1px", color: TC.ink, marginBottom: 14, textWrap: "balance" }}>
+                {o.company || o.title}
+              </div>
+
+              <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
+                {o.signal && (
+                  <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "1.2px", background: TC.ink, color: TC.onInk,
+                    padding: "5px 13px", borderRadius: 999, textTransform: "uppercase" }}>{o.signal}</span>
+                )}
+                {ev.label && <span style={{ fontSize: 12, color: TC.sub, background: TC.elevated, padding: "5px 13px", borderRadius: 999 }}>{ev.label}</span>}
+                {geoOf(o) && <span style={{ fontSize: 12, color: TC.sub, background: TC.elevated, padding: "5px 13px", borderRadius: 999 }}>{geoOf(o)}</span>}
+              </div>
+
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "1.8px", color: TC.muted, marginBottom: 8 }}>WHY THIS MATTERS</div>
+              <div style={{ fontSize: 14.5, lineHeight: 1.6, color: TC.sub, marginBottom: 22, textWrap: "pretty" }}>
+                {cleanWhy(o) || o.title}
+              </div>
+
+              {/* The design's green panel was "RECOMMENDED ANGLE" — a column that doesn't exist.
+                  Rather than render an empty box, it carries the one genuinely decisive fact we
+                  do have: whether Fatfish has already worked with them, and for how much. */}
+              {rel && (
+                <div style={{ background: TC.accentSoft, borderRadius: 18, padding: "18px 20px", marginBottom: 24 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "1.8px", color: TC.accentDeep, marginBottom: 7 }}>EXISTING CLIENT</div>
+                  <div style={{ fontSize: 14.5, lineHeight: 1.6, color: TC.ink }}>
+                    {usdShort(rel.total_revenue)} across {rel.total_events} job{rel.total_events === 1 ? "" : "s"}
+                    {rel.last_event_date ? `, last ${rel.last_event_date}` : ""}. Open with the relationship, not an introduction.
+                  </div>
+                </div>
+              )}
+
+              {enriched[o.id] && enriched[o.id].contact && enriched[o.id].contact.name && (
+                <div style={{ display: "flex", alignItems: "center", gap: 13, marginBottom: 26 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 14, background: TC.ink, color: TC.onInk,
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+                    {String(enriched[o.id].contact.name).split(" ").map(w => w[0]).slice(0, 2).join("")}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14.5, fontWeight: 500, color: TC.ink }}>{enriched[o.id].contact.name}</div>
+                    <div style={{ fontSize: 12.5, color: TC.muted }}>{enriched[o.id].contact.title || enriched[o.id].company}</div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <button onClick={() => { send(o); setQueueIndex(i => i + 1); }} disabled={!!sending[o.id] || !!sent[o.id]}
+                  style={{ fontFamily: "inherit", fontSize: 14.5, fontWeight: 500, background: TC.ink, color: TC.onInk,
+                    border: "none", borderRadius: 999, padding: "14px 28px", cursor: sent[o.id] ? "default" : "pointer",
+                    display: "inline-flex", alignItems: "center", gap: 9 }}>
+                  {!sent[o.id] && !sending[o.id] && <span style={{ width: 8, height: 8, borderRadius: 999, background: TC.accent }} />}
+                  {sending[o.id] ? "Sending…" : sent[o.id] ? "Sent to Taylor" : "Send to #ff-leads"}
+                </button>
+                <button onClick={() => { skip(o); setQueueIndex(i => i + 1); }}
+                  style={{ fontFamily: "inherit", fontSize: 14.5, fontWeight: 500, background: "transparent", color: TC.sub,
+                    border: `1px solid ${TC.lineStrong}`, borderRadius: 999, padding: "14px 28px", cursor: "pointer" }}>Skip</button>
+                {!enriched[o.id] && (
+                  <button onClick={() => enrich(o)} disabled={!!enriching[o.id]}
+                    style={{ fontFamily: "inherit", fontSize: 14.5, fontWeight: 500, background: "transparent", color: TC.muted,
+                      border: `1px solid ${TC.lineStrong}`, borderRadius: 999, padding: "14px 22px", cursor: "pointer" }}>
+                    {enriching[o.id] ? "Finding…" : "Find contact"}</button>
+                )}
               </div>
             </div>
-          );
-        })}
-      </div>
+
+            {/* Right rail */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div style={{ background: TC.card, borderRadius: 26, padding: "24px 28px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "2px", color: TC.muted }}>WORKED TODAY</span>
+                  <span style={{ fontSize: 13, color: TC.sub }}>{workedToday} of 10</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, background: TC.barTrack, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${Math.min(100, workedToday * 10)}%`, background: TC.accent, borderRadius: 999 }} />
+                </div>
+              </div>
+
+              <div style={{ background: TC.card, borderRadius: 26, padding: "24px 28px" }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "2px", color: TC.muted, marginBottom: 14 }}>UP NEXT</div>
+                {list.slice(queueIndex + 1, queueIndex + 5).map((n, i) => (
+                  <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: i ? `1px solid ${TC.lineSoft}` : "none" }}>
+                    <span style={{ fontSize: 12, color: TC.fainter, width: 18, flexShrink: 0 }}>{queueIndex + i + 2}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 500, color: TC.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.company || n.title}</div>
+                      <div style={{ fontSize: 11.5, color: TC.faint }}>{n.signal || "signal"}{eventDateInfo(n).label ? ` · ${eventDateInfo(n).label}` : ""}</div>
+                    </div>
+                    {n.overall_score != null && (
+                      <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 9px", borderRadius: 999, flexShrink: 0,
+                        background: n.overall_score >= 8 ? TC.accentPill : TC.elevated,
+                        color: n.overall_score >= 8 ? TC.accentInk : TC.sub }}>{n.overall_score}</span>
+                    )}
+                  </div>
+                ))}
+                <div style={{ fontSize: 11.5, color: TC.faint, marginTop: 12 }}>
+                  {Math.max(0, list.length - queueIndex - 5)} more ranked below — they stay off-screen.
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Sources to mine — venue calendars & event roundups (not single leads) */}
       {sources.length > 0 && (
