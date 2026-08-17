@@ -3030,6 +3030,14 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
   const winback = billed.filter(c => monthsSince(c.last_event_date) > 12)
     .sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
   const winbackValue = winback.reduce((s, c) => s + (Number(c.total_revenue) || 0), 0);
+  // Median, not mean. WGU is 31.6% of all revenue, so the average client value ($67.8k) is a
+  // number only 42 of 257 clients have ever reached — it describes almost nobody.
+  const clientValues = billed.map(c => Number(c.total_revenue) || 0).filter(v => v > 0).sort((a, b) => a - b);
+  const medianClient = clientValues.length
+    ? (clientValues.length % 2
+        ? clientValues[(clientValues.length - 1) / 2]
+        : (clientValues[clientValues.length / 2 - 1] + clientValues[clientValues.length / 2]) / 2)
+    : 0;
   const topClients = billed.slice().sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0)).slice(0, 8);
   const maxClientRev = topClients.length ? (Number(topClients[0].total_revenue) || 1) : 1;
   const concentration = totalBooked ? (Number(topClients[0]?.total_revenue || 0) / totalBooked * 100) : 0;
@@ -3156,7 +3164,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
               {[{ v: usd(totalBooked), l: `booked · ${years.length} years` },
                 { v: billed.length, l: "clients" },
                 { v: projects.length.toLocaleString(), l: "projects" },
-                { v: usd(totalJobs ? totalBooked / totalJobs : 0), l: "avg per job" }].map(s => (
+                { v: usd(medianClient), l: "median client" }].map(s => (
                 <div key={s.l} style={{ background: TC.card, borderRadius: 22, padding: "22px 24px" }}>
                   <div style={{ fontSize: 36, fontWeight: 500, letterSpacing: "-1.5px", color: TC.ink }}>{loadingData ? "—" : s.v}</div>
                   <div style={{ fontSize: 12.5, color: TC.muted, marginTop: 4 }}>{s.l}</div>
