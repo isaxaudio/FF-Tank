@@ -1106,8 +1106,12 @@ function WeeklyBriefView({ db, onNavigate }) {
     : [];
 
   const monthsSince = d => d ? (today - new Date(d + "T00:00:00")) / 2629800000 : 999;
+  // Revenue floor: the rotation picks anywhere in this list, and "win back X — $0 of past
+  // business" is not a real task. Only chase clients who actually spent something.
   const winback = clients
-    .filter(c => monthsSince(c.last_event_date) > 12 && c.contact_email && !/^(fat fish|clear lamp)/i.test(c.name || ""))
+    .filter(c => monthsSince(c.last_event_date) > 12 && c.contact_email
+      && (Number(c.total_revenue) || 0) >= 1000
+      && !/^(fat fish|clear lamp)/i.test(c.name || ""))
     .sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
   const winbackPicks = winback.length
     ? Array.from({ length: Math.min(2, winback.length) }, (_, i) => winback[(weekIdx * 2 + i) % winback.length])
