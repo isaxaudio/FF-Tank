@@ -3152,11 +3152,11 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
             {/* Stat cards */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {[
-                { label: "Booked value", value: usd(totalBooked), color: TC.accentDeep },
-                { label: "Clients", value: billed.length, color: TC.warnInk },
+                { label: "Booked value", value: usd(totalBooked), color: TC.ink },
+                { label: "Clients", value: billed.length, color: TC.ink },
                 { label: "Jobs", value: totalJobs, color: TC.ink },
-                { label: "Active 12mo", value: activeClients.length, color: TC.sub },
-                { label: "Repeat", value: repeatClients, color: TC.warnInk },
+                { label: "Active 12mo", value: activeClients.length, color: TC.ink },
+                { label: "Repeat", value: repeatClients, color: TC.ink },
               ].map(s => (
                 <div key={s.label} style={{ flex: "1 1 100px", minWidth: 90, background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, padding: "16px 18px" }}>
                   <div style={{ fontSize: 26, fontWeight: 700, color: s.color, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loadingData ? "—" : s.value}</div>
@@ -3168,7 +3168,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
             {/* Strategic Snapshot */}
             <div style={{ background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8 }}>
               <div style={{ padding: "12px 18px", borderBottom: `1px solid ${TC.card}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 9, color: TC.warnInk, letterSpacing: "2px" }}>◐ STRATEGIC SNAPSHOT</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: TC.muted, letterSpacing: "1.8px" }}>◐ STRATEGIC SNAPSHOT</span>
                 <button onClick={() => generate("overview")} disabled={generating === "overview" || !hasData}
                   style={{ fontSize: 9, padding: "3px 10px", background: generating === "overview" ? `${TC.warnInk}12` : "transparent", border: `1px solid ${generating === "overview" ? `${TC.warnInk}40` : TC.line}`, borderRadius: 5, color: generating === "overview" ? TC.warnInk : TC.fainter, cursor: generating === "overview" || !hasData ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
                   {generating === "overview" ? "◌ Analyzing…" : insights.overview ? "↻ Refresh" : "◐ Generate Snapshot"}
@@ -3187,7 +3187,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <div style={{ flex: "1 1 320px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, padding: "16px 18px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-                    <span style={{ fontSize: 9, color: TC.accentDeep, letterSpacing: "2px" }}>TOP CLIENTS BY BOOKED VALUE</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: TC.muted, letterSpacing: "1.8px" }}>TOP CLIENTS BY BOOKED VALUE</span>
                     <span style={{ fontSize: 9, color: concentration > 25 ? TC.warnInk : TC.fainter }}>
                       top client = {concentration.toFixed(0)}% of revenue
                     </span>
@@ -3195,7 +3195,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
                   {topClients.map(c => (
                     <div key={c.id} style={{ marginBottom: 10 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 11, marginBottom: 3 }}>
-                        <span style={{ color: TC.warnInk, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                        <span style={{ color: TC.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
                         <span style={{ color: TC.warnInk, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                           {usd(Number(c.total_revenue) || 0)} <span style={{ color: TC.fainter }}>· {c.total_events || 0}j</span>
                         </span>
@@ -3208,7 +3208,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
                 </div>
 
                 <div style={{ flex: "1 1 240px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, padding: "16px 18px" }}>
-                  <div style={{ fontSize: 9, color: TC.ink, letterSpacing: "2px", marginBottom: 14 }}>BOOKED BY YEAR</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: TC.muted, letterSpacing: "1.8px", marginBottom: 14 }}>BOOKED BY YEAR</div>
                   {years.length ? years.map(([y, v]) => (
                     <div key={y} style={{ marginBottom: 10 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
@@ -3230,7 +3230,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
             {winback.length > 0 && (
               <div style={{ background: TC.card, border: `1px solid ${TC.line}`, borderLeft: `3px solid ${TC.warnInk}`, borderRadius: 8, padding: "16px 18px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
-                  <span style={{ fontSize: 9, color: TC.warnInk, letterSpacing: "2px" }}>◇ WIN-BACK · NO BOOKING IN 12 MONTHS</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: TC.muted, letterSpacing: "1.8px" }}>◇ WIN-BACK · NO BOOKING IN 12 MONTHS</span>
                   <span style={{ fontSize: 9, color: TC.fainter }}>{winback.length} clients · {usd(winbackValue)} of past business</span>
                 </div>
                 <div style={{ fontSize: 10, color: TC.fainter, marginBottom: 14 }}>They already bought from you once. Warmer than anything the Scout finds cold.</div>
@@ -3312,7 +3312,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
             {(lookalikesLoading || lookalikes.length > 0) && (
               <div style={{ margin: "0 28px 28px", background: TC.card, border: `1px solid ${TC.sub}30`, borderRadius: 8, overflow: "hidden" }}>
                 <div style={{ padding: "12px 16px", borderBottom: `1px solid ${TC.card}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 9, color: TC.sub, letterSpacing: "2px" }}>◐ APOLLO LOOKALIKE PROSPECTS</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: TC.muted, letterSpacing: "1.8px" }}>◐ APOLLO LOOKALIKE PROSPECTS</span>
                   {lookalikesOrgs.length > 0 && (
                     <span style={{ fontSize: 9, color: TC.fainter }}>Searched: {lookalikesOrgs.join(", ")}</span>
                   )}
