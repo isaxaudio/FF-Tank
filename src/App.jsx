@@ -2119,22 +2119,22 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
     return new Date(b.created_at) - new Date(a.created_at);
   });
 
-  const thStyle = { fontSize: 8, color: "#444", letterSpacing: "1.5px", padding: "8px 10px", textAlign: "left", borderBottom: "1px solid #111", whiteSpace: "nowrap" };
-  const tdStyle = { fontSize: 11, color: "#A8A4A0", padding: "9px 10px", borderBottom: "1px solid #0D0D0D", verticalAlign: "top" };
+  const thStyle = { fontSize: 8, color: TC.fainter, letterSpacing: "1.5px", padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${TC.card}`, whiteSpace: "nowrap" };
+  const tdStyle = { fontSize: 11, color: TC.warnInk, padding: "9px 10px", borderBottom: `1px solid ${TC.card}`, verticalAlign: "top" };
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ padding: "14px 20px", borderBottom: "1px solid #111", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 8, flexShrink: 0 }}>
+      <div style={{ padding: "14px 20px", borderBottom: `1px solid ${TC.card}`, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 8, flexShrink: 0 }}>
         <div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: "#A78BFA" }}>Opportunities</div>
-          <div style={{ fontSize: 9, color: "#555" }}>scout signals · inbound leads</div>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: TC.ink }}>Opportunities</div>
+          <div style={{ fontSize: 9, color: TC.fainter }}>scout signals · inbound leads</div>
         </div>
         {/* Tab switcher */}
-        <div style={{ display: "flex", gap: 2, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 6, padding: 2 }}>
+        <div style={{ display: "flex", gap: 2, background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 6, padding: 2 }}>
           {[["signals", "Signals"], ["targets", "Target 100"], ["find", "Find"]].map(([id, label]) => (
             <button key={id} onClick={() => setActiveTab(id)}
-              style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: "none", background: activeTab === id ? "#1A1A1A" : "transparent", color: activeTab === id ? "#A78BFA" : "#555", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px", transition: "all 0.15s" }}>
+              style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: "none", background: activeTab === id ? TC.line : "transparent", color: activeTab === id ? TC.ink : TC.fainter, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px", transition: "all 0.15s" }}>
               {label}
             </button>
           ))}
@@ -2142,98 +2142,98 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
         {(cronToast || scanToast || qualifyToast || salesToast) && (() => {
           const t = salesToast || cronToast || scanToast || qualifyToast;
           return (
-            <div style={{ fontSize: 9, padding: "4px 10px", borderRadius: 5, background: t.ok ? "#34D39912" : "#FF6B6B12", border: `1px solid ${t.ok ? "#34D39940" : "#FF6B6B40"}`, color: t.ok ? "#34D399" : "#FF6B6B" }}>
+            <div style={{ fontSize: 9, padding: "4px 10px", borderRadius: 5, background: t.ok ? `${TC.accentDeep}12` : `${TC.criticalInk}12`, border: `1px solid ${t.ok ? `${TC.accentDeep}40` : `${TC.criticalInk}40`}`, color: t.ok ? TC.accentDeep : TC.criticalInk }}>
               {t.msg}
             </div>
           );
         })()}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
           {activeTab === "signals" ? (<>
-            <span style={{ fontSize: 9, color: "#555" }}>{visible.length} records{!showExpired && signalFiltered.filter(r => isExpired(r)).length > 0 ? ` · ${signalFiltered.filter(r => isExpired(r)).length} expired hidden` : ""}</span>
+            <span style={{ fontSize: 9, color: TC.fainter }}>{visible.length} records{!showExpired && signalFiltered.filter(r => isExpired(r)).length > 0 ? ` · ${signalFiltered.filter(r => isExpired(r)).length} expired hidden` : ""}</span>
             <button onClick={() => runCron("scout")} disabled={!!cronRunning}
-              style={{ fontSize: 9, padding: "3px 9px", background: cronRunning === "scout" ? "#A78BFA12" : "transparent", border: `1px solid ${cronRunning === "scout" ? "#A78BFA50" : "#1A1A1A"}`, borderRadius: 5, color: cronRunning === "scout" ? "#A78BFA" : "#888", cursor: cronRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              style={{ fontSize: 9, padding: "3px 9px", background: cronRunning === "scout" ? `${TC.ink}12` : "transparent", border: `1px solid ${cronRunning === "scout" ? `${TC.ink}50` : TC.line}`, borderRadius: 5, color: cronRunning === "scout" ? TC.ink : TC.muted, cursor: cronRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
               {cronRunning === "scout" ? "◌ Running…" : "▶ Scout"}
             </button>
             <button onClick={() => runCron("prospector")} disabled={!!cronRunning}
-              style={{ fontSize: 9, padding: "3px 9px", background: cronRunning === "prospector" ? "#4ECDC412" : "transparent", border: `1px solid ${cronRunning === "prospector" ? "#4ECDC450" : "#1A1A1A"}`, borderRadius: 5, color: cronRunning === "prospector" ? "#4ECDC4" : "#888", cursor: cronRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              style={{ fontSize: 9, padding: "3px 9px", background: cronRunning === "prospector" ? `${TC.sub}12` : "transparent", border: `1px solid ${cronRunning === "prospector" ? `${TC.sub}50` : TC.line}`, borderRadius: 5, color: cronRunning === "prospector" ? TC.sub : TC.muted, cursor: cronRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
               {cronRunning === "prospector" ? "◌ Running…" : "▶ Prospector"}
             </button>
             <button onClick={runEnrich} disabled={!!cronRunning}
-              style={{ fontSize: 9, padding: "3px 9px", background: cronRunning === "enrich" ? "#F7C94812" : "transparent", border: `1px solid ${cronRunning === "enrich" ? "#F7C94850" : "#1A1A1A"}`, borderRadius: 5, color: cronRunning === "enrich" ? "#F7C948" : "#888", cursor: cronRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              style={{ fontSize: 9, padding: "3px 9px", background: cronRunning === "enrich" ? `${TC.warnInk}12` : "transparent", border: `1px solid ${cronRunning === "enrich" ? `${TC.warnInk}50` : TC.line}`, borderRadius: 5, color: cronRunning === "enrich" ? TC.warnInk : TC.muted, cursor: cronRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
               {cronRunning === "enrich" ? "◌ Enriching…" : "◈ Enrich"}
             </button>
             <button onClick={runQualify} disabled={qualifyRunning || !!cronRunning}
-              style={{ fontSize: 9, padding: "3px 9px", background: qualifyRunning ? "#34D39912" : "transparent", border: `1px solid ${qualifyRunning ? "#34D39950" : "#1A1A1A"}`, borderRadius: 5, color: qualifyRunning ? "#34D399" : "#888", cursor: qualifyRunning || cronRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              style={{ fontSize: 9, padding: "3px 9px", background: qualifyRunning ? `${TC.accentDeep}12` : "transparent", border: `1px solid ${qualifyRunning ? `${TC.accentDeep}50` : TC.line}`, borderRadius: 5, color: qualifyRunning ? TC.accentDeep : TC.muted, cursor: qualifyRunning || cronRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
               {qualifyRunning ? "◌ Qualifying…" : "★ Qualify"}
             </button>
-            <button onClick={load} disabled={!!cronRunning} style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: "1px solid #1A1A1A", borderRadius: 5, color: "#555", cursor: cronRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>↻</button>
+            <button onClick={load} disabled={!!cronRunning} style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: `1px solid ${TC.line}`, borderRadius: 5, color: TC.fainter, cursor: cronRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>↻</button>
             <AgentRunButton onComplete={() => { load(); loadBrief(); }} />
           </>) : (<>
-            <span style={{ fontSize: 9, color: "#555" }}>{targets.length} accounts</span>
+            <span style={{ fontSize: 9, color: TC.fainter }}>{targets.length} accounts</span>
             <button onClick={() => setShowAddTarget(s => !s)}
-              style={{ fontSize: 9, padding: "3px 9px", background: showAddTarget ? "#A78BFA12" : "transparent", border: `1px solid ${showAddTarget ? "#A78BFA50" : "#1A1A1A"}`, borderRadius: 5, color: showAddTarget ? "#A78BFA" : "#888", cursor: "pointer", fontFamily: "inherit" }}>
+              style={{ fontSize: 9, padding: "3px 9px", background: showAddTarget ? `${TC.ink}12` : "transparent", border: `1px solid ${showAddTarget ? `${TC.ink}50` : TC.line}`, borderRadius: 5, color: showAddTarget ? TC.ink : TC.muted, cursor: "pointer", fontFamily: "inherit" }}>
               + Add
             </button>
             <button onClick={runLookalike} disabled={lookalikeRunning || scanRunning}
-              style={{ fontSize: 9, padding: "3px 9px", background: lookalikeRunning ? "#A78BFA12" : "transparent", border: `1px solid ${lookalikeRunning ? "#A78BFA50" : "#1A1A1A"}`, borderRadius: 5, color: lookalikeRunning ? "#A78BFA" : "#888", cursor: lookalikeRunning || scanRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              style={{ fontSize: 9, padding: "3px 9px", background: lookalikeRunning ? `${TC.ink}12` : "transparent", border: `1px solid ${lookalikeRunning ? `${TC.ink}50` : TC.line}`, borderRadius: 5, color: lookalikeRunning ? TC.ink : TC.muted, cursor: lookalikeRunning || scanRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
               {lookalikeRunning ? "◌ Running…" : "⚡ Lookalike"}
             </button>
             <button onClick={scanTargets} disabled={scanRunning || lookalikeRunning}
-              style={{ fontSize: 9, padding: "3px 9px", background: scanRunning ? "#34D39912" : "transparent", border: `1px solid ${scanRunning ? "#34D39950" : "#1A1A1A"}`, borderRadius: 5, color: scanRunning ? "#34D399" : "#888", cursor: scanRunning || lookalikeRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              style={{ fontSize: 9, padding: "3px 9px", background: scanRunning ? `${TC.accentDeep}12` : "transparent", border: `1px solid ${scanRunning ? `${TC.accentDeep}50` : TC.line}`, borderRadius: 5, color: scanRunning ? TC.accentDeep : TC.muted, cursor: scanRunning || lookalikeRunning ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
               {scanRunning ? "◌ Scanning…" : "⟳ Scan Targets"}
             </button>
-            <button onClick={loadTargets} disabled={targetsLoading} style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: "1px solid #1A1A1A", borderRadius: 5, color: "#555", cursor: targetsLoading ? "not-allowed" : "pointer", fontFamily: "inherit" }}>↻</button>
+            <button onClick={loadTargets} disabled={targetsLoading} style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: `1px solid ${TC.line}`, borderRadius: 5, color: TC.fainter, cursor: targetsLoading ? "not-allowed" : "pointer", fontFamily: "inherit" }}>↻</button>
           </>)}
         </div>
       </div>
 
       {/* Monday Brief */}
       {activeTab === "signals" && brief && !briefDismissed && (
-        <div style={{ padding: "12px 20px", borderBottom: "1px solid #111", background: "#050505", flexShrink: 0 }}>
+        <div style={{ padding: "12px 20px", borderBottom: `1px solid ${TC.card}`, background: TC.card, flexShrink: 0 }}>
           {/* Brief header row */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 8, letterSpacing: "1.5px", color: "#A78BFA" }}>MONDAY BRIEF</span>
-              <span style={{ fontSize: 8, color: "#222" }}>·</span>
+              <span style={{ fontSize: 8, letterSpacing: "1.5px", color: TC.ink }}>MONDAY BRIEF</span>
+              <span style={{ fontSize: 8, color: TC.line }}>·</span>
               {(brief.run.opportunities_saved > 0) && (
-                <span style={{ fontSize: 8, color: "#34D399" }}>{brief.run.opportunities_saved} saved</span>
+                <span style={{ fontSize: 8, color: TC.accentDeep }}>{brief.run.opportunities_saved} saved</span>
               )}
               {(brief.run.opportunities_skipped > 0) && (
-                <><span style={{ fontSize: 8, color: "#222" }}>·</span>
-                <span style={{ fontSize: 8, color: "#555" }}>{brief.run.opportunities_skipped} skipped</span></>
+                <><span style={{ fontSize: 8, color: TC.line }}>·</span>
+                <span style={{ fontSize: 8, color: TC.fainter }}>{brief.run.opportunities_skipped} skipped</span></>
               )}
               {(brief.run.searches_performed > 0) && (
-                <><span style={{ fontSize: 8, color: "#222" }}>·</span>
-                <span style={{ fontSize: 8, color: "#333" }}>{brief.run.searches_performed} searches</span></>
+                <><span style={{ fontSize: 8, color: TC.line }}>·</span>
+                <span style={{ fontSize: 8, color: TC.line }}>{brief.run.searches_performed} searches</span></>
               )}
               {brief.run.created_at && (
-                <><span style={{ fontSize: 8, color: "#222" }}>·</span>
-                <span style={{ fontSize: 8, color: "#2A2A2A" }}>
+                <><span style={{ fontSize: 8, color: TC.line }}>·</span>
+                <span style={{ fontSize: 8, color: TC.line }}>
                   {new Date(brief.run.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </span></>
               )}
             </div>
             <button onClick={() => setBriefDismissed(true)}
-              style={{ fontSize: 9, color: "#2A2A2A", background: "transparent", border: "none", cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>
+              style={{ fontSize: 9, color: TC.line, background: "transparent", border: "none", cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>
               ✕
             </button>
           </div>
 
           {brief.opps.length === 0 ? (
-            <div style={{ fontSize: 9, color: "#333" }}>No scored opportunities from this session.</div>
+            <div style={{ fontSize: 9, color: TC.line }}>No scored opportunities from this session.</div>
           ) : (
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {brief.opps.map((opp, i) => {
                 const urgent = isUrgent(opp);
                 const isTop = i === 0;
                 const isPriority = priorityMarked[opp.id] || opp.status === "priority";
-                const borderAccent = urgent ? "#FB923C" : isTop ? "#A78BFA" : "#1E1E1E";
+                const borderAccent = urgent ? TC.warnInk : isTop ? TC.ink : TC.line;
                 const feedbackAdj = opp._displayScore != null ? Math.round((opp._displayScore - opp.overall_score) * 10) / 10 : 0;
                 return (
                   <div key={opp.id} style={{
                     flex: "1 1 260px", minWidth: 220, maxWidth: 400,
-                    background: "rgba(4,14,34,0.62)",
-                    border: `1px solid ${isTop ? "#A78BFA20" : "#141414"}`,
+                    background: TC.card,
+                    border: `1px solid ${isTop ? `${TC.ink}20` : TC.card}`,
                     borderLeft: `3px solid ${borderAccent}`,
                     borderRadius: 6,
                     padding: "10px 12px",
@@ -2241,18 +2241,18 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                   }}>
                     {/* Title + score */}
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                      <div style={{ fontSize: 10, color: "#D8D4CC", lineHeight: 1.4, fontWeight: 500, flex: 1 }}>
+                      <div style={{ fontSize: 10, color: TC.warnInk, lineHeight: 1.4, fontWeight: 500, flex: 1 }}>
                         {opp.title}
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: isTop ? "#A78BFA" : "#666" }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: isTop ? TC.ink : TC.fainter }}>
                           {opp.overall_score}
                         </span>
                         {urgent && (
-                          <span style={{ fontSize: 7, color: "#FB923C", letterSpacing: "0.5px" }}>URGENT</span>
+                          <span style={{ fontSize: 7, color: TC.warnInk, letterSpacing: "0.5px" }}>URGENT</span>
                         )}
                         {feedbackAdj !== 0 && (
-                          <span style={{ fontSize: 7, color: "#2A2A2A", letterSpacing: "0.3px" }}>
+                          <span style={{ fontSize: 7, color: TC.line, letterSpacing: "0.3px" }}>
                             feedback {feedbackAdj > 0 ? "+" : ""}{feedbackAdj}
                           </span>
                         )}
@@ -2261,12 +2261,12 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
 
                     {/* Company */}
                     {opp.company && (
-                      <div style={{ fontSize: 8, color: "#3A3A3A" }}>{opp.company}</div>
+                      <div style={{ fontSize: 8, color: TC.fainter }}>{opp.company}</div>
                     )}
 
                     {/* why_this_matters */}
                     {opp.why_this_matters && (
-                      <div style={{ fontSize: 9, color: "#777", lineHeight: 1.55 }}>
+                      <div style={{ fontSize: 9, color: TC.muted, lineHeight: 1.55 }}>
                         {opp.why_this_matters.length > 160
                           ? opp.why_this_matters.slice(0, 160) + "…"
                           : opp.why_this_matters}
@@ -2275,7 +2275,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
 
                     {/* recommended_angle */}
                     {opp.recommended_angle && (
-                      <div style={{ fontSize: 9, color: "#4A4A4A", lineHeight: 1.5, fontStyle: "italic" }}>
+                      <div style={{ fontSize: 9, color: TC.fainter, lineHeight: 1.5, fontStyle: "italic" }}>
                         ↳ {opp.recommended_angle.length > 130
                           ? opp.recommended_angle.slice(0, 130) + "…"
                           : opp.recommended_angle}
@@ -2285,7 +2285,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                     {/* Next step + quick actions */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginTop: "auto", paddingTop: 4 }}>
                       {opp.recommended_next_step && (
-                        <span style={{ fontSize: 7, color: "#333", background: "#111", border: "1px solid #1A1A1A", borderRadius: 3, padding: "2px 6px", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
+                        <span style={{ fontSize: 7, color: TC.line, background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 3, padding: "2px 6px", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
                           {opp.recommended_next_step}
                         </span>
                       )}
@@ -2293,26 +2293,26 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                         {feedbackGiven[opp.id] == null ? (
                           <>
                             <button onClick={() => submitFeedback(opp.id, 1)}
-                              style={{ fontSize: 9, padding: "2px 6px", borderRadius: 3, border: "1px solid #1A2A1A", background: "transparent", color: "#2A4A2A", cursor: "pointer", fontFamily: "inherit" }}
+                              style={{ fontSize: 9, padding: "2px 6px", borderRadius: 3, border: `1px solid ${TC.accentDeep}`, background: "transparent", color: TC.accentDeep, cursor: "pointer", fontFamily: "inherit" }}
                               title="Good lead">👍</button>
                             <button onClick={() => submitFeedback(opp.id, -1)}
-                              style={{ fontSize: 9, padding: "2px 6px", borderRadius: 3, border: "1px solid #2A1A1A", background: "transparent", color: "#4A2A2A", cursor: "pointer", fontFamily: "inherit" }}
+                              style={{ fontSize: 9, padding: "2px 6px", borderRadius: 3, border: `1px solid ${TC.criticalInk}`, background: "transparent", color: TC.criticalInk, cursor: "pointer", fontFamily: "inherit" }}
                               title="Not relevant">👎</button>
                           </>
                         ) : (
-                          <span style={{ fontSize: 8, color: "#333", padding: "2px 6px" }}>
+                          <span style={{ fontSize: 8, color: TC.line, padding: "2px 6px" }}>
                             {feedbackGiven[opp.id] === 1 ? "👍" : "👎"}
                           </span>
                         )}
                         <button
                           onClick={() => markPriority(opp)}
                           disabled={isPriority}
-                          style={{ fontSize: 8, padding: "2px 8px", borderRadius: 3, border: `1px solid ${isPriority ? "#34D39940" : "#A78BFA30"}`, background: isPriority ? "#34D39910" : "transparent", color: isPriority ? "#34D399" : "#A78BFA", cursor: isPriority ? "default" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                          style={{ fontSize: 8, padding: "2px 8px", borderRadius: 3, border: `1px solid ${isPriority ? `${TC.accentDeep}40` : `${TC.ink}30`}`, background: isPriority ? `${TC.accentDeep}10` : "transparent", color: isPriority ? TC.accentDeep : TC.ink, cursor: isPriority ? "default" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                           {isPriority ? "✓ priority" : "★ priority"}
                         </button>
                         <button
                           onClick={() => { setExpandedRow(prev => prev === opp.id ? null : opp.id); setBriefDismissed(true); }}
-                          style={{ fontSize: 8, padding: "2px 8px", borderRadius: 3, border: "1px solid #1A1A1A", background: "transparent", color: "#444", cursor: "pointer", fontFamily: "inherit" }}>
+                          style={{ fontSize: 8, padding: "2px 8px", borderRadius: 3, border: `1px solid ${TC.line}`, background: "transparent", color: TC.fainter, cursor: "pointer", fontFamily: "inherit" }}>
                           view ↓
                         </button>
                       </div>
@@ -2329,38 +2329,38 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
       {activeTab === "signals" && (
         <>
           <div style={{ padding: "8px 20px 0", display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-            <span style={{ fontSize: 8, color: "#333", letterSpacing: "1px", marginRight: 2 }}>STATUS</span>
+            <span style={{ fontSize: 8, color: TC.line, letterSpacing: "1px", marginRight: 2 }}>STATUS</span>
             {["all", ...STATUS_OPTIONS].map(s => (
               <button key={s} onClick={() => setFilter(s)}
-                style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${filter === s ? (STATUS_COLORS[s] || "#FF6B2B") + "60" : "#1A1A1A"}`, background: filter === s ? (STATUS_COLORS[s] || "#FF6B2B") + "12" : "transparent", color: filter === s ? (STATUS_COLORS[s] || "#FF6B2B") : "#555", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
+                style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${filter === s ? (STATUS_COLORS[s] || TC.criticalInk) + "60" : TC.line}`, background: filter === s ? (STATUS_COLORS[s] || TC.criticalInk) + "12" : "transparent", color: filter === s ? (STATUS_COLORS[s] || TC.criticalInk) : TC.fainter, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
                 {s.toUpperCase()}
               </button>
             ))}
           </div>
-          <div style={{ padding: "6px 20px 8px", borderBottom: "1px solid #0D0D0D", display: "flex", gap: 6, flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 8, color: "#333", letterSpacing: "1px", marginRight: 2 }}>SIGNAL</span>
+          <div style={{ padding: "6px 20px 8px", borderBottom: `1px solid ${TC.card}`, display: "flex", gap: 6, flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 8, color: TC.line, letterSpacing: "1px", marginRight: 2 }}>SIGNAL</span>
             {[
-              { id: "all", label: "ALL", color: "#555" },
-              { id: "rfp", label: "RFP", color: "#34D399" },
-              { id: "market", label: "MARKET", color: "#A78BFA" },
-              { id: "venue", label: "VENUE", color: "#4ECDC4" },
-              { id: "competitor", label: "COMPETITOR", color: "#FF6B6B" },
+              { id: "all", label: "ALL", color: TC.fainter },
+              { id: "rfp", label: "RFP", color: TC.accentDeep },
+              { id: "market", label: "MARKET", color: TC.ink },
+              { id: "venue", label: "VENUE", color: TC.sub },
+              { id: "competitor", label: "COMPETITOR", color: TC.criticalInk },
             ].map(({ id, label, color }) => (
               <button key={id} onClick={() => setSignalFilter(id)}
-                style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${signalFilter === id ? color + "60" : "#1A1A1A"}`, background: signalFilter === id ? color + "12" : "transparent", color: signalFilter === id ? color : "#555", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
+                style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${signalFilter === id ? color + "60" : TC.line}`, background: signalFilter === id ? color + "12" : "transparent", color: signalFilter === id ? color : TC.fainter, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
                 {label}
               </button>
             ))}
             <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
               <button onClick={() => setSendWorthyOnly(s => !s)}
                 title="Show only real, send-worthy leads (hides raw-scout junk with no company)"
-                style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${sendWorthyOnly ? "#34D39960" : "#1A1A1A"}`, background: sendWorthyOnly ? "#34D39912" : "transparent", color: sendWorthyOnly ? "#34D399" : "#555", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
+                style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${sendWorthyOnly ? `${TC.accentDeep}60` : TC.line}`, background: sendWorthyOnly ? `${TC.accentDeep}12` : "transparent", color: sendWorthyOnly ? TC.accentDeep : TC.fainter, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
                 {sendWorthyOnly
                   ? `✓ send-worthy only${totalSignals ? ` · ${(totalSignals - rows.length).toLocaleString()} low-fit filtered` : ""}${hiddenJunk > 0 ? ` · ${hiddenJunk} junk hidden` : ""}`
                   : `show all signals${totalSignals ? ` · ${totalSignals.toLocaleString()} total` : ""}`}
               </button>
               <button onClick={() => setShowExpired(s => !s)}
-                style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${showExpired ? "#FF6B6B40" : "#1A1A1A"}`, background: showExpired ? "#FF6B6B12" : "transparent", color: showExpired ? "#FF6B6B" : "#444", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
+                style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: `1px solid ${showExpired ? `${TC.criticalInk}40` : TC.line}`, background: showExpired ? `${TC.criticalInk}12` : "transparent", color: showExpired ? TC.criticalInk : TC.fainter, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.5px" }}>
                 {showExpired ? "hide expired" : "show expired"}
               </button>
             </div>
@@ -2370,30 +2370,30 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
 
       {/* Targets: add form */}
       {activeTab === "targets" && showAddTarget && (
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid #0D0D0D", background: "rgba(4,14,34,0.62)", flexShrink: 0 }}>
+        <div style={{ padding: "14px 20px", borderBottom: `1px solid ${TC.card}`, background: TC.card, flexShrink: 0 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 160px", minWidth: 140 }}>
-              <span style={{ fontSize: 8, color: "#555", letterSpacing: "1px" }}>COMPANY NAME *</span>
+              <span style={{ fontSize: 8, color: TC.fainter, letterSpacing: "1px" }}>COMPANY NAME *</span>
               <input value={newTarget.name} onChange={e => setNewTarget(p => ({ ...p, name: e.target.value }))} placeholder="e.g. WGU"
-                style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "5px 9px", fontFamily: "inherit" }} />
+                style={{ background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 5, color: TC.warnInk, fontSize: 11, padding: "5px 9px", fontFamily: "inherit" }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 140px", minWidth: 120 }}>
-              <span style={{ fontSize: 8, color: "#555", letterSpacing: "1px" }}>DOMAIN</span>
+              <span style={{ fontSize: 8, color: TC.fainter, letterSpacing: "1px" }}>DOMAIN</span>
               <input value={newTarget.domain} onChange={e => setNewTarget(p => ({ ...p, domain: e.target.value }))} placeholder="e.g. wgu.edu"
-                style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "5px 9px", fontFamily: "inherit" }} />
+                style={{ background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 5, color: TC.warnInk, fontSize: 11, padding: "5px 9px", fontFamily: "inherit" }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 130px", minWidth: 110 }}>
-              <span style={{ fontSize: 8, color: "#555", letterSpacing: "1px" }}>INDUSTRY</span>
+              <span style={{ fontSize: 8, color: TC.fainter, letterSpacing: "1px" }}>INDUSTRY</span>
               <input value={newTarget.industry} onChange={e => setNewTarget(p => ({ ...p, industry: e.target.value }))} placeholder="e.g. Higher Ed"
-                style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "5px 9px", fontFamily: "inherit" }} />
+                style={{ background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 5, color: TC.warnInk, fontSize: 11, padding: "5px 9px", fontFamily: "inherit" }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "2 1 200px", minWidth: 160 }}>
-              <span style={{ fontSize: 8, color: "#555", letterSpacing: "1px" }}>WHY A TARGET</span>
+              <span style={{ fontSize: 8, color: TC.fainter, letterSpacing: "1px" }}>WHY A TARGET</span>
               <input value={newTarget.notes} onChange={e => setNewTarget(p => ({ ...p, notes: e.target.value }))} placeholder="e.g. Big annual conference, past client"
-                style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "5px 9px", fontFamily: "inherit" }} />
+                style={{ background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 5, color: TC.warnInk, fontSize: 11, padding: "5px 9px", fontFamily: "inherit" }} />
             </div>
             <button onClick={addTarget} disabled={addingTarget || !newTarget.name.trim()}
-              style={{ fontSize: 9, padding: "5px 14px", background: !newTarget.name.trim() ? "transparent" : "#A78BFA", border: `1px solid ${!newTarget.name.trim() ? "#1A1A1A" : "#A78BFA"}`, borderRadius: 5, color: !newTarget.name.trim() ? "#444" : "#080808", fontWeight: 600, cursor: !newTarget.name.trim() || addingTarget ? "not-allowed" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+              style={{ fontSize: 9, padding: "5px 14px", background: !newTarget.name.trim() ? "transparent" : TC.ink, border: `1px solid ${!newTarget.name.trim() ? TC.line : TC.ink}`, borderRadius: 5, color: !newTarget.name.trim() ? TC.fainter : TC.card, fontWeight: 600, cursor: !newTarget.name.trim() || addingTarget ? "not-allowed" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
               {addingTarget ? "Adding…" : "Add Account"}
             </button>
           </div>
@@ -2410,53 +2410,53 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
           tabIndex={-1}
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
           onClick={e => { if (e.target === e.currentTarget) setDraftModal(null); }}>
-          <div style={{ background: "rgba(4,14,34,0.55)", border: "1px solid #1E1E1E", borderRadius: 8, width: "100%", maxWidth: 560, display: "flex", flexDirection: "column", gap: 0, boxShadow: "0 20px 60px rgba(0,0,0,0.8)" }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, width: "100%", maxWidth: 560, display: "flex", flexDirection: "column", gap: 0, boxShadow: "0 20px 60px rgba(0,0,0,0.8)" }} onClick={e => e.stopPropagation()}>
             {/* Modal header */}
-            <div style={{ padding: "14px 18px", borderBottom: "1px solid #1A1A1A", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ padding: "14px 18px", borderBottom: `1px solid ${TC.line}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 12, fontWeight: 700, color: "#34D399" }}>Draft Outreach</div>
-                {draftModal?.existing && <span style={{ fontSize: 9, color: "#F7C948", background: "#F7C94812", border: "1px solid #F7C94830", borderRadius: 4, padding: "1px 6px" }}>existing draft</span>}
+                <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 12, fontWeight: 700, color: TC.accentDeep }}>Draft Outreach</div>
+                {draftModal?.existing && <span style={{ fontSize: 9, color: TC.warnInk, background: `${TC.warnInk}12`, border: `1px solid ${TC.warnInk}30`, borderRadius: 4, padding: "1px 6px" }}>existing draft</span>}
               </div>
               <button onClick={() => setDraftModal(null)}
-                style={{ background: "transparent", border: "none", color: "#555", cursor: "pointer", fontSize: 16, padding: "0 4px", fontFamily: "inherit", lineHeight: 1 }}
-                onMouseEnter={e => e.target.style.color = "#E8E4DC"}
-                onMouseLeave={e => e.target.style.color = "#555"}
+                style={{ background: "transparent", border: "none", color: TC.fainter, cursor: "pointer", fontSize: 16, padding: "0 4px", fontFamily: "inherit", lineHeight: 1 }}
+                onMouseEnter={e => e.target.style.color = TC.warnInk}
+                onMouseLeave={e => e.target.style.color = TC.fainter}
                 aria-label="Close modal">✕</button>
             </div>
             {/* Existing draft notice */}
             {draftModal?.existing && (
-              <div style={{ padding: "8px 18px", background: "#F7C94808", borderBottom: "1px solid #F7C94820", fontSize: 9, color: "#F7C948" }}>
+              <div style={{ padding: "8px 18px", background: `${TC.warnInk}08`, borderBottom: `1px solid ${TC.warnInk}20`, fontSize: 9, color: TC.warnInk }}>
                 A draft already exists for this contact. View and manage it in <strong>Grow Pipeline → Outreach Drafts</strong>.
               </div>
             )}
             {/* Subject */}
-            <div style={{ padding: "14px 18px", borderBottom: "1px solid #111" }}>
+            <div style={{ padding: "14px 18px", borderBottom: `1px solid ${TC.card}` }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontSize: 8, color: "#555", letterSpacing: "1.5px" }}>SUBJECT</span>
+                <span style={{ fontSize: 8, color: TC.fainter, letterSpacing: "1.5px" }}>SUBJECT</span>
                 <button onClick={() => copyDraft("subject", draftModal.subject)}
-                  style={{ fontSize: 8, padding: "2px 8px", background: draftCopied.subject ? "#34D39912" : "transparent", border: `1px solid ${draftCopied.subject ? "#34D39940" : "#1E1E1E"}`, borderRadius: 3, color: draftCopied.subject ? "#34D399" : "#555", cursor: "pointer", fontFamily: "inherit" }}>
+                  style={{ fontSize: 8, padding: "2px 8px", background: draftCopied.subject ? `${TC.accentDeep}12` : "transparent", border: `1px solid ${draftCopied.subject ? `${TC.accentDeep}40` : TC.line}`, borderRadius: 3, color: draftCopied.subject ? TC.accentDeep : TC.fainter, cursor: "pointer", fontFamily: "inherit" }}>
                   {draftCopied.subject ? "Copied ✓" : "Copy"}
                 </button>
               </div>
-              <div style={{ fontSize: 12, color: "#E8E4DC", lineHeight: 1.5, wordBreak: "break-word" }}>{draftModal.subject}</div>
+              <div style={{ fontSize: 12, color: TC.warnInk, lineHeight: 1.5, wordBreak: "break-word" }}>{draftModal.subject}</div>
             </div>
             {/* Body */}
             <div style={{ padding: "14px 18px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontSize: 8, color: "#555", letterSpacing: "1.5px" }}>BODY</span>
+                <span style={{ fontSize: 8, color: TC.fainter, letterSpacing: "1.5px" }}>BODY</span>
                 <button onClick={() => copyDraft("body", draftModal.body)}
-                  style={{ fontSize: 8, padding: "2px 8px", background: draftCopied.body ? "#34D39912" : "transparent", border: `1px solid ${draftCopied.body ? "#34D39940" : "#1E1E1E"}`, borderRadius: 3, color: draftCopied.body ? "#34D399" : "#555", cursor: "pointer", fontFamily: "inherit" }}>
+                  style={{ fontSize: 8, padding: "2px 8px", background: draftCopied.body ? `${TC.accentDeep}12` : "transparent", border: `1px solid ${draftCopied.body ? `${TC.accentDeep}40` : TC.line}`, borderRadius: 3, color: draftCopied.body ? TC.accentDeep : TC.fainter, cursor: "pointer", fontFamily: "inherit" }}>
                   {draftCopied.body ? "Copied ✓" : "Copy"}
                 </button>
               </div>
-              <pre style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{draftModal.body}</pre>
+              <pre style={{ fontSize: 11, color: TC.warnInk, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{draftModal.body}</pre>
             </div>
             {/* Footer */}
-            <div style={{ padding: "10px 18px", borderTop: "1px solid #111", display: "flex", justifyContent: "flex-end" }}>
+            <div style={{ padding: "10px 18px", borderTop: `1px solid ${TC.card}`, display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => setDraftModal(null)}
-                style={{ fontSize: 9, padding: "4px 14px", background: "transparent", border: "1px solid #1E1E1E", borderRadius: 4, color: "#666", cursor: "pointer", fontFamily: "inherit" }}
-                onMouseEnter={e => e.target.style.color = "#E8E4DC"}
-                onMouseLeave={e => e.target.style.color = "#666"}>
+                style={{ fontSize: 9, padding: "4px 14px", background: "transparent", border: `1px solid ${TC.line}`, borderRadius: 4, color: TC.fainter, cursor: "pointer", fontFamily: "inherit" }}
+                onMouseEnter={e => e.target.style.color = TC.warnInk}
+                onMouseLeave={e => e.target.style.color = TC.fainter}>
                 Close
               </button>
             </div>
@@ -2467,10 +2467,10 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
       {/* Targets table */}
       {activeTab === "targets" && (
         <div style={{ flex: 1, overflowY: "auto" }}>
-          {targetsLoading && <div style={{ padding: 24, fontSize: 10, color: "#555" }}>Loading…</div>}
-          {targetsError && <div style={{ padding: 24, fontSize: 10, color: "#FF6B6B" }}>Error: {targetsError}</div>}
+          {targetsLoading && <div style={{ padding: 24, fontSize: 10, color: TC.fainter }}>Loading…</div>}
+          {targetsError && <div style={{ padding: 24, fontSize: 10, color: TC.criticalInk }}>Error: {targetsError}</div>}
           {!targetsLoading && !targetsError && targets.length === 0 && (
-            <div style={{ padding: 24, fontSize: 10, color: "#444" }}>No target accounts yet. Click <span style={{ color: "#A78BFA" }}>+ Add</span> to add your first.</div>
+            <div style={{ padding: 24, fontSize: 10, color: TC.fainter }}>No target accounts yet. Click <span style={{ color: TC.ink }}>+ Add</span> to add your first.</div>
           )}
           {!targetsLoading && targets.length > 0 && (
             <TargetsTable targets={targets} updateTargetStatus={updateTargetStatus} deleteTarget={deleteTarget} thStyle={thStyle} tdStyle={tdStyle} queueForChain={queueForChain} queuedIds={queuedIds} onDraftOutreach={draftOutreachForTarget} draftLoading={draftLoading} />
@@ -2480,23 +2480,23 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
 
       {/* Signals table */}
       {activeTab === "signals" && <div style={{ flex: 1, overflowY: "auto" }}>
-        {loading && <div style={{ padding: 24, fontSize: 10, color: "#555" }}>Loading…</div>}
-        {error && <div style={{ padding: 24, fontSize: 10, color: "#FF6B6B" }}>Error: {error}</div>}
+        {loading && <div style={{ padding: 24, fontSize: 10, color: TC.fainter }}>Loading…</div>}
+        {error && <div style={{ padding: 24, fontSize: 10, color: TC.criticalInk }}>Error: {error}</div>}
         {!loading && !error && visible.length === 0 && (
-          <div style={{ padding: 24, fontSize: 10, color: "#444" }}>No opportunities{filter !== "all" ? ` with status "${filter}"` : ""}.</div>
+          <div style={{ padding: 24, fontSize: 10, color: TC.fainter }}>No opportunities{filter !== "all" ? ` with status "${filter}"` : ""}.</div>
         )}
         {!loading && visible.length > 0 && (() => {
           const NEXT_ACTION_STYLE = {
-            "draft outreach":  { color: "#34D399", bg: "#34D39915", border: "#34D39940" },
-            "enrich contact":  { color: "#A78BFA", bg: "#A78BFA15", border: "#A78BFA40" },
-            "send to sales":   { color: "#FB923C", bg: "#FB923C15", border: "#FB923C40" },
-            "watch only":      { color: "#666",    bg: "transparent", border: "#222" },
-            "add to targets":  { color: "#4ECDC4", bg: "#4ECDC415", border: "#4ECDC440" },
+            "draft outreach":  { color: TC.accentDeep, bg: `${TC.accentDeep}15`, border: `${TC.accentDeep}40` },
+            "enrich contact":  { color: TC.ink, bg: `${TC.ink}15`, border: `${TC.ink}40` },
+            "send to sales":   { color: TC.warnInk, bg: `${TC.warnInk}15`, border: `${TC.warnInk}40` },
+            "watch only":      { color: TC.fainter,    bg: "transparent", border: TC.line },
+            "add to targets":  { color: TC.sub, bg: `${TC.sub}15`, border: `${TC.sub}40` },
           };
           const BUDGET_LABEL = { small: "< $25k", mid: "$25k–$75k", large: "$75k–$200k", enterprise: "$200k+", unknown: "?" };
           return (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed" }}>
-            <thead style={{ position: "sticky", top: 0, background: "rgba(4,14,34,0.5)", zIndex: 1 }}>
+            <thead style={{ position: "sticky", top: 0, background: TC.card, zIndex: 1 }}>
               <tr>
                 <th style={{ ...thStyle, width: 36 }}>★</th>
                 <th style={{ ...thStyle, width: 120 }}>COMPANY</th>
@@ -2517,44 +2517,44 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                 const tier = oppTier(row);
                 const rowIsExpired = isExpired(row);
                 const rowIsUrgent = isUrgent(row);
-                const rowBg = rowIsExpired ? "#0A0A08" : isRfp ? "#0D0800" : "transparent";
-                const rfpBorder = rowIsExpired ? "2px solid #22222280" : isRfp ? "2px solid #FB923C30" : rowIsUrgent ? "2px solid #FB923C50" : undefined;
+                const rowBg = rowIsExpired ? TC.card : isRfp ? TC.warnInk : "transparent";
+                const rfpBorder = rowIsExpired ? `2px solid ${TC.line}80` : isRfp ? `2px solid ${TC.warnInk}30` : rowIsUrgent ? `2px solid ${TC.warnInk}50` : undefined;
                 const nas = NEXT_ACTION_STYLE[row.recommended_next_step] || NEXT_ACTION_STYLE["watch only"];
-                const scoreColor = rowIsExpired ? "#333" : (row.overall_score ?? 0) >= 7 ? "#34D399" : (row.overall_score ?? 0) >= 5 ? "#F7C948" : (row.overall_score ?? 0) >= 1 ? "#FF6B6B" : "#333";
+                const scoreColor = rowIsExpired ? TC.line : (row.overall_score ?? 0) >= 7 ? TC.accentDeep : (row.overall_score ?? 0) >= 5 ? TC.warnInk : (row.overall_score ?? 0) >= 1 ? TC.criticalInk : TC.line;
                 return (
                   <React.Fragment key={row.id}>
                     <tr style={{ background: rowBg, borderLeft: rfpBorder, transition: "background 0.1s", cursor: "pointer", opacity: rowIsExpired ? 0.45 : 1 }}
                       onClick={() => setExpandedRow(isExpanded ? null : row.id)}
-                      onMouseEnter={e => { e.currentTarget.style.background = rowIsExpired ? "#0D0D0A" : isRfp ? "#140B00" : "#0A0A0A"; }}
+                      onMouseEnter={e => { e.currentTarget.style.background = rowIsExpired ? TC.card : isRfp ? TC.warnInk : TC.card; }}
                       onMouseLeave={e => { e.currentTarget.style.background = rowBg; }}>
                       <td style={{ ...tdStyle, textAlign: "center" }}>
-                        {rowIsExpired && <div style={{ fontSize: 7, fontWeight: 700, color: "#555", letterSpacing: "0.5px", marginBottom: 2 }}>EXPIRED</div>}
-                        {!rowIsExpired && rowIsUrgent && <div style={{ fontSize: 7, fontWeight: 700, color: "#FB923C", letterSpacing: "0.5px", marginBottom: 2 }}>URGENT</div>}
-                        {!rowIsExpired && isRfp && <div style={{ fontSize: 7, fontWeight: 700, color: "#FB923C", letterSpacing: "0.5px", marginBottom: 2 }}>RFP</div>}
+                        {rowIsExpired && <div style={{ fontSize: 7, fontWeight: 700, color: TC.fainter, letterSpacing: "0.5px", marginBottom: 2 }}>EXPIRED</div>}
+                        {!rowIsExpired && rowIsUrgent && <div style={{ fontSize: 7, fontWeight: 700, color: TC.warnInk, letterSpacing: "0.5px", marginBottom: 2 }}>URGENT</div>}
+                        {!rowIsExpired && isRfp && <div style={{ fontSize: 7, fontWeight: 700, color: TC.warnInk, letterSpacing: "0.5px", marginBottom: 2 }}>RFP</div>}
                         {row.overall_score != null
                           ? <span title={`Fit: ${row.fit_score} · Urgency: ${row.urgency_score} · Confidence: ${row.confidence_score}`}
                               style={{ fontSize: 10, fontWeight: 700, color: scoreColor, background: scoreColor + "18", border: `1px solid ${scoreColor}40`, borderRadius: 4, padding: "1px 5px" }}>
                               {row.overall_score}
                             </span>
-                          : <span style={{ color: "#222", fontSize: 9 }}>—</span>}
-                        {!rowIsExpired && tier <= 1 && row.overall_score != null && <div style={{ fontSize: 7, color: tier === 0 ? "#FB923C" : "#34D399", marginTop: 2 }}>T{tier + 1}</div>}
+                          : <span style={{ color: TC.line, fontSize: 9 }}>—</span>}
+                        {!rowIsExpired && tier <= 1 && row.overall_score != null && <div style={{ fontSize: 7, color: tier === 0 ? TC.warnInk : TC.accentDeep, marginTop: 2 }}>T{tier + 1}</div>}
                       </td>
-                      <td style={{ ...tdStyle, color: rowIsExpired ? "#444" : isRfp ? "#FB923C" : "#E8E4DC", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {row.company || <span style={{ color: "#333" }}>—</span>}
-                        {row.event_type && <div style={{ fontSize: 8, color: rowIsExpired ? "#333" : "#555", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.event_type}</div>}
+                      <td style={{ ...tdStyle, color: rowIsExpired ? TC.fainter : isRfp ? TC.warnInk : TC.warnInk, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {row.company || <span style={{ color: TC.line }}>—</span>}
+                        {row.event_type && <div style={{ fontSize: 8, color: rowIsExpired ? TC.line : TC.fainter, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.event_type}</div>}
                       </td>
-                      <td style={{ ...tdStyle, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.contact || <span style={{ color: "#333" }}>—</span>}</td>
+                      <td style={{ ...tdStyle, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.contact || <span style={{ color: TC.line }}>—</span>}</td>
                       <td style={{ ...tdStyle, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {row.email
-                          ? <a href={`mailto:${row.email}`} onClick={e => e.stopPropagation()} style={{ color: "#A78BFA", textDecoration: "none" }}>{row.email}</a>
-                          : <span style={{ color: "#333" }}>—</span>}
+                          ? <a href={`mailto:${row.email}`} onClick={e => e.stopPropagation()} style={{ color: TC.ink, textDecoration: "none" }}>{row.email}</a>
+                          : <span style={{ color: TC.line }}>—</span>}
                       </td>
                       <td style={{ ...tdStyle, maxWidth: 220 }}>
                         <div style={{ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-                          {row.signal || row.notes || <span style={{ color: "#333" }}>—</span>}
+                          {row.signal || row.notes || <span style={{ color: TC.line }}>—</span>}
                         </div>
                         {row.why_this_matters && (
-                          <div style={{ marginTop: 3, fontSize: 9, color: "#34D399", fontStyle: "italic", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>
+                          <div style={{ marginTop: 3, fontSize: 9, color: TC.accentDeep, fontStyle: "italic", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>
                             ★ {row.why_this_matters}
                           </div>
                         )}
@@ -2564,45 +2564,45 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                           ? <span style={{ fontSize: 8, color: nas.color, background: nas.bg, border: `1px solid ${nas.border}`, borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>
                               {row.recommended_next_step}
                             </span>
-                          : <span style={{ color: "#222", fontSize: 9 }}>—</span>}
+                          : <span style={{ color: TC.line, fontSize: 9 }}>—</span>}
                         {row.estimated_budget_band && row.estimated_budget_band !== "unknown" && (
-                          <div style={{ fontSize: 8, color: "#555", marginTop: 3 }}>{BUDGET_LABEL[row.estimated_budget_band] || row.estimated_budget_band}</div>
+                          <div style={{ fontSize: 8, color: TC.fainter, marginTop: 3 }}>{BUDGET_LABEL[row.estimated_budget_band] || row.estimated_budget_band}</div>
                         )}
                       </td>
                       <td style={{ ...tdStyle, maxWidth: 130 }}>
                         {row.source
-                          ? <a href={row.source} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: "#A78BFA", textDecoration: "none", fontSize: 10, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          ? <a href={row.source} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: TC.ink, textDecoration: "none", fontSize: 10, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {row.title || row.source}
                             </a>
-                          : <span style={{ color: "#333" }}>—</span>}
+                          : <span style={{ color: TC.line }}>—</span>}
                       </td>
                       <td style={tdStyle} onClick={e => e.stopPropagation()}>
                         <select value={row.status || "new"} onChange={e => updateStatus(row.id, e.target.value)}
-                          style={{ background: "rgba(4,14,34,0.6)", border: `1px solid ${(STATUS_COLORS[row.status] || "#1A1A1A") + "50"}`, borderRadius: 4, color: STATUS_COLORS[row.status] || "#888", fontSize: 9, padding: "2px 4px", fontFamily: "inherit", cursor: "pointer" }}>
+                          style={{ background: TC.card, border: `1px solid ${(STATUS_COLORS[row.status] || TC.line) + "50"}`, borderRadius: 4, color: STATUS_COLORS[row.status] || TC.muted, fontSize: 9, padding: "2px 4px", fontFamily: "inherit", cursor: "pointer" }}>
                           {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
-                      <td style={{ ...tdStyle, fontSize: 9, color: "#555", whiteSpace: "nowrap" }}>
+                      <td style={{ ...tdStyle, fontSize: 9, color: TC.fainter, whiteSpace: "nowrap" }}>
                         {row.created_at ? new Date(row.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
                       </td>
                       <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
-                        {draftError[row.id] && <span style={{ fontSize: 8, color: "#FF6B6B", marginRight: 4 }} title={draftError[row.id]}>!</span>}
+                        {draftError[row.id] && <span style={{ fontSize: 8, color: TC.criticalInk, marginRight: 4 }} title={draftError[row.id]}>!</span>}
                         <button onClick={() => draftOutreach(row)} disabled={!!draftLoading[row.id]}
-                          style={{ background: "transparent", border: "1px solid #1E1E1E", borderRadius: 3, color: draftLoading[row.id] ? "#34D399" : "#555", cursor: draftLoading[row.id] ? "not-allowed" : "pointer", fontSize: 8, padding: "2px 5px", fontFamily: "inherit", marginRight: 3 }}
-                          onMouseEnter={e => { if (!draftLoading[row.id]) e.currentTarget.style.color = "#34D399"; }}
-                          onMouseLeave={e => { if (!draftLoading[row.id]) e.currentTarget.style.color = "#555"; }}>
+                          style={{ background: "transparent", border: `1px solid ${TC.line}`, borderRadius: 3, color: draftLoading[row.id] ? TC.accentDeep : TC.fainter, cursor: draftLoading[row.id] ? "not-allowed" : "pointer", fontSize: 8, padding: "2px 5px", fontFamily: "inherit", marginRight: 3 }}
+                          onMouseEnter={e => { if (!draftLoading[row.id]) e.currentTarget.style.color = TC.accentDeep; }}
+                          onMouseLeave={e => { if (!draftLoading[row.id]) e.currentTarget.style.color = TC.fainter; }}>
                           {draftLoading[row.id] ? "◌" : "Draft"}
                         </button>
                         <button onClick={() => deleteRow(row.id)}
-                          style={{ background: "transparent", border: "none", color: "#333", cursor: "pointer", fontSize: 12, padding: "2px 3px", fontFamily: "inherit" }}
-                          onMouseEnter={e => e.target.style.color = "#FF6B6B"}
-                          onMouseLeave={e => e.target.style.color = "#333"}>✕</button>
+                          style={{ background: "transparent", border: "none", color: TC.line, cursor: "pointer", fontSize: 12, padding: "2px 3px", fontFamily: "inherit" }}
+                          onMouseEnter={e => e.target.style.color = TC.criticalInk}
+                          onMouseLeave={e => e.target.style.color = TC.line}>✕</button>
                       </td>
                     </tr>
                     {/* Expandable detail panel */}
                     {isExpanded && (
-                      <tr style={{ background: isRfp ? "#100900" : "#080808" }}>
-                        <td colSpan={10} style={{ padding: "16px 20px 20px 20px", borderBottom: "1px solid #111", borderLeft: isRfp ? "2px solid #FB923C30" : "none" }}>
+                      <tr style={{ background: isRfp ? TC.warnInk : TC.card }}>
+                        <td colSpan={10} style={{ padding: "16px 20px 20px 20px", borderBottom: `1px solid ${TC.card}`, borderLeft: isRfp ? `2px solid ${TC.warnInk}30` : "none" }}>
                           <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
                             {/* Left: scores + intelligence */}
                             <div style={{ flex: "1 1 260px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -2610,28 +2610,28 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                                 {[
                                   { label: "OVERALL", val: row.overall_score, color: scoreColor },
-                                  { label: "FIT", val: row.fit_score, color: "#A78BFA" },
-                                  { label: "URGENCY", val: row.urgency_score, color: "#F7C948" },
-                                  { label: "CONFIDENCE", val: row.confidence_score, color: "#4ECDC4" },
+                                  { label: "FIT", val: row.fit_score, color: TC.ink },
+                                  { label: "URGENCY", val: row.urgency_score, color: TC.warnInk },
+                                  { label: "CONFIDENCE", val: row.confidence_score, color: TC.sub },
                                 ].map(({ label, val, color }) => (
-                                  <div key={label} style={{ background: "rgba(4,14,34,0.6)", border: `1px solid ${color}25`, borderRadius: 6, padding: "6px 12px", minWidth: 60, textAlign: "center" }}>
+                                  <div key={label} style={{ background: TC.card, border: `1px solid ${color}25`, borderRadius: 6, padding: "6px 12px", minWidth: 60, textAlign: "center" }}>
                                     <div style={{ fontSize: 16, fontWeight: 700, color, fontFamily: "'Syne', sans-serif" }}>{val ?? "—"}</div>
-                                    <div style={{ fontSize: 7, color: "#444", letterSpacing: "1px", marginTop: 2 }}>{label}</div>
+                                    <div style={{ fontSize: 7, color: TC.fainter, letterSpacing: "1px", marginTop: 2 }}>{label}</div>
                                   </div>
                                 ))}
                               </div>
                               {/* Why this matters */}
                               {row.why_this_matters && (
-                                <div style={{ background: "#34D39908", border: "1px solid #34D39925", borderRadius: 6, padding: "10px 12px" }}>
-                                  <div style={{ fontSize: 8, color: "#34D399", letterSpacing: "1px", marginBottom: 5 }}>WHY THIS MATTERS</div>
-                                  <div style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.6 }}>{row.why_this_matters}</div>
+                                <div style={{ background: `${TC.accentDeep}08`, border: `1px solid ${TC.accentDeep}25`, borderRadius: 6, padding: "10px 12px" }}>
+                                  <div style={{ fontSize: 8, color: TC.accentDeep, letterSpacing: "1px", marginBottom: 5 }}>WHY THIS MATTERS</div>
+                                  <div style={{ fontSize: 11, color: TC.warnInk, lineHeight: 1.6 }}>{row.why_this_matters}</div>
                                 </div>
                               )}
                               {/* Recommended angle */}
                               {row.recommended_angle && (
-                                <div style={{ background: "#A78BFA08", border: "1px solid #A78BFA25", borderRadius: 6, padding: "10px 12px" }}>
-                                  <div style={{ fontSize: 8, color: "#A78BFA", letterSpacing: "1px", marginBottom: 5 }}>POSITIONING ANGLE</div>
-                                  <div style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.6 }}>{row.recommended_angle}</div>
+                                <div style={{ background: `${TC.ink}08`, border: `1px solid ${TC.ink}25`, borderRadius: 6, padding: "10px 12px" }}>
+                                  <div style={{ fontSize: 8, color: TC.ink, letterSpacing: "1px", marginBottom: 5 }}>POSITIONING ANGLE</div>
+                                  <div style={{ fontSize: 11, color: TC.warnInk, lineHeight: 1.6 }}>{row.recommended_angle}</div>
                                 </div>
                               )}
                             </div>
@@ -2650,20 +2650,20 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
                                 { label: "SOURCE",        val: row.title || row.source, link: row.source },
                               ].filter(f => f.val).map(({ label, val, link }) => (
                                 <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                                  <span style={{ fontSize: 8, color: "#444", letterSpacing: "1px", minWidth: 80, paddingTop: 1 }}>{label}</span>
+                                  <span style={{ fontSize: 8, color: TC.fainter, letterSpacing: "1px", minWidth: 80, paddingTop: 1 }}>{label}</span>
                                   {link
-                                    ? <a href={link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#A78BFA", textDecoration: "none", wordBreak: "break-all" }}>{val}</a>
-                                    : <span style={{ fontSize: 10, color: "#A8A4A0" }}>{val}</span>}
+                                    ? <a href={link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: TC.ink, textDecoration: "none", wordBreak: "break-all" }}>{val}</a>
+                                    : <span style={{ fontSize: 10, color: TC.warnInk }}>{val}</span>}
                                 </div>
                               ))}
                               {/* Actions row */}
                               <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                                 <button onClick={() => draftOutreach(row)} disabled={!!draftLoading[row.id]}
-                                  style={{ fontSize: 9, padding: "4px 12px", background: "#34D39912", border: "1px solid #34D39940", borderRadius: 5, color: "#34D399", cursor: "pointer", fontFamily: "inherit" }}>
+                                  style={{ fontSize: 9, padding: "4px 12px", background: `${TC.accentDeep}12`, border: `1px solid ${TC.accentDeep}40`, borderRadius: 5, color: TC.accentDeep, cursor: "pointer", fontFamily: "inherit" }}>
                                   {draftLoading[row.id] ? "◌ Drafting…" : "Draft Outreach →"}
                                 </button>
                                 <button onClick={() => sendToSales(row)} disabled={!!salesLoading[row.id] || !!salesSent[row.id]}
-                                  style={{ fontSize: 9, padding: "4px 12px", background: "#FB923C12", border: "1px solid #FB923C40", borderRadius: 5, color: "#FB923C", cursor: "pointer", fontFamily: "inherit" }}>
+                                  style={{ fontSize: 9, padding: "4px 12px", background: `${TC.warnInk}12`, border: `1px solid ${TC.warnInk}40`, borderRadius: 5, color: TC.warnInk, cursor: "pointer", fontFamily: "inherit" }}>
                                   {salesLoading[row.id] ? "◌" : salesSent[row.id] ? "✓ Sent to Taylor" : "→ Send to #ff-leads"}
                                 </button>
                               </div>
@@ -2685,7 +2685,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
       {activeTab === "find" && (
         <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
           {!tavilyKey && (
-            <div style={{ padding: "12px 16px", background: "#1A0A00", border: "1px solid #FB923C30", borderRadius: 8, marginBottom: 16, fontSize: 11, color: "#FB923C" }}>
+            <div style={{ padding: "12px 16px", background: TC.warnInk, border: `1px solid ${TC.warnInk}30`, borderRadius: 8, marginBottom: 16, fontSize: 11, color: TC.warnInk }}>
               Tavily key not configured — add it in Settings to enable live search.
             </div>
           )}
@@ -2696,20 +2696,20 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
               onChange={e => setFindQuery(e.target.value)}
               onKeyDown={e => e.key === "Enter" && runFind()}
               placeholder='e.g. "event production" RFP Utah 2026'
-              style={{ flex: 1, background: "rgba(3,12,30,0.7)", border: "1px solid #1A1A1A", borderRadius: 7, color: "#E8E4DC", fontSize: 12, padding: "9px 14px", fontFamily: "inherit" }}
+              style={{ flex: 1, background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 7, color: TC.warnInk, fontSize: 12, padding: "9px 14px", fontFamily: "inherit" }}
             />
             <button onClick={() => runFind()} disabled={findLoading || !tavilyKey || !findQuery.trim()}
-              style={{ padding: "9px 18px", background: findLoading ? "#A78BFA20" : "#A78BFA15", border: "1px solid #A78BFA40", borderRadius: 7, color: findLoading ? "#A78BFA" : "#A78BFA99", fontSize: 11, cursor: findLoading || !tavilyKey || !findQuery.trim() ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              style={{ padding: "9px 18px", background: findLoading ? `${TC.ink}20` : `${TC.ink}15`, border: `1px solid ${TC.ink}40`, borderRadius: 7, color: findLoading ? TC.ink : `${TC.ink}99`, fontSize: 11, cursor: findLoading || !tavilyKey || !findQuery.trim() ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
               {findLoading ? "⟳ Searching..." : "Search →"}
             </button>
           </div>
           {/* Suggested queries */}
           <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 8, color: "#444", letterSpacing: "1.5px", marginBottom: 8 }}>SUGGESTED QUERIES</div>
+            <div style={{ fontSize: 8, color: TC.fainter, letterSpacing: "1.5px", marginBottom: 8 }}>SUGGESTED QUERIES</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {FIND_SUGGESTIONS.map((q, i) => (
                 <button key={i} onClick={() => { setFindQuery(q); runFind(q); }}
-                  style={{ textAlign: "left", background: "rgba(4,14,34,0.62)", border: "1px solid #141414", borderRadius: 6, padding: "7px 12px", fontSize: 10, color: "#666", cursor: "pointer", fontFamily: "inherit" }}>
+                  style={{ textAlign: "left", background: TC.card, border: `1px solid ${TC.card}`, borderRadius: 6, padding: "7px 12px", fontSize: 10, color: TC.fainter, cursor: "pointer", fontFamily: "inherit" }}>
                   {q}
                 </button>
               ))}
@@ -2717,33 +2717,33 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
           </div>
           {/* Error */}
           {findError && (
-            <div style={{ padding: "10px 14px", background: "#1A0000", border: "1px solid #FF6B6B30", borderRadius: 7, fontSize: 11, color: "#FF6B6B", marginBottom: 14 }}>{findError}</div>
+            <div style={{ padding: "10px 14px", background: TC.criticalInk, border: `1px solid ${TC.criticalInk}30`, borderRadius: 7, fontSize: 11, color: TC.criticalInk, marginBottom: 14 }}>{findError}</div>
           )}
           {/* Results */}
           {findResults.length > 0 && (
             <div>
-              <div style={{ fontSize: 8, color: "#444", letterSpacing: "1.5px", marginBottom: 10 }}>{findResults.length} RESULTS</div>
+              <div style={{ fontSize: 8, color: TC.fainter, letterSpacing: "1.5px", marginBottom: 10 }}>{findResults.length} RESULTS</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {findResults.map((r, i) => {
                   const url = r.url;
                   const saved = savedUrls.has(url);
                   const saving = savingUrl[url];
                   return (
-                    <div key={i} style={{ background: "rgba(3,12,30,0.7)", border: `1px solid ${saved ? "#34D39920" : "#141414"}`, borderRadius: 8, padding: "14px 16px" }}>
+                    <div key={i} style={{ background: TC.card, border: `1px solid ${saved ? `${TC.accentDeep}20` : TC.card}`, borderRadius: 8, padding: "14px 16px" }}>
                       <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, color: "#B8B4AC", marginBottom: 5, fontWeight: 500 }}>{r.title || url}</div>
-                          <div style={{ fontSize: 9, color: "#4ECDC4", marginBottom: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{url}</div>
+                          <div style={{ fontSize: 12, color: TC.warnInk, marginBottom: 5, fontWeight: 500 }}>{r.title || url}</div>
+                          <div style={{ fontSize: 9, color: TC.sub, marginBottom: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{url}</div>
                           {(r.content || r.snippet) && (
-                            <div style={{ fontSize: 10, color: "#666", lineHeight: 1.6 }}>{(r.content || r.snippet || "").slice(0, 280)}{(r.content || r.snippet || "").length > 280 ? "..." : ""}</div>
+                            <div style={{ fontSize: 10, color: TC.fainter, lineHeight: 1.6 }}>{(r.content || r.snippet || "").slice(0, 280)}{(r.content || r.snippet || "").length > 280 ? "..." : ""}</div>
                           )}
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 5, flexShrink: 0 }}>
                           {saved ? (
-                            <span style={{ fontSize: 9, color: "#34D399", padding: "4px 10px" }}>✓ Saved</span>
+                            <span style={{ fontSize: 9, color: TC.accentDeep, padding: "4px 10px" }}>✓ Saved</span>
                           ) : (
                             <>
-                              {[["rfp", "RFP", "#34D399"], ["venue", "Venue", "#4ECDC4"], ["market", "Market", "#A78BFA"]].map(([sig, label, color]) => (
+                              {[["rfp", "RFP", TC.accentDeep], ["venue", "Venue", TC.sub], ["market", "Market", TC.ink]].map(([sig, label, color]) => (
                                 <button key={sig} onClick={() => saveResult(r, sig)} disabled={saving}
                                   style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: `1px solid ${color}35`, borderRadius: 5, color: `${color}99`, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
                                   {saving ? "..." : `+ ${label}`}
@@ -2760,7 +2760,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
             </div>
           )}
           {!findLoading && findResults.length === 0 && findQuery && !findError && (
-            <div style={{ fontSize: 11, color: "#444", padding: "20px 0" }}>No results — try a different query</div>
+            <div style={{ fontSize: 11, color: TC.fainter, padding: "20px 0" }}>No results — try a different query</div>
           )}
         </div>
       )}
@@ -3053,7 +3053,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
   const usd = n => n >= 1000000 ? `$${(n / 1000000).toFixed(2)}M` : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${Math.round(n)}`;
   const hasData = clients.length > 0 || venues.length > 0 || projects.length > 0;
 
-  const ACCENT = { overview: "#FB923C", industries: "#34D399", markets: "#A78BFA", growth: "#4ECDC4", content: "#F7C948" };
+  const ACCENT = { overview: TC.warnInk, industries: TC.accentDeep, markets: TC.ink, growth: TC.sub, content: TC.warnInk };
 
   function insightPanel(section, title, description, actions) {
     const color = ACCENT[section];
@@ -3064,27 +3064,27 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 16 }}>
           <div>
             <div style={{ fontSize: 11, color, letterSpacing: "2px", marginBottom: 5 }}>{title}</div>
-            <div style={{ fontSize: 10, color: "#555", maxWidth: 500 }}>{description}</div>
+            <div style={{ fontSize: 10, color: TC.fainter, maxWidth: 500 }}>{description}</div>
           </div>
           <button onClick={() => generate(section)} disabled={isGen || !hasData}
-            style={{ fontSize: 9, padding: "5px 14px", background: isGen ? `${color}15` : "transparent", border: `1px solid ${isGen ? `${color}50` : "#1A1A1A"}`, borderRadius: 5, color: isGen ? color : "#666", cursor: isGen || !hasData ? "not-allowed" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+            style={{ fontSize: 9, padding: "5px 14px", background: isGen ? `${color}15` : "transparent", border: `1px solid ${isGen ? `${color}50` : TC.line}`, borderRadius: 5, color: isGen ? color : TC.fainter, cursor: isGen || !hasData ? "not-allowed" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
             {isGen ? "◌ Generating…" : content ? "↻ Refresh" : "◐ Generate"}
           </button>
         </div>
-        {!hasData && <div style={{ fontSize: 10, color: "#333", padding: "20px 0" }}>Sync Flex data first to generate insights.</div>}
+        {!hasData && <div style={{ fontSize: 10, color: TC.line, padding: "20px 0" }}>Sync Flex data first to generate insights.</div>}
         {hasData && !content && !isGen && (
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "24px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 10, color: "#444" }}>Click Generate to analyze {billed.length} billed clients · {projects.length} projects</div>
-            <div style={{ fontSize: 9, color: "#333" }}>Uses Claude to surface patterns and strategic recommendations from your historical data.</div>
+          <div style={{ background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, padding: "24px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 10, color: TC.fainter }}>Click Generate to analyze {billed.length} billed clients · {projects.length} projects</div>
+            <div style={{ fontSize: 9, color: TC.line }}>Uses Claude to surface patterns and strategic recommendations from your historical data.</div>
           </div>
         )}
-        {isGen && <div style={{ fontSize: 10, color: "#555", padding: "20px 0" }}>◌ Analyzing {billed.length} billed clients across all historical records…</div>}
+        {isGen && <div style={{ fontSize: 10, color: TC.fainter, padding: "20px 0" }}>◌ Analyzing {billed.length} billed clients across all historical records…</div>}
         {content && !isGen && (
           <>
-            <pre style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.85, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{content}</pre>
+            <pre style={{ fontSize: 11, color: TC.warnInk, lineHeight: 1.85, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{content}</pre>
             {actions && actions.length > 0 && (
-              <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #111", display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 9, color: "#444", letterSpacing: "1px", alignSelf: "center" }}>NEXT ACTIONS</span>
+              <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${TC.card}`, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 9, color: TC.fainter, letterSpacing: "1px", alignSelf: "center" }}>NEXT ACTIONS</span>
                 {actions.map((a, i) => (
                   <button key={i} onClick={a.onClick}
                     style={{ fontSize: 9, padding: "4px 12px", background: `${a.color}12`, border: `1px solid ${a.color}40`, borderRadius: 5, color: a.color, cursor: "pointer", fontFamily: "inherit" }}>
@@ -3102,12 +3102,12 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ padding: "14px 20px", borderBottom: "1px solid #111", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 8, flexShrink: 0 }}>
+      <div style={{ padding: "14px 20px", borderBottom: `1px solid ${TC.card}`, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 8, flexShrink: 0 }}>
         <div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: "#FB923C" }}>Flex Intel</div>
-          <div style={{ fontSize: 9, color: "#444" }}>{loadingData ? "loading…" : `${billed.length} billed clients · ${projects.length} projects · ${usd(totalBooked)} booked`}</div>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: TC.warnInk }}>Flex Intel</div>
+          <div style={{ fontSize: 9, color: TC.fainter }}>{loadingData ? "loading…" : `${billed.length} billed clients · ${projects.length} projects · ${usd(totalBooked)} booked`}</div>
         </div>
-        <div style={{ display: "flex", gap: 2, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 6, padding: 2 }}>
+        <div style={{ display: "flex", gap: 2, background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 6, padding: 2 }}>
           {[
             { id: "overview", label: "Overview" },
             { id: "industries", label: "Industries" },
@@ -3117,29 +3117,29 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
             { id: "data", label: "Raw Data" },
           ].map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
-              style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: "none", background: activeTab === t.id ? "#1A1A1A" : "transparent", color: activeTab === t.id ? (ACCENT[t.id] || "#888") : "#555", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.3px" }}>
+              style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: "none", background: activeTab === t.id ? TC.line : "transparent", color: activeTab === t.id ? (ACCENT[t.id] || TC.muted) : TC.fainter, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.3px" }}>
               {t.label}
             </button>
           ))}
         </div>
         {toast && (
-          <div style={{ fontSize: 9, padding: "4px 10px", borderRadius: 5, background: toast.ok ? "#34D39912" : "#FF6B6B12", border: `1px solid ${toast.ok ? "#34D39940" : "#FF6B6B40"}`, color: toast.ok ? "#34D399" : "#FF6B6B" }}>{toast.msg}</div>
+          <div style={{ fontSize: 9, padding: "4px 10px", borderRadius: 5, background: toast.ok ? `${TC.accentDeep}12` : `${TC.criticalInk}12`, border: `1px solid ${toast.ok ? `${TC.accentDeep}40` : `${TC.criticalInk}40`}`, color: toast.ok ? TC.accentDeep : TC.criticalInk }}>{toast.msg}</div>
         )}
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <button onClick={generateAll} disabled={!!generating || !hasData}
-            style={{ fontSize: 9, padding: "3px 9px", background: generating ? "#FB923C12" : "transparent", border: `1px solid ${generating ? "#FB923C40" : "#1A1A1A"}`, borderRadius: 5, color: generating ? "#FB923C" : "#666", cursor: generating || !hasData ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+            style={{ fontSize: 9, padding: "3px 9px", background: generating ? `${TC.warnInk}12` : "transparent", border: `1px solid ${generating ? `${TC.warnInk}40` : TC.line}`, borderRadius: 5, color: generating ? TC.warnInk : TC.fainter, cursor: generating || !hasData ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
             {generating ? `◌ ${generating}…` : "◐ Generate All"}
           </button>
-          <label style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: "1px solid #1A1A1A", borderRadius: 5, color: "#666", cursor: "pointer", fontFamily: "inherit" }}>
+          <label style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: `1px solid ${TC.line}`, borderRadius: 5, color: TC.fainter, cursor: "pointer", fontFamily: "inherit" }}>
             ↑ Import CSV
             <input type="file" accept=".csv,.xls,.xlsx" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) importFlexCsv(f); e.target.value = ''; }} />
           </label>
           <button onClick={syncFromFlex} disabled={syncing}
-            style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: "1px solid #1A1A1A", borderRadius: 5, color: syncing ? "#34D399" : "#666", cursor: syncing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+            style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: `1px solid ${TC.line}`, borderRadius: 5, color: syncing ? TC.accentDeep : TC.fainter, cursor: syncing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
             {syncing ? "◌ Syncing…" : "⇅ Sync Flex"}
           </button>
           <button onClick={loadAll}
-            style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: "1px solid #1A1A1A", borderRadius: 5, color: "#555", cursor: "pointer", fontFamily: "inherit" }}>↻</button>
+            style={{ fontSize: 9, padding: "3px 9px", background: "transparent", border: `1px solid ${TC.line}`, borderRadius: 5, color: TC.fainter, cursor: "pointer", fontFamily: "inherit" }}>↻</button>
         </div>
       </div>
 
@@ -3152,99 +3152,99 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
             {/* Stat cards */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {[
-                { label: "Booked value", value: usd(totalBooked), color: "#34D399" },
-                { label: "Clients", value: billed.length, color: "#FB923C" },
-                { label: "Jobs", value: totalJobs, color: "#A78BFA" },
-                { label: "Active 12mo", value: activeClients.length, color: "#4ECDC4" },
-                { label: "Repeat", value: repeatClients, color: "#F7C948" },
+                { label: "Booked value", value: usd(totalBooked), color: TC.accentDeep },
+                { label: "Clients", value: billed.length, color: TC.warnInk },
+                { label: "Jobs", value: totalJobs, color: TC.ink },
+                { label: "Active 12mo", value: activeClients.length, color: TC.sub },
+                { label: "Repeat", value: repeatClients, color: TC.warnInk },
               ].map(s => (
-                <div key={s.label} style={{ flex: "1 1 100px", minWidth: 90, background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
+                <div key={s.label} style={{ flex: "1 1 100px", minWidth: 90, background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, padding: "16px 18px" }}>
                   <div style={{ fontSize: 26, fontWeight: 700, color: s.color, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loadingData ? "—" : s.value}</div>
-                  <div style={{ fontSize: 9, color: "#444", letterSpacing: "1.5px", marginTop: 7, textTransform: "uppercase" }}>{s.label}</div>
+                  <div style={{ fontSize: 9, color: TC.fainter, letterSpacing: "1.5px", marginTop: 7, textTransform: "uppercase" }}>{s.label}</div>
                 </div>
               ))}
             </div>
 
             {/* Strategic Snapshot */}
-            <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8 }}>
-              <div style={{ padding: "12px 18px", borderBottom: "1px solid #111", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 9, color: "#FB923C", letterSpacing: "2px" }}>◐ STRATEGIC SNAPSHOT</span>
+            <div style={{ background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8 }}>
+              <div style={{ padding: "12px 18px", borderBottom: `1px solid ${TC.card}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 9, color: TC.warnInk, letterSpacing: "2px" }}>◐ STRATEGIC SNAPSHOT</span>
                 <button onClick={() => generate("overview")} disabled={generating === "overview" || !hasData}
-                  style={{ fontSize: 9, padding: "3px 10px", background: generating === "overview" ? "#FB923C12" : "transparent", border: `1px solid ${generating === "overview" ? "#FB923C40" : "#1A1A1A"}`, borderRadius: 5, color: generating === "overview" ? "#FB923C" : "#555", cursor: generating === "overview" || !hasData ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                  style={{ fontSize: 9, padding: "3px 10px", background: generating === "overview" ? `${TC.warnInk}12` : "transparent", border: `1px solid ${generating === "overview" ? `${TC.warnInk}40` : TC.line}`, borderRadius: 5, color: generating === "overview" ? TC.warnInk : TC.fainter, cursor: generating === "overview" || !hasData ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
                   {generating === "overview" ? "◌ Analyzing…" : insights.overview ? "↻ Refresh" : "◐ Generate Snapshot"}
                 </button>
               </div>
               <div style={{ padding: "16px 18px" }}>
-                {!hasData && <div style={{ fontSize: 10, color: "#333" }}>Sync Flex data first.</div>}
-                {hasData && !insights.overview && generating !== "overview" && <div style={{ fontSize: 10, color: "#444" }}>Generate an executive summary of your historical client work, top patterns, and strategic positioning.</div>}
-                {generating === "overview" && <div style={{ fontSize: 10, color: "#555" }}>◌ Analyzing {billed.length} billed clients across all sectors…</div>}
-                {insights.overview && generating !== "overview" && <pre style={{ fontSize: 11, color: "#A8A4A0", lineHeight: 1.8, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{insights.overview}</pre>}
+                {!hasData && <div style={{ fontSize: 10, color: TC.line }}>Sync Flex data first.</div>}
+                {hasData && !insights.overview && generating !== "overview" && <div style={{ fontSize: 10, color: TC.fainter }}>Generate an executive summary of your historical client work, top patterns, and strategic positioning.</div>}
+                {generating === "overview" && <div style={{ fontSize: 10, color: TC.fainter }}>◌ Analyzing {billed.length} billed clients across all sectors…</div>}
+                {insights.overview && generating !== "overview" && <pre style={{ fontSize: 11, color: TC.warnInk, lineHeight: 1.8, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{insights.overview}</pre>}
               </div>
             </div>
 
             {/* Who pays the bills + how it trends by year */}
             {billed.length > 0 && (
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 320px", background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
+                <div style={{ flex: "1 1 320px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, padding: "16px 18px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-                    <span style={{ fontSize: 9, color: "#34D399", letterSpacing: "2px" }}>TOP CLIENTS BY BOOKED VALUE</span>
-                    <span style={{ fontSize: 9, color: concentration > 25 ? "#FB923C" : "#444" }}>
+                    <span style={{ fontSize: 9, color: TC.accentDeep, letterSpacing: "2px" }}>TOP CLIENTS BY BOOKED VALUE</span>
+                    <span style={{ fontSize: 9, color: concentration > 25 ? TC.warnInk : TC.fainter }}>
                       top client = {concentration.toFixed(0)}% of revenue
                     </span>
                   </div>
                   {topClients.map(c => (
                     <div key={c.id} style={{ marginBottom: 10 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 11, marginBottom: 3 }}>
-                        <span style={{ color: "#A8A4A0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                        <span style={{ color: "#E8E4DC", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                          {usd(Number(c.total_revenue) || 0)} <span style={{ color: "#444" }}>· {c.total_events || 0}j</span>
+                        <span style={{ color: TC.warnInk, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                        <span style={{ color: TC.warnInk, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                          {usd(Number(c.total_revenue) || 0)} <span style={{ color: TC.fainter }}>· {c.total_events || 0}j</span>
                         </span>
                       </div>
-                      <div style={{ height: 4, background: "#141414", borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${((Number(c.total_revenue) || 0) / maxClientRev * 100).toFixed(1)}%`, background: TC.accentDeep }} />
+                      <div style={{ height: 4, background: TC.barTrack, borderRadius: 999, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${((Number(c.total_revenue) || 0) / maxClientRev * 100).toFixed(1)}%`, background: (Number(c.total_revenue) || 0) === maxClientRev ? TC.ink : TC.bar, borderRadius: 999 }} />
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div style={{ flex: "1 1 240px", background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "16px 18px" }}>
-                  <div style={{ fontSize: 9, color: "#A78BFA", letterSpacing: "2px", marginBottom: 14 }}>BOOKED BY YEAR</div>
+                <div style={{ flex: "1 1 240px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, padding: "16px 18px" }}>
+                  <div style={{ fontSize: 9, color: TC.ink, letterSpacing: "2px", marginBottom: 14 }}>BOOKED BY YEAR</div>
                   {years.length ? years.map(([y, v]) => (
                     <div key={y} style={{ marginBottom: 10 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
-                        <span style={{ color: "#A8A4A0" }}>{y}</span>
-                        <span style={{ color: "#E8E4DC", fontVariantNumeric: "tabular-nums" }}>
-                          {usd(v.rev)} <span style={{ color: "#444" }}>· {v.jobs}j</span>
+                        <span style={{ color: TC.warnInk }}>{y}</span>
+                        <span style={{ color: TC.warnInk, fontVariantNumeric: "tabular-nums" }}>
+                          {usd(v.rev)} <span style={{ color: TC.fainter }}>· {v.jobs}j</span>
                         </span>
                       </div>
-                      <div style={{ height: 4, background: "#141414", borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${(v.rev / maxYearRev * 100).toFixed(1)}%`, background: "#A78BFA" }} />
+                      <div style={{ height: 4, background: TC.barTrack, borderRadius: 999, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${(v.rev / maxYearRev * 100).toFixed(1)}%`, background: v.rev === maxYearRev ? TC.ink : TC.bar, borderRadius: 999 }} />
                       </div>
                     </div>
-                  )) : <div style={{ fontSize: 10, color: "#333" }}>No dated projects yet.</div>}
+                  )) : <div style={{ fontSize: 10, color: TC.line }}>No dated projects yet.</div>}
                 </div>
               </div>
             )}
 
             {/* Win-back: clients who paid before and have gone quiet */}
             {winback.length > 0 && (
-              <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderLeft: "3px solid #FB923C", borderRadius: 8, padding: "16px 18px" }}>
+              <div style={{ background: TC.card, border: `1px solid ${TC.line}`, borderLeft: `3px solid ${TC.warnInk}`, borderRadius: 8, padding: "16px 18px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
-                  <span style={{ fontSize: 9, color: "#FB923C", letterSpacing: "2px" }}>◇ WIN-BACK · NO BOOKING IN 12 MONTHS</span>
-                  <span style={{ fontSize: 9, color: "#666" }}>{winback.length} clients · {usd(winbackValue)} of past business</span>
+                  <span style={{ fontSize: 9, color: TC.warnInk, letterSpacing: "2px" }}>◇ WIN-BACK · NO BOOKING IN 12 MONTHS</span>
+                  <span style={{ fontSize: 9, color: TC.fainter }}>{winback.length} clients · {usd(winbackValue)} of past business</span>
                 </div>
-                <div style={{ fontSize: 10, color: "#555", marginBottom: 14 }}>They already bought from you once. Warmer than anything the Scout finds cold.</div>
+                <div style={{ fontSize: 10, color: TC.fainter, marginBottom: 14 }}>They already bought from you once. Warmer than anything the Scout finds cold.</div>
                 {winback.slice(0, 10).map(c => (
-                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: "1px solid #131313", fontSize: 11, flexWrap: "wrap" }}>
-                    <span style={{ color: "#A8A4A0", flex: "1 1 150px" }}>
+                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${TC.card}`, fontSize: 11, flexWrap: "wrap" }}>
+                    <span style={{ color: TC.warnInk, flex: "1 1 150px" }}>
                       {c.name}
                       {(c.contact_email || c.location) && (
-                        <span style={{ color: "#555", fontSize: 10 }}> · {c.contact_email || c.location}</span>
+                        <span style={{ color: TC.fainter, fontSize: 10 }}> · {c.contact_email || c.location}</span>
                       )}
                     </span>
-                    <span style={{ color: "#E8E4DC", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                    <span style={{ color: TC.warnInk, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
                       {usd(Number(c.total_revenue) || 0)}
-                      <span style={{ color: "#444" }}> · last {c.last_event_date || "—"}</span>
+                      <span style={{ color: TC.fainter }}> · last {c.last_event_date || "—"}</span>
                     </span>
                   </div>
                 ))}
@@ -3260,15 +3260,15 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
                 { id: "content", icon: "✦", label: "Content Strategy", desc: "Pages, campaigns & proof points" },
               ].map(s => (
                 <div key={s.id} onClick={() => setActiveTab(s.id)}
-                  style={{ background: "rgba(4,14,34,0.62)", border: `1px solid ${insights[s.id] ? ACCENT[s.id] + "30" : "#1A1A1A"}`, borderRadius: 8, padding: "13px 15px", cursor: "pointer", transition: "border-color 0.1s" }}
+                  style={{ background: TC.card, border: `1px solid ${insights[s.id] ? ACCENT[s.id] + "30" : TC.line}`, borderRadius: 8, padding: "13px 15px", cursor: "pointer", transition: "border-color 0.1s" }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = ACCENT[s.id] + "50"}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = insights[s.id] ? ACCENT[s.id] + "30" : "#1A1A1A"}>
+                  onMouseLeave={e => e.currentTarget.style.borderColor = insights[s.id] ? ACCENT[s.id] + "30" : TC.line}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
                     <span style={{ fontSize: 11, color: ACCENT[s.id] }}>{s.icon}</span>
                     <span style={{ fontSize: 10, color: ACCENT[s.id], fontWeight: 500 }}>{s.label}</span>
-                    {insights[s.id] && <span style={{ fontSize: 8, color: "#34D399", marginLeft: "auto" }}>✓</span>}
+                    {insights[s.id] && <span style={{ fontSize: 8, color: TC.accentDeep, marginLeft: "auto" }}>✓</span>}
                   </div>
-                  <div style={{ fontSize: 9, color: "#444" }}>{s.desc}</div>
+                  <div style={{ fontSize: 9, color: TC.fainter }}>{s.desc}</div>
                 </div>
               ))}
             </div>
@@ -3281,8 +3281,8 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
           "◈ INDUSTRY INTELLIGENCE",
           "Cluster analysis of your client portfolio — strongest sectors, repeat work patterns, and where to double down.",
           insights.industries ? [
-            { label: "→ Scout these industries", color: "#A78BFA", onClick: () => onNavigate && onNavigate("scout") },
-            { label: "→ Build service pages", color: "#F7C948", onClick: () => onNavigate && onNavigate("publisher") },
+            { label: "→ Scout these industries", color: TC.ink, onClick: () => onNavigate && onNavigate("scout") },
+            { label: "→ Build service pages", color: TC.warnInk, onClick: () => onNavigate && onNavigate("publisher") },
           ] : null
         )}
 
@@ -3292,7 +3292,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
           "◉ MARKETS & VENUES",
           "Geographic concentration, top venue relationships, venue category patterns, and adjacent markets worth entering.",
           insights.markets ? [
-            { label: "→ Scout expansion markets", color: "#A78BFA", onClick: () => onNavigate && onNavigate("scout") },
+            { label: "→ Scout expansion markets", color: TC.ink, onClick: () => onNavigate && onNavigate("scout") },
           ] : null
         )}
 
@@ -3304,38 +3304,38 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
               "⚡ GROWTH OPPORTUNITIES",
               "Dormant client reactivation, lookalike prospect profiles, and adjacent market plays.",
               insights.growth ? [
-                { label: lookalikesLoading ? "◌ Searching Apollo…" : "◐ Search Apollo for Lookalikes", color: "#4ECDC4", onClick: () => !lookalikesLoading && runLookalikSearch() },
-                { label: "→ Grow Pipeline", color: "#A78BFA", onClick: () => onNavigate && onNavigate("prospector") },
+                { label: lookalikesLoading ? "◌ Searching Apollo…" : "◐ Search Apollo for Lookalikes", color: TC.sub, onClick: () => !lookalikesLoading && runLookalikSearch() },
+                { label: "→ Grow Pipeline", color: TC.ink, onClick: () => onNavigate && onNavigate("prospector") },
               ] : null
             )}
             {/* Lookalike Results Panel */}
             {(lookalikesLoading || lookalikes.length > 0) && (
-              <div style={{ margin: "0 28px 28px", background: "rgba(4,14,34,0.62)", border: "1px solid #4ECDC430", borderRadius: 8, overflow: "hidden" }}>
-                <div style={{ padding: "12px 16px", borderBottom: "1px solid #111", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 9, color: "#4ECDC4", letterSpacing: "2px" }}>◐ APOLLO LOOKALIKE PROSPECTS</span>
+              <div style={{ margin: "0 28px 28px", background: TC.card, border: `1px solid ${TC.sub}30`, borderRadius: 8, overflow: "hidden" }}>
+                <div style={{ padding: "12px 16px", borderBottom: `1px solid ${TC.card}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 9, color: TC.sub, letterSpacing: "2px" }}>◐ APOLLO LOOKALIKE PROSPECTS</span>
                   {lookalikesOrgs.length > 0 && (
-                    <span style={{ fontSize: 9, color: "#444" }}>Searched: {lookalikesOrgs.join(", ")}</span>
+                    <span style={{ fontSize: 9, color: TC.fainter }}>Searched: {lookalikesOrgs.join(", ")}</span>
                   )}
                 </div>
-                {lookalikesLoading && <div style={{ padding: "16px 18px", fontSize: 10, color: "#555" }}>◌ Extracting org names from insight → searching Apollo for contacts…</div>}
+                {lookalikesLoading && <div style={{ padding: "16px 18px", fontSize: 10, color: TC.fainter }}>◌ Extracting org names from insight → searching Apollo for contacts…</div>}
                 {!lookalikesLoading && lookalikes.length === 0 && (
-                  <div style={{ padding: "16px 18px", fontSize: 10, color: "#444" }}>No contacts found. Try generating Growth insights first, then search again.</div>
+                  <div style={{ padding: "16px 18px", fontSize: 10, color: TC.fainter }}>No contacts found. Try generating Growth insights first, then search again.</div>
                 )}
                 {!lookalikesLoading && lookalikes.length > 0 && (
                   <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
                     {lookalikes.map((c, i) => (
-                      <div key={i} style={{ padding: "12px 14px", background: "rgba(4,14,34,0.5)", border: "1px solid #111", borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                      <div key={i} style={{ padding: "12px 14px", background: TC.card, border: `1px solid ${TC.card}`, borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 11, color: "#E8E4DC", fontWeight: 500 }}>{c.name || "—"}</span>
-                            {c.title && <span style={{ fontSize: 9, color: "#4ECDC4", background: "#4ECDC412", padding: "1px 7px", borderRadius: 10 }}>{c.title}</span>}
+                            <span style={{ fontSize: 11, color: TC.warnInk, fontWeight: 500 }}>{c.name || "—"}</span>
+                            {c.title && <span style={{ fontSize: 9, color: TC.sub, background: `${TC.sub}12`, padding: "1px 7px", borderRadius: 10 }}>{c.title}</span>}
                           </div>
-                          <div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>{c.company}{c.location ? ` · ${c.location}` : ""}{c.employees ? ` · ${c.employees.toLocaleString()} employees` : ""}</div>
-                          {c.email && <div style={{ fontSize: 10, color: "#34D399" }}>{c.email}</div>}
-                          {c.linkedin && <a href={c.linkedin} target="_blank" rel="noopener noreferrer" style={{ fontSize: 9, color: "#555" }}>LinkedIn ↗</a>}
+                          <div style={{ fontSize: 10, color: TC.fainter, marginBottom: 3 }}>{c.company}{c.location ? ` · ${c.location}` : ""}{c.employees ? ` · ${c.employees.toLocaleString()} employees` : ""}</div>
+                          {c.email && <div style={{ fontSize: 10, color: TC.accentDeep }}>{c.email}</div>}
+                          {c.linkedin && <a href={c.linkedin} target="_blank" rel="noopener noreferrer" style={{ fontSize: 9, color: TC.fainter }}>LinkedIn ↗</a>}
                         </div>
                         <button onClick={() => addToTarget100(c)}
-                          style={{ fontSize: 9, padding: "4px 10px", background: "transparent", border: "1px solid #A78BFA40", borderRadius: 5, color: "#A78BFA", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+                          style={{ fontSize: 9, padding: "4px 10px", background: "transparent", border: `1px solid ${TC.ink}40`, borderRadius: 5, color: TC.ink, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
                           + Target 100
                         </button>
                       </div>
@@ -3353,41 +3353,41 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
           "✦ CONTENT STRATEGY",
           "Service pages, case study buckets, homepage proof points, and campaign themes — all built from real historical work.",
           insights.content ? [
-            { label: "→ Draft in Builder", color: "#F7C948", onClick: () => onNavigate && onNavigate("builder") },
-            { label: "→ Publish to Webflow", color: "#34D399", onClick: () => onNavigate && onNavigate("publisher") },
+            { label: "→ Draft in Builder", color: TC.warnInk, onClick: () => onNavigate && onNavigate("builder") },
+            { label: "→ Publish to Webflow", color: TC.accentDeep, onClick: () => onNavigate && onNavigate("publisher") },
           ] : null
         )}
 
         {/* RAW DATA */}
         {activeTab === "data" && (
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-            <div style={{ padding: "10px 16px", borderBottom: "1px solid #0D0D0D", display: "flex", alignItems: "center", gap: 2, background: "rgba(4,14,34,0.5)", flexShrink: 0 }}>
+            <div style={{ padding: "10px 16px", borderBottom: `1px solid ${TC.card}`, display: "flex", alignItems: "center", gap: 2, background: TC.card, flexShrink: 0 }}>
               {["clients", "venues", "projects"].map(t => (
                 <button key={t} onClick={() => setDataTab(t)}
-                  style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: "none", background: dataTab === t ? "#1A1A1A" : "transparent", color: dataTab === t ? "#FB923C" : "#555", cursor: "pointer", fontFamily: "inherit", textTransform: "capitalize" }}>
+                  style={{ fontSize: 9, padding: "3px 10px", borderRadius: 4, border: "none", background: dataTab === t ? TC.line : "transparent", color: dataTab === t ? TC.warnInk : TC.fainter, cursor: "pointer", fontFamily: "inherit", textTransform: "capitalize" }}>
                   {t}
                 </button>
               ))}
-              <span style={{ fontSize: 9, color: "#333", marginLeft: 8 }}>{loadingRows ? "…" : `${dataRows.length} records`}</span>
+              <span style={{ fontSize: 9, color: TC.line, marginLeft: 8 }}>{loadingRows ? "…" : `${dataRows.length} records`}</span>
             </div>
             <div style={{ flex: 1, overflowY: "auto" }}>
-              {loadingRows && <div style={{ padding: 16, fontSize: 10, color: "#555" }}>Loading…</div>}
-              {!loadingRows && dataRows.length === 0 && <div style={{ padding: 20, fontSize: 10, color: "#333" }}>No records. Use ⇅ Sync Flex to import.</div>}
+              {loadingRows && <div style={{ padding: 16, fontSize: 10, color: TC.fainter }}>Loading…</div>}
+              {!loadingRows && dataRows.length === 0 && <div style={{ padding: 20, fontSize: 10, color: TC.line }}>No records. Use ⇅ Sync Flex to import.</div>}
               {!loadingRows && dataRows.length > 0 && (
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
                   <thead>
                     <tr>
                       {Object.keys(dataRows[0]).filter(k => !["id","created_at","flex_id"].includes(k)).slice(0, 7).map(k => (
-                        <th key={k} style={{ fontSize: 8, color: "#444", letterSpacing: "1px", padding: "8px 12px", textAlign: "left", borderBottom: "1px solid #111", whiteSpace: "nowrap", textTransform: "uppercase" }}>{k.replace(/_/g, " ")}</th>
+                        <th key={k} style={{ fontSize: 8, color: TC.fainter, letterSpacing: "1px", padding: "8px 12px", textAlign: "left", borderBottom: `1px solid ${TC.card}`, whiteSpace: "nowrap", textTransform: "uppercase" }}>{k.replace(/_/g, " ")}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {dataRows.map((row, i) => (
-                      <tr key={row.id || i} onMouseEnter={e => e.currentTarget.style.background = "#0A0A0A"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <tr key={row.id || i} onMouseEnter={e => e.currentTarget.style.background = TC.card} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                         {Object.keys(dataRows[0]).filter(k => !["id","created_at","flex_id"].includes(k)).slice(0, 7).map(k => (
-                          <td key={k} style={{ fontSize: 10, color: (k === "name" || k === "client_name") ? "#E8E4DC" : "#555", padding: "8px 12px", borderBottom: "1px solid #0D0D0D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>
-                            {row[k] != null ? String(row[k]) : <span style={{ color: "#2A2A2A" }}>—</span>}
+                          <td key={k} style={{ fontSize: 10, color: (k === "name" || k === "client_name") ? TC.warnInk : TC.fainter, padding: "8px 12px", borderBottom: `1px solid ${TC.card}`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>
+                            {row[k] != null ? String(row[k]) : <span style={{ color: TC.line }}>—</span>}
                           </td>
                         ))}
                       </tr>
