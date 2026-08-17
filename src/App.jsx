@@ -821,12 +821,12 @@ function LeadHandoffView({ db }) {
 
   const geoOf = o => { const m = ((o.company || "") + " " + (o.title || "") + " " + (o.notes || "")).match(LEAD_GEO_RE); return m ? m[0].replace(/\b\w/g, c => c.toUpperCase()) : ""; };
   const tagOf = o => { const s = (o.signal || "").toLowerCase();
-    if (s === "rfp") return { t: "RFP", c: "#34D399" };
-    if (/hire/.test(s)) return { t: "HIRE", c: "#A78BFA" };
-    if (/expansion/.test(s)) return { t: "EXPAND", c: "#FB923C" };
-    if (/event|gala|commencement|venue/.test(s)) return { t: "EVENT", c: "#60A5FA" };
-    if (s === "competitor") return { t: "WATCH", c: "#F87171" };
-    return { t: (s || "LEAD").toUpperCase().slice(0, 7), c: "#8A8F98" }; };
+    if (s === "rfp") return { t: "RFP", c: TC.accentDeep };
+    if (/hire/.test(s)) return { t: "HIRE", c: TC.ink };
+    if (/expansion/.test(s)) return { t: "EXPAND", c: TC.warnInk };
+    if (/event|gala|commencement|venue/.test(s)) return { t: "EVENT", c: TC.ink };
+    if (s === "competitor") return { t: "WATCH", c: TC.criticalInk };
+    return { t: (s || "LEAD").toUpperCase().slice(0, 7), c: TC.ink }; };
   const scoreOf = o => o.overall_score != null ? o.overall_score : Math.round(leadQuality(o) / 10);
   const cleanWhy = o => (o.why_this_matters || o.notes || "")
     .replace(/^\[[^\]]*\]\s*/, "")                              // [market] prefix
@@ -867,40 +867,40 @@ function LeadHandoffView({ db }) {
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px 80px" }}>
       {toast && (
-        <div style={{ position: "fixed", top: 68, right: 28, zIndex: 60, background: toast.ok ? "#0f2f22" : "#3a1414", border: `1px solid ${toast.ok ? "#34D39960" : "#F8717160"}`, color: toast.ok ? "#34D399" : "#F87171", padding: "10px 16px", borderRadius: 9, fontSize: 12, fontFamily: "inherit", boxShadow: "0 8px 30px rgba(0,0,0,.4)" }}>{toast.msg}</div>
+        <div style={{ position: "fixed", top: 68, right: 28, zIndex: 60, background: toast.ok ? TC.accentSoft : TC.criticalSoft, border: `1px solid ${toast.ok ? "#34D39960" : "#F8717160"}`, color: toast.ok ? TC.accentDeep : TC.criticalInk, padding: "10px 16px", borderRadius: 9, fontSize: 12, fontFamily: "inherit", boxShadow: "0 8px 30px rgba(0,0,0,.4)" }}>{toast.msg}</div>
       )}
 
       {/* Header */}
       <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 4 }}>Lead Handoff</div>
-      <div style={{ color: "#9aa0a9", fontSize: 13, marginBottom: 22 }}>
+      <div style={{ color: TC.muted, fontSize: 13, marginBottom: 22 }}>
         {loading ? "Loading signals…" : <>
-          {(totals.scanned ?? rows.length).toLocaleString()} scanned · <span style={{ color: "#34D399" }}>{allWorthy.length} upcoming &amp; send-worthy</span> across UT·NV·ID·SoCal·AZ ·
+          {(totals.scanned ?? rows.length).toLocaleString()} scanned · <span style={{ color: TC.accentDeep }}>{allWorthy.length} upcoming &amp; send-worthy</span> across UT·NV·ID·SoCal·AZ ·
           {" "}{totals.scanned ? `${(totals.scanned - totals.loaded).toLocaleString()} low-fit filtered before download` : "filtered"} · {hidden} more hidden here{skippedCount ? ` · ${skippedCount} skipped` : ""}.
         </>}
       </div>
 
       {/* Funnel strip */}
-      <div style={{ display: "flex", gap: 1, background: "#1a1e24", border: "1px solid #232830", borderRadius: 12, overflow: "hidden", marginBottom: 22 }}>
-        {[{ n: reviewCount, l: "To review", c: "#A78BFA" }, { n: sentCount, l: "Sent to Taylor", c: "#FB923C" }, { n: 0, l: "Rep contacted", c: "#e8e4dc" }, { n: 0, l: "Won", c: "#34D399" }].map((f, i) => (
-          <div key={i} style={{ flex: 1, background: "#111317", padding: "14px 18px" }}>
+      <div style={{ display: "flex", gap: 1, background: TC.line, border: "1px solid #232830", borderRadius: 12, overflow: "hidden", marginBottom: 22 }}>
+        {[{ n: reviewCount, l: "To review", c: TC.ink }, { n: sentCount, l: "Sent to Taylor", c: TC.warnInk }, { n: 0, l: "Rep contacted", c: TC.warnInk }, { n: 0, l: "Won", c: TC.accentDeep }].map((f, i) => (
+          <div key={i} style={{ flex: 1, background: TC.card, padding: "14px 18px" }}>
             <div style={{ fontFamily: "monospace", fontSize: 24, fontWeight: 600, color: f.c }}>{f.n}</div>
-            <div style={{ fontFamily: "monospace", fontSize: 9.5, letterSpacing: "0.1em", color: "#626873", textTransform: "uppercase", marginTop: 2 }}>{f.l}</div>
+            <div style={{ fontFamily: "monospace", fontSize: 9.5, letterSpacing: "0.1em", color: TC.faint, textTransform: "uppercase", marginTop: 2 }}>{f.l}</div>
           </div>
         ))}
       </div>
 
       {/* Callout */}
       <div style={{ border: "1px solid #2b2544", background: "linear-gradient(180deg,rgba(167,139,250,.06),transparent)", borderRadius: 12, padding: "15px 18px", marginBottom: 20 }}>
-        <div style={{ fontFamily: "monospace", fontSize: 12.5, color: "#A78BFA", marginBottom: 5 }}>◆ Surface signal, hide noise</div>
-        <div style={{ color: "#9aa0a9", fontSize: 12.5, lineHeight: 1.5 }}>The raw scout saves everything (mostly junk: “los”, Spotify, Instagram, empty company). Here only real, ranked, geo-relevant leads show — approve one and it posts to #ff-leads for Taylor with the outreach draft attached.</div>
+        <div style={{ fontFamily: "monospace", fontSize: 12.5, color: TC.ink, marginBottom: 5 }}>◆ Surface signal, hide noise</div>
+        <div style={{ color: TC.muted, fontSize: 12.5, lineHeight: 1.5 }}>The raw scout saves everything (mostly junk: “los”, Spotify, Instagram, empty company). Here only real, ranked, geo-relevant leads show — approve one and it posts to #ff-leads for Taylor with the outreach draft attached.</div>
       </div>
       {Object.keys(weights).length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, fontFamily: "monospace", fontSize: 11.5, color: "#626873", flexWrap: "wrap" }}>
-          <span style={{ color: "#34D399" }}>📈 Learning from your picks:</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, fontFamily: "monospace", fontSize: 11.5, color: TC.faint, flexWrap: "wrap" }}>
+          <span style={{ color: TC.accentDeep }}>📈 Learning from your picks:</span>
           {Object.entries(weights).sort((a, b) => b[1] - a[1]).map(([s, w]) => (
-            <span key={s} style={{ color: w > 0 ? "#34D399" : "#FB923C" }}>{s} {w > 0 ? "▲" : "▼"}{Math.abs(w)}</span>
+            <span key={s} style={{ color: w > 0 ? TC.accentDeep : TC.warnInk }}>{s} {w > 0 ? "▲" : "▼"}{Math.abs(w)}</span>
           ))}
-          <span style={{ color: "#626873" }}>· the queue re-ranks toward what you send</span>
+          <span style={{ color: TC.faint }}>· the queue re-ranks toward what you send</span>
         </div>
       )}
 
@@ -911,17 +911,17 @@ function LeadHandoffView({ db }) {
           const count = allWorthy.filter(c.fn).length;
           return (
             <button key={c.id} onClick={() => setCat(c.id)}
-              style={{ fontFamily: "monospace", fontSize: 11, color: on ? "#34D399" : "#9aa0a9", border: `1px solid ${on ? "#34D39960" : "#232830"}`, background: on ? "#1c3a3020" : "transparent", padding: "6px 12px", borderRadius: 999, cursor: "pointer" }}>
-              {c.label} <span style={{ color: on ? "#34D399" : "#626873" }}>{count}</span>
+              style={{ fontFamily: "monospace", fontSize: 11, color: on ? TC.accentDeep : TC.muted, border: `1px solid ${on ? "#34D39960" : TC.line}`, background: on ? "#1c3a3020" : "transparent", padding: "6px 12px", borderRadius: 999, cursor: "pointer" }}>
+              {c.label} <span style={{ color: on ? TC.accentDeep : TC.faint }}>{count}</span>
             </button>
           );
         })}
       </div>
 
       {/* Lead cards */}
-      <div style={{ border: "1px solid #232830", borderRadius: 14, overflow: "hidden", background: "#111317" }}>
-        {loading && <div style={{ padding: 40, textAlign: "center", color: "#626873", fontSize: 13 }}>Loading…</div>}
-        {!loading && list.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "#626873", fontSize: 13 }}>No leads in this view.</div>}
+      <div style={{ border: "1px solid #232830", borderRadius: 14, overflow: "hidden", background: TC.card }}>
+        {loading && <div style={{ padding: 40, textAlign: "center", color: TC.faint, fontSize: 13 }}>Loading…</div>}
+        {!loading && list.length === 0 && <div style={{ padding: 40, textAlign: "center", color: TC.faint, fontSize: 13 }}>No leads in this view.</div>}
         {list.map(o => {
           const tag = tagOf(o), why = cleanWhy(o), geo = geoOf(o), isSent = sent[o.id];
           return (
@@ -929,30 +929,30 @@ function LeadHandoffView({ db }) {
               <span style={{ fontFamily: "monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", color: tag.c, background: tag.c + "1f", padding: "3px 8px", borderRadius: 5, flexShrink: 0, marginTop: 2 }}>{tag.t}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.005em", marginBottom: 3 }}>{o.company && o.company.trim() ? o.company : (o.title || "Untitled")}</div>
-                {why && <div style={{ color: "#9aa0a9", fontSize: 12.5, lineHeight: 1.45, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{why || o.title}</div>}
+                {why && <div style={{ color: TC.muted, fontSize: 12.5, lineHeight: 1.45, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{why || o.title}</div>}
                 {enriched[o.id] && (() => { const c = enriched[o.id].contact || {}; return (
-                  <div style={{ marginTop: 9, fontFamily: "monospace", fontSize: 11.5, color: "#9aa0a9", background: "#171a1f", border: "1px solid #1a1e24", borderRadius: 8, padding: "8px 11px" }}>
-                    👤 <span style={{ color: "#e8e4dc" }}>{c.name || "contact"}</span>{c.title ? ` · ${c.title}` : ""}{c.email ? <span style={{ color: "#34D399" }}>{"  ·  " + c.email}</span> : <span style={{ color: "#FB923C" }}>{"  ·  no email"}</span>} <span style={{ color: "#626873" }}>@ {enriched[o.id].company}</span>
+                  <div style={{ marginTop: 9, fontFamily: "monospace", fontSize: 11.5, color: TC.muted, background: TC.card, border: "1px solid #1a1e24", borderRadius: 8, padding: "8px 11px" }}>
+                    👤 <span style={{ color: TC.warnInk }}>{c.name || "contact"}</span>{c.title ? ` · ${c.title}` : ""}{c.email ? <span style={{ color: TC.accentDeep }}>{"  ·  " + c.email}</span> : <span style={{ color: TC.warnInk }}>{"  ·  no email"}</span>} <span style={{ color: TC.faint }}>@ {enriched[o.id].company}</span>
                   </div>
                 ); })()}
                 <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                   <button onClick={() => send(o)} disabled={!!sending[o.id] || !!isSent}
-                    style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "none", background: isSent ? "#1c3a30" : "linear-gradient(135deg,#3ecf8e,#0f766e)", color: isSent ? "#34D399" : "#04140d", fontWeight: 600, cursor: isSent ? "default" : "pointer" }}>
+                    style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "none", background: isSent ? TC.accentDeep : "linear-gradient(135deg,#3ecf8e,#0f766e)", color: isSent ? TC.accentDeep : TC.accentDeep, fontWeight: 600, cursor: isSent ? "default" : "pointer" }}>
                     {sending[o.id] ? "◌ Sending…" : isSent ? "✓ Sent to Taylor" : "→ Send to #ff-leads"}
                   </button>
                   {!isSent && !enriched[o.id] && <button onClick={() => enrich(o)} disabled={!!enriching[o.id]}
-                    style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #2b2544", background: "#2b254420", color: "#A78BFA", cursor: enriching[o.id] ? "default" : "pointer" }}>
+                    style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #2b2544", background: "#2b254420", color: TC.ink, cursor: enriching[o.id] ? "default" : "pointer" }}>
                     {enriching[o.id] ? "◌ Finding…" : "✦ Find contact"}
                   </button>}
-                  {o.source && <a href={o.source} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #232830", color: "#9aa0a9", textDecoration: "none" }}>View source</a>}
-                  {!isSent && <button onClick={() => skip(o)} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid transparent", background: "none", color: "#626873", cursor: "pointer" }}>Skip</button>}
+                  {o.source && <a href={o.source} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #232830", color: TC.muted, textDecoration: "none" }}>View source</a>}
+                  {!isSent && <button onClick={() => skip(o)} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid transparent", background: "none", color: TC.faint, cursor: "pointer" }}>Skip</button>}
                 </div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0, minWidth: 96 }}>
                 {(() => { const ev = eventDateInfo(o); return ev.label
-                  ? <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 600, color: "#60A5FA" }}>📅 {ev.label}</div>
-                  : <div style={{ fontFamily: "monospace", fontSize: 11, color: "#FB923C" }}>open / no date</div>; })()}
-                <div style={{ fontFamily: "monospace", fontSize: 10.5, color: "#626873", marginTop: 4 }}>{geo || "—"} · score {scoreOf(o)}</div>
+                  ? <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 600, color: TC.ink }}>📅 {ev.label}</div>
+                  : <div style={{ fontFamily: "monospace", fontSize: 11, color: TC.warnInk }}>open / no date</div>; })()}
+                <div style={{ fontFamily: "monospace", fontSize: 10.5, color: TC.faint, marginTop: 4 }}>{geo || "—"} · score {scoreOf(o)}</div>
               </div>
             </div>
           );
@@ -962,18 +962,18 @@ function LeadHandoffView({ db }) {
       {/* Sources to mine — venue calendars & event roundups (not single leads) */}
       {sources.length > 0 && (
         <div style={{ marginTop: 26 }}>
-          <div style={{ fontFamily: "monospace", fontSize: 11, letterSpacing: "0.1em", color: "#60A5FA", textTransform: "uppercase", marginBottom: 4 }}>🔭 Sources to mine · {sources.length}</div>
-          <div style={{ color: "#626873", fontSize: 12, marginBottom: 12 }}>Venue calendars &amp; event roundups — not one lead, but browse them to pull individual upcoming events into the queue.</div>
-          <div style={{ border: "1px solid #232830", borderRadius: 12, overflow: "hidden", background: "#111317" }}>
+          <div style={{ fontFamily: "monospace", fontSize: 11, letterSpacing: "0.1em", color: TC.ink, textTransform: "uppercase", marginBottom: 4 }}>🔭 Sources to mine · {sources.length}</div>
+          <div style={{ color: TC.faint, fontSize: 12, marginBottom: 12 }}>Venue calendars &amp; event roundups — not one lead, but browse them to pull individual upcoming events into the queue.</div>
+          <div style={{ border: "1px solid #232830", borderRadius: 12, overflow: "hidden", background: TC.card }}>
             {sources.slice(0, 15).map(o => (
               <div key={o.id} style={{ display: "flex", gap: 12, padding: "12px 16px", borderBottom: "1px solid #1a1e24", alignItems: "center" }}>
-                <span style={{ fontFamily: "monospace", fontSize: 9.5, fontWeight: 700, color: "#60A5FA", background: "#60A5FA1f", padding: "3px 8px", borderRadius: 5, flexShrink: 0 }}>SOURCE</span>
+                <span style={{ fontFamily: "monospace", fontSize: 9.5, fontWeight: 700, color: TC.ink, background: "#60A5FA1f", padding: "3px 8px", borderRadius: 5, flexShrink: 0 }}>SOURCE</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{o.company && o.company.trim() ? o.company : (o.title || "")}</div>
-                  <div style={{ color: "#626873", fontFamily: "monospace", fontSize: 10.5 }}>{(o.source || "").replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}</div>
+                  <div style={{ color: TC.faint, fontFamily: "monospace", fontSize: 10.5 }}>{(o.source || "").replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}</div>
                 </div>
-                {o.source && <a href={o.source} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #232830", color: "#60A5FA", textDecoration: "none" }}>Browse ↗</a>}
-                <button onClick={() => skip(o)} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 10px", borderRadius: 8, border: "1px solid transparent", background: "none", color: "#626873", cursor: "pointer" }}>Dismiss</button>
+                {o.source && <a href={o.source} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 13px", borderRadius: 8, border: "1px solid #232830", color: TC.ink, textDecoration: "none" }}>Browse ↗</a>}
+                <button onClick={() => skip(o)} style={{ fontFamily: "monospace", fontSize: 11, padding: "6px 10px", borderRadius: 8, border: "1px solid transparent", background: "none", color: TC.faint, cursor: "pointer" }}>Dismiss</button>
               </div>
             ))}
           </div>
@@ -982,10 +982,10 @@ function LeadHandoffView({ db }) {
 
       {/* Noise footer */}
       {hidden > 0 && (
-        <div style={{ marginTop: 18, border: "1px dashed #232830", borderRadius: 12, padding: "13px 18px", color: "#626873", fontFamily: "monospace", fontSize: 12, display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ color: "#FB923C" }}>⊘</span>
-          <span><b style={{ color: "#9aa0a9" }}>{hidden} low-value signals hidden</b> — “market” noise, no company/contact (los · Spotify · Instagram).</span>
-          <span onClick={() => setShowNoise(s => !s)} style={{ marginLeft: "auto", color: "#9aa0a9", cursor: "pointer", textDecoration: "underline" }}>{showNoise ? "hide noise" : "show anyway"}</span>
+        <div style={{ marginTop: 18, border: "1px dashed #232830", borderRadius: 12, padding: "13px 18px", color: TC.faint, fontFamily: "monospace", fontSize: 12, display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ color: TC.warnInk }}>⊘</span>
+          <span><b style={{ color: TC.muted }}>{hidden} low-value signals hidden</b> — “market” noise, no company/contact (los · Spotify · Instagram).</span>
+          <span onClick={() => setShowNoise(s => !s)} style={{ marginLeft: "auto", color: TC.muted, cursor: "pointer", textDecoration: "underline" }}>{showNoise ? "hide noise" : "show anyway"}</span>
         </div>
       )}
     </div>
@@ -1399,8 +1399,8 @@ function TargetAccountsView({ db }) {
     <button key={key} onClick={onClick}
       style={{ fontSize: 9, letterSpacing: "0.5px", padding: "4px 11px", borderRadius: 999, cursor: "pointer",
         fontFamily: "inherit", textTransform: "uppercase",
-        border: `1px solid ${active ? color + "70" : "#1A1A1A"}`,
-        background: active ? color + "14" : "transparent", color: active ? color : "#555" }}>
+        border: `1px solid ${active ? color + "70" : TC.line}`,
+        background: active ? color + "14" : "transparent", color: active ? color : TC.faint }}>
       {label}
     </button>
   );
@@ -1409,46 +1409,46 @@ function TargetAccountsView({ db }) {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ padding: "12px 20px", borderBottom: "1px solid #111", flexShrink: 0, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: "#4ECDC4" }}>Target Accounts</div>
-          <div style={{ fontSize: 9, color: "#444" }}>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: TC.accentDeep }}>Target Accounts</div>
+          <div style={{ fontSize: 9, color: TC.faint }}>
             {loading ? "loading…" : `${merged.length} accounts · ${withContact} reachable · ${scanning} on the Scout scan list`}
           </div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          {[{ n: tCounts.target_a || 0, l: "tier A", c: "#34D399" },
-            { n: tCounts.target_b || 0, l: "tier B", c: "#A78BFA" },
-            { n: clients, l: "clients", c: "#FB923C" },
-            { n: scanning, l: "scanning", c: "#F7C948" }].map(s => (
+          {[{ n: tCounts.target_a || 0, l: "tier A", c: TC.accentDeep },
+            { n: tCounts.target_b || 0, l: "tier B", c: TC.ink },
+            { n: clients, l: "clients", c: TC.warnInk },
+            { n: scanning, l: "scanning", c: TC.warnInk }].map(s => (
             <div key={s.l} style={{ textAlign: "right" }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: s.c, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loading ? "—" : s.n}</div>
-              <div style={{ fontSize: 8, color: "#444", letterSpacing: "1px", textTransform: "uppercase", marginTop: 2 }}>{s.l}</div>
+              <div style={{ fontSize: 8, color: TC.faint, letterSpacing: "1px", textTransform: "uppercase", marginTop: 2 }}>{s.l}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Sticky control bar — filtering is the main job on this page, so it stays reachable */}
-      <div style={{ padding: "10px 20px", borderBottom: "1px solid #111", flexShrink: 0, background: "rgba(4,14,34,0.35)" }}>
+      <div style={{ padding: "10px 20px", borderBottom: "1px solid #111", flexShrink: 0, background: TC.card }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search company, person, title, city…"
-            style={{ flex: 1, minWidth: 190, fontSize: 11, padding: "6px 11px", background: "rgba(4,14,34,0.62)", color: "#E8E4DC", border: "1px solid #1A1A1A", borderRadius: 6, fontFamily: "inherit" }} />
+            style={{ flex: 1, minWidth: 190, fontSize: 11, padding: "6px 11px", background: TC.card, color: TC.ink, border: "1px solid #1A1A1A", borderRadius: 6, fontFamily: "inherit" }} />
           <select value={sort} onChange={e => setSort(e.target.value)}
-            style={{ fontSize: 10, padding: "6px 9px", background: "rgba(4,14,34,0.62)", color: "#A8A4A0", border: "1px solid #1A1A1A", borderRadius: 6, fontFamily: "inherit" }}>
+            style={{ fontSize: 10, padding: "6px 9px", background: TC.card, color: TC.sub, border: "1px solid #1A1A1A", borderRadius: 6, fontFamily: "inherit" }}>
             <option value="priority">sort: priority</option>
             <option value="contacts">sort: most contacts</option>
             <option value="name">sort: name</option>
           </select>
-          {chip(onlyContact, "#34D399", "has contact", () => setOnlyContact(v => !v), "f-c")}
-          {chip(onlyScanning, "#F7C948", "scanning", () => setOnlyScanning(v => !v), "f-s")}
-          <span style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{list.length} shown</span>
+          {chip(onlyContact, TC.accentDeep, "has contact", () => setOnlyContact(v => !v), "f-c")}
+          {chip(onlyScanning, TC.warnInk, "scanning", () => setOnlyScanning(v => !v), "f-s")}
+          <span style={{ fontSize: 9, color: TC.faint, whiteSpace: "nowrap" }}>{list.length} shown</span>
         </div>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
-          {chip(!vert, "#E8E4DC", `all ${merged.length}`, () => setVert(""), "v-all")}
+          {chip(!vert, TC.ink, `all ${merged.length}`, () => setVert(""), "v-all")}
           {Object.keys(TA_VERTICALS).filter(v => vCounts[v]).map(v =>
             chip(vert === v, TA_VERTICALS[v].color, `${TA_VERTICALS[v].label} ${vCounts[v]}`, () => setVert(vert === v ? "" : v), "v-" + v))}
         </div>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {chip(!tier, "#E8E4DC", "any tier", () => setTier(""), "t-all")}
+          {chip(!tier, TC.ink, "any tier", () => setTier(""), "t-all")}
           {Object.keys(TA_TIERS).filter(t => tCounts[t]).map(t =>
             chip(tier === t, TA_TIERS[t].color, `${TA_TIERS[t].label} ${tCounts[t]}`, () => setTier(tier === t ? "" : t), "t-" + t))}
         </div>
@@ -1458,24 +1458,24 @@ function TargetAccountsView({ db }) {
         {toast && (
           <div style={{ position: "fixed", top: 66, right: 26, zIndex: 60, fontSize: 10, padding: "8px 14px", borderRadius: 7,
             background: toast.ok ? "#34D39912" : "#FF6B6B12", border: `1px solid ${toast.ok ? "#34D39940" : "#FF6B6B40"}`,
-            color: toast.ok ? "#34D399" : "#FF6B6B" }}>{toast.msg}</div>
+            color: toast.ok ? TC.accentDeep : TC.criticalInk }}>{toast.msg}</div>
         )}
 
         {/* Rationale belongs to the vertical, not to each card — one line, only when relevant */}
         {vert && TA_VERTICALS[vert] && (
-          <div style={{ fontSize: 10.5, color: "#8A8578", borderLeft: `2px solid ${TA_VERTICALS[vert].color}60`, paddingLeft: 10, marginBottom: 14, lineHeight: 1.7 }}>
+          <div style={{ fontSize: 10.5, color: TC.muted, borderLeft: `2px solid ${TA_VERTICALS[vert].color}60`, paddingLeft: 10, marginBottom: 14, lineHeight: 1.7 }}>
             {TA_VERTICALS[vert].why}
           </div>
         )}
         {!vert && (
-          <div style={{ fontSize: 10.5, color: "#8A8578", borderLeft: "2px solid #34D39960", paddingLeft: 10, marginBottom: 14, lineHeight: 1.7 }}>
+          <div style={{ fontSize: 10.5, color: TC.muted, borderLeft: "2px solid #34D39960", paddingLeft: 10, marginBottom: 14, lineHeight: 1.7 }}>
             The Scout can&apos;t find corporate internal events — no RFP, no public listing — so these are worked by name.
-            <span style={{ color: "#626873" }}> Entry pattern: LoanPro opened at $36k → $99,573 a year later; Socure at $1,733 → $96,538 ten days later. Lead with the kickoff, not the flagship.</span>
+            <span style={{ color: TC.faint }}> Entry pattern: LoanPro opened at $36k → $99,573 a year later; Socure at $1,733 → $96,538 ten days later. Lead with the kickoff, not the flagship.</span>
           </div>
         )}
 
-        {loading && <div style={{ fontSize: 10, color: "#444" }}>loading accounts…</div>}
-        {!loading && !list.length && <div style={{ fontSize: 10, color: "#444", padding: "26px 0", textAlign: "center" }}>Nothing matches that filter.</div>}
+        {loading && <div style={{ fontSize: 10, color: TC.faint }}>loading accounts…</div>}
+        {!loading && !list.length && <div style={{ fontSize: 10, color: TC.faint, padding: "26px 0", textAlign: "center" }}>Nothing matches that filter.</div>}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8 }}>
           {list.slice(0, shown).map(a => {
@@ -1484,33 +1484,33 @@ function TargetAccountsView({ db }) {
             const people = contactsOf(a);
             const isClient = a.existing_relationship || a.tier === "existing_client";
             return (
-              <div key={a.id} style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A",
+              <div key={a.id} style={{ background: TC.card, border: "1px solid #1A1A1A",
                 borderLeft: isClient ? "3px solid #FB923C" : t ? `3px solid ${t.color}45` : "1px solid #1A1A1A",
                 borderRadius: 9, padding: "11px 13px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "#E8E4DC" }}>{a.name}</span>
-                  <span style={{ fontSize: 9, color: "#555", whiteSpace: "nowrap" }}>{a.city || ""}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: TC.ink }}>{a.name}</span>
+                  <span style={{ fontSize: 9, color: TC.faint, whiteSpace: "nowrap" }}>{a.city || ""}</span>
                 </div>
                 <div style={{ display: "flex", gap: 4, margin: "6px 0 8px", flexWrap: "wrap", alignItems: "center" }}>
                   <span style={{ fontSize: 8.5, letterSpacing: "0.7px", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, border: `1px solid ${v.color}50`, color: v.color }}>{v.label}</span>
                   {t && <span style={{ fontSize: 8.5, letterSpacing: "0.7px", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, border: `1px solid ${t.color}50`, color: t.color }}>{t.label}</span>}
-                  {isMonitored(a) && <span style={{ fontSize: 8.5, color: "#F7C948" }}>◉ scanning</span>}
+                  {isMonitored(a) && <span style={{ fontSize: 8.5, color: TC.warnInk }}>◉ scanning</span>}
                 </div>
                 {people.length ? people.slice(0, 4).map((p, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "2px 0", fontSize: 10.5 }}>
                     <a href={liSearch(p.name, a.name)} target="_blank" rel="noopener noreferrer"
-                      style={{ color: "#A8A4A0", whiteSpace: "nowrap", textDecoration: "none", borderBottom: "1px dotted #333" }}
+                      style={{ color: TC.sub, whiteSpace: "nowrap", textDecoration: "none", borderBottom: "1px dotted #333" }}
                       title={`Find ${p.name} on LinkedIn`}>{p.name}</a>
-                    <span style={{ color: "#626873", textAlign: "right", fontSize: 10 }}>{p.title}</span>
+                    <span style={{ color: TC.faint, textAlign: "right", fontSize: 10 }}>{p.title}</span>
                   </div>
-                )) : <div style={{ fontSize: 10, color: "#3a3a3a" }}>no named contact — enrich to reach</div>}
+                )) : <div style={{ fontSize: 10, color: TC.fainter }}>no named contact — enrich to reach</div>}
                 {isClient && a.relationship_notes && (
-                  <div style={{ fontSize: 9.5, color: "#FB923C", marginTop: 7 }}>◆ {a.relationship_notes}</div>
+                  <div style={{ fontSize: 9.5, color: TC.warnInk, marginTop: 7 }}>◆ {a.relationship_notes}</div>
                 )}
                 <button onClick={() => toggleMonitor(a)} disabled={!!busy[a.id]}
                   style={{ marginTop: 9, fontSize: 9, padding: "3px 9px", borderRadius: 5, cursor: busy[a.id] ? "wait" : "pointer", fontFamily: "inherit",
-                    border: `1px solid ${isMonitored(a) ? "#34D39940" : "#1A1A1A"}`,
-                    background: isMonitored(a) ? "#34D39910" : "transparent", color: isMonitored(a) ? "#34D399" : "#555" }}>
+                    border: `1px solid ${isMonitored(a) ? "#34D39940" : TC.line}`,
+                    background: isMonitored(a) ? "#34D39910" : "transparent", color: isMonitored(a) ? TC.accentDeep : TC.faint }}>
                   {isMonitored(a) ? "✓ scanning" : "+ add to scan list"}
                 </button>
               </div>
@@ -1521,13 +1521,13 @@ function TargetAccountsView({ db }) {
         {list.length > shown && (
           <div style={{ textAlign: "center", marginTop: 16 }}>
             <button onClick={() => setShown(s => s + TA_PAGE)}
-              style={{ fontSize: 10, padding: "7px 18px", borderRadius: 6, border: "1px solid #1A1A1A", background: "transparent", color: "#8A8578", cursor: "pointer", fontFamily: "inherit" }}>
+              style={{ fontSize: 10, padding: "7px 18px", borderRadius: 6, border: "1px solid #1A1A1A", background: "transparent", color: TC.muted, cursor: "pointer", fontFamily: "inherit" }}>
               Show {Math.min(TA_PAGE, list.length - shown)} more · {list.length - shown} remaining
             </button>
           </div>
         )}
         {dupes > 0 && (
-          <div style={{ fontSize: 9, color: "#3a3a3a", marginTop: 18, textAlign: "center" }}>
+          <div style={{ fontSize: 9, color: TC.fainter, marginTop: 18, textAlign: "center" }}>
             {dupes} duplicate row{dupes === 1 ? "" : "s"} collapsed by name
           </div>
         )}
