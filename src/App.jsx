@@ -991,6 +991,245 @@ function LeadHandoffView({ db }) {
   );
 }
 
+// Defined at module scope on purpose — declaring these inside WeeklyBriefView would create new
+// component types on every render, remounting the subtree and dropping state.
+function WBTask({ id, accent, title, why, children, cta, done, mark }) {
+  const isDone = !!done[id];
+  return (
+    <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderLeft: `3px solid ${isDone ? "#222" : accent}`,
+      borderRadius: 9, padding: "13px 15px", marginBottom: 9, opacity: isDone ? 0.45 : 1 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <button onClick={() => mark(id)} title={isDone ? "Mark not done" : "Mark done"}
+          style={{ marginTop: 1, width: 15, height: 15, flexShrink: 0, borderRadius: 4, cursor: "pointer",
+            border: `1px solid ${isDone ? accent : "#2A2A2A"}`, background: isDone ? accent + "30" : "transparent",
+            color: accent, fontSize: 9, lineHeight: 1, fontFamily: "inherit", padding: 0 }}>
+          {isDone ? "\u2713" : ""}
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: isDone ? "#666" : "#E8E4DC", textDecoration: isDone ? "line-through" : "none" }}>{title}</div>
+          {why && <div style={{ fontSize: 10.5, color: "#8A8578", marginTop: 4, lineHeight: 1.65 }}>{why}</div>}
+          {children}
+          {cta && (
+            <button onClick={cta.go}
+              style={{ marginTop: 9, fontSize: 9, padding: "4px 11px", borderRadius: 5, cursor: "pointer", fontFamily: "inherit",
+                border: `1px solid ${accent}45`, background: accent + "10", color: accent }}>{cta.label}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WBSection({ label, note, children }) {
+  return (
+    <div style={{ marginBottom: 26 }}>
+      <div style={{ fontSize: 9, letterSpacing: "2px", textTransform: "uppercase", color: "#555", marginBottom: 3 }}>{label}</div>
+      {note && <div style={{ fontSize: 10, color: "#3f3f3f", marginBottom: 10 }}>{note}</div>}
+      {children}
+    </div>
+  );
+}
+
+// This Week — the one page that answers "what do I actually do today".
+// Everything else in FF Tank generates; this converts. It reads live data from both systems and
+// names specific accounts, people and counts rather than restating a static plan.
+const WB_DAY = 86400000;
+
+function WeeklyBriefView({ db, onNavigate }) {
+  const [opps, setOpps] = React.useState([]);
+  const [targets, setTargets] = React.useState([]);
+  const [clients, setClients] = React.useState([]);
+  const [projects, setProjects] = React.useState([]);
+  const [drafts, setDrafts] = React.useState(0);
+  const [feedback, setFeedback] = React.useState(0);
+  const [rp, setRp] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [done, setDone] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem("briefDone") || "{}"); } catch { return {}; }
+  });
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const iso = d => new Date(d).toISOString().slice(0, 10);
+  // Deterministic week index so the rotating picks change each Monday without storing state.
+  const weekIdx = Math.floor(today.getTime() / (7 * WB_DAY));
+
+  function mark(id) {
+    setDone(p => {
+      const n = { ...p, [id]: p[id] ? 0 : Date.now() };
+      try { localStorage.setItem("briefDone", JSON.stringify(n)); } catch { /* non-fatal */ }
+      return n;
+    });
+  }
+
+  React.useEffect(() => { (async () => {
+    setLoading(true);
+    const horizon = iso(today.getTime() + 120 * WB_DAY);
+    try {
+      const [o, t, c, p, d, f] = await Promise.all([
+        db.selectAll("opportunities", {
+          select: "id,title,company,overall_score,deadline,status,source",
+          and: `(status.in.(new,priority),overall_score.gte.8,deadline.gte.${iso(today)},deadline.lte.${horizon})`,
+          order: "deadline.asc",
+        }),
+        db.selectAll("target_accounts", { select: "id,name,city,tier,vertical,contact_name,contact_title,status,metadata" }),
+        db.selectAll("flex_clients", { select: "name,total_revenue,total_events,last_event_date,contact_email", total_revenue: "not.is.null" }),
+        db.selectAll("flex_projects", { select: "client_name,event_date,budget_estimate,notes", event_date: `gte.${iso(today)}`, order: "event_date.asc" }),
+        db.count("outreach_drafts", {}),
+        db.count("opportunity_feedback", {}),
+      ]);
+      setOpps(o || []); setTargets(t || []); setClients(c || []); setProjects(p || []);
+      setDrafts(d || 0); setFeedback(f || 0);
+    } catch (e) { console.error("brief load failed:", e); }
+    try {
+      const r = await fetch("/api/index?service=rankpilot-brief");
+      setRp(r.ok ? await r.json() : { error: `HTTP ${r.status}` });
+    } catch (e) { setRp({ error: e.message }); }
+    setLoading(false);
+  })(); }, []);
+
+  // ── derive the week's actual work ────────────────────────────────────────────
+  const key = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 22);
+  const urgent = React.useMemo(() => {
+    const seen = new Set(); const out = [];
+    opps.forEach(o => {
+      const k = key(o.company || o.title);
+      if (!k || seen.has(k)) return;         // the queue holds ~11 rows for one TEDx event
+      seen.add(k); out.push(o);
+    });
+    return out;
+  }, [opps]);
+  const within = n => urgent.filter(o => (new Date(o.deadline) - today) / WB_DAY <= n);
+
+  const tierA = targets.filter(t => t.tier === "target_a" && t.contact_name);
+  const weeklyPicks = tierA.length
+    ? Array.from({ length: Math.min(5, tierA.length) }, (_, i) => tierA[(weekIdx * 5 + i) % tierA.length])
+    : [];
+
+  const monthsSince = d => d ? (today - new Date(d + "T00:00:00")) / 2629800000 : 999;
+  const winback = clients
+    .filter(c => monthsSince(c.last_event_date) > 12 && c.contact_email && !/^(fat fish|clear lamp)/i.test(c.name || ""))
+    .sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
+  const winbackPicks = winback.length
+    ? Array.from({ length: Math.min(2, winback.length) }, (_, i) => winback[(weekIdx * 2 + i) % winback.length])
+    : [];
+
+  const liveProjects = projects.filter(p => !/cancel|void/i.test(p.notes || ""));
+  const booked = liveProjects.reduce((s, p) => s + (Number(p.budget_estimate) || 0), 0);
+  const usd = n => n >= 1000000 ? `$${(n / 1000000).toFixed(2)}M` : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${Math.round(n)}`;
+
+  const C = { green: "#34D399", orange: "#FB923C", purple: "#A78BFA", teal: "#4ECDC4", yellow: "#F7C948", dim: "#8A8578", faint: "#555" };
+
+  const doneCount = Object.values(done).filter(Boolean).length;
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "13px 20px", borderBottom: "1px solid #111", flexShrink: 0, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: C.green }}>This Week</div>
+          <div style={{ fontSize: 9, color: "#444" }}>
+            {loading ? "reading both systems…" : `week of ${iso(today)} · ${urgent.length} dated leads ahead · ${usd(booked)} booked`}
+          </div>
+        </div>
+        {doneCount > 0 && (
+          <button onClick={() => { setDone({}); try { localStorage.removeItem("briefDone"); } catch { /* ignore */ } }}
+            style={{ marginLeft: "auto", fontSize: 9, padding: "4px 10px", borderRadius: 5, border: "1px solid #1A1A1A", background: "transparent", color: C.faint, cursor: "pointer", fontFamily: "inherit" }}>
+            reset {doneCount} checked
+          </button>
+        )}
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 80px", maxWidth: 900 }}>
+        {loading && <div style={{ fontSize: 10, color: "#444" }}>loading…</div>}
+
+        {!loading && (
+          <>
+            <div style={{ fontSize: 10.5, color: C.dim, borderLeft: `2px solid ${C.green}60`, paddingLeft: 11, marginBottom: 22, lineHeight: 1.75 }}>
+              Both systems generate well and convert poorly — {drafts} outreach drafts written, {feedback === 0 ? "no" : feedback} feedback ratings recorded,
+              and {rp && !rp.error ? `${rp.patchReady} Rankpilot fixes` : "Rankpilot fixes"} sitting drafted.
+              <span style={{ color: C.faint }}> Nothing below asks you to find more. It all ships what already exists.</span>
+            </div>
+
+            {/* ── TODAY ─────────────────────────────────────────────────────── */}
+            <WBSection label="Today · 20 minutes" note="Do these before anything else.">
+              <WBTask done={done} mark={mark} id="daily-queue" accent={C.green}
+                title={`Work 10 cards in the Lead Handoff queue`}
+                why={`Binary decisions — Send to #ff-leads or Skip. ${feedback < 5
+                  ? `The learning loop only started recording recently (${feedback} rating${feedback === 1 ? "" : "s"} so far), so every decision now trains the ranking that was silently discarding your input before.`
+                  : `${feedback} ratings recorded so far — the queue is starting to order itself around what you pick.`}`}
+                cta={{ label: "Open Lead Handoff →", go: () => onNavigate && onNavigate("handoff") }} />
+
+              {within(14).slice(0, 3).map(o => (
+                <WBTask done={done} mark={mark} key={o.id} id={`urgent-${o.id}`} accent={C.orange}
+                  title={`${o.company || o.title} — ${Math.max(0, Math.round((new Date(o.deadline) - today) / WB_DAY))} days out`}
+                  why={`${o.deadline} · scored ${o.overall_score}. ${(o.title || "").slice(0, 110)}`} />
+              ))}
+              {!within(14).length && (
+                <div style={{ fontSize: 10.5, color: "#3f3f3f", padding: "4px 0 10px" }}>No dated leads inside two weeks — the near horizon is clear.</div>
+              )}
+            </WBSection>
+
+            {/* ── MONDAY BLOCK ──────────────────────────────────────────────── */}
+            <WBSection label="Monday · ~90 minutes · Outbound" note="The accounts rotate each week, so you don't work the same five.">
+              {weeklyPicks.map((t, i) => (
+                <WBTask done={done} mark={mark} key={t.id} id={`ta-${weekIdx}-${t.id}`} accent={C.teal}
+                  title={`Approach ${t.name}${t.city ? ` · ${t.city}` : ""}`}
+                  why={`${t.contact_name}${t.contact_title ? `, ${t.contact_title}` : ""}. ${i === 0
+                    ? "Pitch a second-tier event — sales kickoff, roadshow, partner day. LoanPro opened at $36k and became $99,573; Socure opened at $1,733 and booked $96,538 ten days later. Nobody hands a stranger their flagship."
+                    : "Same play: lead with the smaller event."}`}
+                  cta={{ label: "Find on LinkedIn ↗", go: () => window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${t.contact_name} ${t.name}`)}`, "_blank", "noopener") }} />
+              ))}
+              {winbackPicks.map(c => (
+                <WBTask done={done} mark={mark} key={c.name} id={`wb-${weekIdx}-${key(c.name)}`} accent={C.orange}
+                  title={`Win back ${c.name} — ${usd(c.total_revenue)} of past business`}
+                  why={`${c.contact_email} · ${c.total_events} job${c.total_events === 1 ? "" : "s"}, last ${c.last_event_date}. They already bought from you once, which makes this warmer than anything the Scout finds cold. Only ${winback.length} of your ${clients.filter(x => monthsSince(x.last_event_date) > 12).length} dormant clients have an email on file — this is the reachable slice.`} />
+              ))}
+            </WBSection>
+
+            {/* ── THURSDAY BLOCK ────────────────────────────────────────────── */}
+            <WBSection label="Thursday · ~60 minutes · Rankpilot" note="Search and AI-answer visibility.">
+              {rp && rp.error && (
+                <div style={{ fontSize: 10.5, color: "#FF6B6B", padding: "6px 0" }}>Couldn&apos;t read Rankpilot: {rp.error}</div>
+              )}
+              {rp && !rp.error && (
+                <>
+                  <WBTask done={done} mark={mark} id="rp-flag" accent={C.yellow}
+                    title="Confirm WEBFLOW_WRITE_ENABLED is on before approving anything"
+                    why={`Rankpilot has ${rp.patchReady} actions with drafted copy ready to apply, but while that flag is false on the droplet, approving writes nothing to the live site. Set it in /root/rankpilot/.env — and do NOT pm2 restart, because that fires the cron job immediately.`} />
+                  {rp.oneClickTotal > 0 && (
+                    <WBTask done={done} mark={mark} id={`rp-meta-${weekIdx}`} accent={C.purple}
+                      title={`Approve ${rp.oneClickTotal} drafted title and meta rewrites`}
+                      why={`The copy is already written and applies straight to Webflow — the only queue where clearing it directly changes what Google shows. ${rp.queued} actions are queued in total.`} />
+                  )}
+                  {rp.citations && rp.citations.length > 0 && (
+                    <WBTask done={done} mark={mark} id={`rp-cite-${weekIdx}`} accent={C.purple}
+                      title={`Read the ${rp.byType.citation_target || 0} citation targets as competitive intel`}
+                      why="These name the competitor pages winning AI answers for queries you want. Webb and Cornerstone own the answer space for the same work you can't break into on the flagship shows — the same wall, showing up in a second system independently.">
+                      <div style={{ marginTop: 7 }}>
+                        {rp.citations.slice(0, 3).map((c, i) => (
+                          <div key={i} style={{ fontSize: 10, color: C.faint, padding: "2px 0" }}>· {String(c.title).slice(0, 96)}</div>
+                        ))}
+                      </div>
+                    </WBTask>
+                  )}
+                </>
+              )}
+            </WBSection>
+
+            {/* ── CONTEXT ───────────────────────────────────────────────────── */}
+            <WBSection label="Context · not a task" note="What the numbers say about where to aim.">
+              <div style={{ background: "rgba(4,14,34,0.4)", border: "1px solid #141414", borderRadius: 9, padding: "13px 15px", fontSize: 10.5, color: C.dim, lineHeight: 1.8 }}>
+                <b style={{ color: "#E8E4DC" }}>{liveProjects.length} projects ahead, {usd(booked)} booked.</b> September and October are historically 300 jobs and $4.96M — roughly 30% of five years&apos; revenue in two months.
+                <br />
+                Which means outbound today shouldn&apos;t chase fall; it&apos;s largely set. Aim at <b style={{ color: "#E8E4DC" }}>Q1 2027 and next fall</b>, and at the <b style={{ color: "#E8E4DC" }}>July and December troughs</b> — your weakest months at 68 and 73 jobs. Those get filled with work that isn&apos;t season-bound: studio days, training video, internal corporate events.
+              </div>
+            </WBSection>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Target Accounts — the named-account list the Scout can't discover on its own.
 // Corporate internal events never surface as RFPs or public listings, so this market has to be
 // targeted deliberately rather than found. Reads target_accounts; extra contacts live in
@@ -9608,6 +9847,16 @@ Cite URLs.`;
               </div>
             </div>
           </div>
+          <div className="agent-pill" onClick={() => setActiveId("brief")}
+            style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${"brief" === activeId ? "#34D39960" : "#111"}`, background: "brief" === activeId ? "#34D39910" : "transparent", marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13 }}>◈</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, fontWeight: 500, color: "brief" === activeId ? "#34D399" : "#A8A4A0" }}>This Week</div>
+                <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>what to work on now</div>
+              </div>
+            </div>
+          </div>
           <div className="agent-pill" onClick={() => setActiveId("handoff")}
             style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${"handoff" === activeId ? "#34D39960" : "#111"}`, background: "handoff" === activeId ? "#34D3990A" : "transparent", marginBottom: 6 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -9788,6 +10037,8 @@ Cite URLs.`;
             <LeadHandoffView db={db} />
           ) : activeId === "opportunities" ? (
             <OpportunitiesView db={db} tavilyKey={tavilyKey} vpsUrl={vpsUrl} agentSecret={agentSecret} />
+          ) : activeId === "brief" ? (
+            <WeeklyBriefView db={db} onNavigate={setActiveId} />
           ) : activeId === "targets" ? (
             <TargetAccountsView db={db} />
           ) : activeId === "flex" ? (

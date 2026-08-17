@@ -115,6 +115,7 @@ module.exports = async (req, res) => {
       case 'smugmug':       return await handleSmugmug(req, res);
       case 'supabase':      return await handleSupabase(req, res, path);
       case 'upload-asset':
+      case 'rankpilot-brief': return await handleRankpilotBrief(req, res);
       case 'webflow-upload': return await handleWebflowUpload(req, res);
       case 'qualify':        return await handleQualify(req, res);
       case 'flex-analyze':   return await handleFlexAnalyze(req, res);
@@ -1712,6 +1713,41 @@ async function handleGmailDraft(req, res) {
 //   mode: "send" | "preview",                      // preview returns the blocks without posting
 //   markStatus: "priority"                         // status to set on the opp after send (best-effort)
 // }
+// Rankpilot lives in its own `rankpilot` Postgres schema in the same Supabase project, with RLS on
+// and no policy for `anon` — deliberate isolation. Rather than weaken that so the browser can read
+// it, summarise server-side with the service key. Read-only: this never writes to Rankpilot.
+async function handleRankpilotBrief(req, res) {
+  const { base, key } = SB_ENV();
+  if (!base || !key) return res.status(500).json({ error: 'Supabase env missing' });
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Accept-Profile': 'rankpilot' };
+  try {
+    const r = await fetch(`${base}/rest/v1/actions?select=id,tier,type,status,title,payload&status=eq.queued&order=tier.asc&limit=500`, { headers });
+    if (!r.ok) return res.status(502).json({ error: `rankpilot read failed (${r.status})` });
+    const rows = await r.json();
+    const byType = {};
+    let patchReady = 0;
+    rows.forEach(a => {
+      byType[a.type] = (byType[a.type] || 0) + 1;
+      if (a.payload && a.payload.patch) patchReady += 1;
+    });
+    // Meta/title rewrites are the one-click wins: copy already drafted, applies straight to Webflow.
+    const oneClick = rows.filter(a => a.payload && a.payload.patch &&
+      (a.type === 'description_rewrite' || a.type === 'title_rewrite'));
+    // Citation targets name the competitor pages winning AI answers — read as competitive intel.
+    const citations = rows.filter(a => a.type === 'citation_target').slice(0, 8)
+      .map(a => ({ title: a.title }));
+    return res.status(200).json({
+      queued: rows.length, patchReady, byType,
+      oneClick: oneClick.slice(0, 12).map(a => ({ type: a.type, title: a.title })),
+      oneClickTotal: oneClick.length,
+      citations,
+      writeEnabled: null,   // lives in the droplet's .env, not readable from here — surfaced as unknown
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
 const SB_ENV = () => ({
   base: (process.env.SUPABASE_URL || '').replace(/\/$/, ''),
   key:  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '',
