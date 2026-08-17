@@ -380,3 +380,17 @@
    LAYOUT HELPERS
 ═══════════════════════════════════════════════════ */
 .tank-above-bg { position: relative; z-index: 1; }
+
+
+/* ═══════════════════════════════════════════════════
+   LIGHT REDESIGN OVERRIDE
+   The ocean background and caustic shimmer belong to the old dark identity. Rather than
+   unpick every rule above, switch the shell off here — appended last so it wins.
+═══════════════════════════════════════════════════ */
+.tank-bg { background: #E7E7E4 !important; }
+.tank-bg::before { display: none !important; }
+.tank-caustic { display: none !important; }
+
+.ff-pulse { animation: ffPulse 2s ease-in-out infinite; }
+@keyframes ffPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .ff-pulse { animation: none; } }

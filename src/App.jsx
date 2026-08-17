@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import TankOceanBg from "./components/TankOceanBg";
+import { c as TC } from "./tokens.js";
 
 export class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -991,30 +992,60 @@ function LeadHandoffView({ db }) {
   );
 }
 
+// Nav, restructured per the redesign: 7 primary items tiered Daily / Weekly / System.
+// The legacy screens move under "More" rather than being deleted — cutting access is an
+// information-architecture decision that hasn't been made yet, and orphaning a working
+// screen is worse than one extra group.
+const NAV_GROUPS = [
+  { label: "DAILY", items: [
+    { id: "home", label: "Today" },
+    { id: "brief", label: "This Week" },
+    { id: "handoff", label: "Handoff", badge: "signals" },
+  ] },
+  { label: "WEEKLY", items: [
+    { id: "targets", label: "Target Accounts" },
+    { id: "flex", label: "Flex Intel" },
+    { id: "opportunities", label: "Signals" },
+  ] },
+  { label: "SYSTEM", items: [
+    { id: "actions", label: "Agents & Ops" },
+  ] },
+  { label: "MORE", items: [
+    { id: "builder", label: "Build Content" },
+    { id: "sales", label: "Sales Queue" },
+    { id: "crm", label: "CRM", badge: "drafts" },
+    { id: "brain", label: "Brain" },
+    { id: "publisher", label: "Publisher" },
+    { id: "openclaw", label: "Runtime" },
+    { id: "memory", label: "Memory" },
+    { id: "chat", label: "Chat" },
+    { id: "usage", label: "Usage" },
+  ] },
+];
+
 // Defined at module scope on purpose — declaring these inside WeeklyBriefView would create new
 // component types on every render, remounting the subtree and dropping state.
 function WBTask({ id, accent, title, why, children, cta, done, mark }) {
   const isDone = !!done[id];
   return (
-    <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderLeft: `3px solid ${isDone ? "#222" : accent}`,
-      borderRadius: 9, padding: "13px 15px", marginBottom: 9, opacity: isDone ? 0.45 : 1 }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-        <button onClick={() => mark(id)} title={isDone ? "Mark not done" : "Mark done"}
-          style={{ marginTop: 1, width: 15, height: 15, flexShrink: 0, borderRadius: 4, cursor: "pointer",
-            border: `1px solid ${isDone ? accent : "#2A2A2A"}`, background: isDone ? accent + "30" : "transparent",
-            color: accent, fontSize: 9, lineHeight: 1, fontFamily: "inherit", padding: 0 }}>
-          {isDone ? "\u2713" : ""}
-        </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: isDone ? "#666" : "#E8E4DC", textDecoration: isDone ? "line-through" : "none" }}>{title}</div>
-          {why && <div style={{ fontSize: 10.5, color: "#8A8578", marginTop: 4, lineHeight: 1.65 }}>{why}</div>}
-          {children}
-          {cta && (
-            <button onClick={cta.go}
-              style={{ marginTop: 9, fontSize: 9, padding: "4px 11px", borderRadius: 5, cursor: "pointer", fontFamily: "inherit",
-                border: `1px solid ${accent}45`, background: accent + "10", color: accent }}>{cta.label}</button>
-          )}
-        </div>
+    <div style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "16px 4px",
+      borderTop: `1px solid ${TC.line}` }}>
+      <button onClick={() => mark(id)} title={isDone ? "Mark not done" : "Mark done"}
+        style={{ marginTop: 1, width: 24, height: 24, flexShrink: 0, borderRadius: 999, cursor: "pointer",
+          border: isDone ? "none" : `1.5px solid rgba(20,20,15,0.22)`, background: isDone ? TC.accent : "transparent",
+          color: TC.ink, fontSize: 12, lineHeight: 1, fontFamily: "inherit", padding: 0,
+          display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {isDone ? "\u2713" : ""}
+      </button>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 500, color: isDone ? TC.fainter : TC.ink, textDecoration: isDone ? "line-through" : "none" }}>{title}</div>
+        {why && <div style={{ fontSize: 13, color: TC.muted, marginTop: 5, lineHeight: 1.6 }}>{why}</div>}
+        {children}
+        {cta && (
+          <button onClick={cta.go}
+            style={{ marginTop: 11, fontSize: 12.5, padding: "7px 15px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit",
+              border: `1px solid ${TC.lineStrong}`, background: TC.elevated, color: TC.sub }}>{cta.label}</button>
+        )}
       </div>
     </div>
   );
@@ -1022,9 +1053,9 @@ function WBTask({ id, accent, title, why, children, cta, done, mark }) {
 
 function WBSection({ label, note, children }) {
   return (
-    <div style={{ marginBottom: 26 }}>
-      <div style={{ fontSize: 9, letterSpacing: "2px", textTransform: "uppercase", color: "#555", marginBottom: 3 }}>{label}</div>
-      {note && <div style={{ fontSize: 10, color: "#3f3f3f", marginBottom: 10 }}>{note}</div>}
+    <div style={{ marginBottom: 26, background: TC.card, borderRadius: 26, padding: "22px 26px" }}>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "1.8px", textTransform: "uppercase", color: TC.muted, marginBottom: 4 }}>{label}</div>
+      {note && <div style={{ fontSize: 13, color: TC.faint, marginBottom: 6 }}>{note}</div>}
       {children}
     </div>
   );
@@ -1121,33 +1152,37 @@ function WeeklyBriefView({ db, onNavigate }) {
   const booked = liveProjects.reduce((s, p) => s + (Number(p.budget_estimate) || 0), 0);
   const usd = n => n >= 1000000 ? `$${(n / 1000000).toFixed(2)}M` : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${Math.round(n)}`;
 
-  const C = { green: "#34D399", orange: "#FB923C", purple: "#A78BFA", teal: "#4ECDC4", yellow: "#F7C948", dim: "#8A8578", faint: "#555" };
+    // accents mapped onto the redesign palette; green stays reserved for the recommended action
+  const C = { green: TC.accentDeep, orange: TC.warnInk, purple: TC.ink, teal: TC.accentDeep, yellow: TC.warnInk, dim: TC.sub, faint: TC.faint };
 
   const doneCount = Object.values(done).filter(Boolean).length;
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "13px 20px", borderBottom: "1px solid #111", flexShrink: 0, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ padding: "26px 48px 18px", flexShrink: 0, display: "flex", alignItems: "flex-end", gap: 14, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: C.green }}>This Week</div>
-          <div style={{ fontSize: 9, color: "#444" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "2px", textTransform: "uppercase", color: TC.faint, marginBottom: 6 }}>
+            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} · Good morning, Isaac
+          </div>
+          <div style={{ fontSize: 40, fontWeight: 500, letterSpacing: "-1.2px", color: TC.ink, lineHeight: 1.05 }}>This Week</div>
+          <div style={{ fontSize: 13, color: TC.muted, marginTop: 8 }}>
             {loading ? "reading both systems…" : `week of ${iso(today)} · ${urgent.length} dated leads ahead · ${usd(booked)} booked`}
           </div>
         </div>
         {doneCount > 0 && (
           <button onClick={() => { setDone({}); try { localStorage.removeItem("briefDone"); } catch { /* ignore */ } }}
-            style={{ marginLeft: "auto", fontSize: 9, padding: "4px 10px", borderRadius: 5, border: "1px solid #1A1A1A", background: "transparent", color: C.faint, cursor: "pointer", fontFamily: "inherit" }}>
+            style={{ marginLeft: "auto", fontSize: 12.5, padding: "7px 15px", borderRadius: 999, border: `1px solid ${TC.lineStrong}`, background: "transparent", color: TC.muted, cursor: "pointer", fontFamily: "inherit" }}>
             reset {doneCount} checked
           </button>
         )}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 80px", maxWidth: 900 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "4px 48px 80px", maxWidth: 980 }}>
         {loading && <div style={{ fontSize: 10, color: "#444" }}>loading…</div>}
 
         {!loading && (
           <>
-            <div style={{ fontSize: 10.5, color: C.dim, borderLeft: `2px solid ${C.green}60`, paddingLeft: 11, marginBottom: 22, lineHeight: 1.75 }}>
+            <div style={{ fontSize: 14, color: TC.sub, background: TC.card, borderRadius: 26, padding: "20px 26px", marginBottom: 26, lineHeight: 1.65 }}>
               Both systems generate well and convert poorly — {drafts} outreach drafts written, {feedback === 0 ? "no" : feedback} feedback ratings recorded,
               and {rp && !rp.error ? `${rp.patchReady} Rankpilot fixes` : "Rankpilot fixes"} sitting drafted.
               <span style={{ color: C.faint }}> Nothing below asks you to find more. It all ships what already exists.</span>
@@ -1168,7 +1203,7 @@ function WeeklyBriefView({ db, onNavigate }) {
                   why={`${o.deadline} · scored ${o.overall_score}. ${(o.title || "").slice(0, 110)}`} />
               ))}
               {!within(14).length && (
-                <div style={{ fontSize: 10.5, color: "#3f3f3f", padding: "4px 0 10px" }}>No dated leads inside two weeks — the near horizon is clear.</div>
+                <div style={{ fontSize: 13, color: TC.faint, padding: "10px 4px" }}>No dated leads inside two weeks — the near horizon is clear.</div>
               )}
             </WBSection>
 
@@ -1221,7 +1256,7 @@ function WeeklyBriefView({ db, onNavigate }) {
 
             {/* ── CONTEXT ───────────────────────────────────────────────────── */}
             <WBSection label="Context · not a task" note="What the numbers say about where to aim.">
-              <div style={{ background: "rgba(4,14,34,0.4)", border: "1px solid #141414", borderRadius: 9, padding: "13px 15px", fontSize: 10.5, color: C.dim, lineHeight: 1.8 }}>
+              <div style={{ background: TC.card, borderRadius: 26, padding: "22px 26px", fontSize: 14, color: TC.sub, lineHeight: 1.7 }}>
                 <b style={{ color: "#E8E4DC" }}>{liveProjects.length} projects ahead, {usd(booked)} booked.</b> September and October are historically 300 jobs and $4.96M — roughly 30% of five years&apos; revenue in two months.
                 <br />
                 Which means outbound today shouldn&apos;t chase fall; it&apos;s largely set. Aim at <b style={{ color: "#E8E4DC" }}>Q1 2027 and next fall</b>, and at the <b style={{ color: "#E8E4DC" }}>July and December troughs</b> — your weakest months at 68 and 73 jobs. Those get filled with work that isn&apos;t season-bound: studio days, training video, internal corporate events.
@@ -9840,187 +9875,56 @@ Cite URLs.`;
       )}
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative", zIndex: 1 }}>
-        <div className="ff-sidebar" style={{ width: 200, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.05)", padding: "14px 11px", display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", background: "rgba(2,10,26,0.5)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", position: "relative", zIndex: 1 }}>
-          <div className="agent-pill" onClick={() => setActiveId("home")}
-            style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${"home" === activeId ? "#FF6B2B50" : "#111"}`, background: "home" === activeId ? "#FF6B2B0A" : "transparent", marginBottom: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13 }}>◉</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, fontWeight: 500, color: "home" === activeId ? "#FF6B2B" : "#A8A4A0" }}>Home</div>
-                <div style={{ fontSize: 9, color: "#999", marginTop: 1 }}>Daily brief</div>
-              </div>
+        <div className="ff-sidebar" style={{ width: 230, flexShrink: 0, borderRight: `1px solid ${TC.line}`, padding: "18px 14px 14px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto", background: TC.bg, position: "relative", zIndex: 1 }}>
+
+          {/* Logo lockup */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 6px 18px" }}>
+            <div style={{ width: 34, height: 34, borderRadius: 11, background: TC.ink, color: TC.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>FF</div>
+            <div style={{ lineHeight: 1.15 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: TC.ink }}>FF Tank</div>
+              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "1.6px", color: TC.faint }}>FATFISH</div>
             </div>
           </div>
-          <div className="agent-pill" onClick={() => setActiveId("brief")}
-            style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${"brief" === activeId ? "#34D39960" : "#111"}`, background: "brief" === activeId ? "#34D39910" : "transparent", marginBottom: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13 }}>◈</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, fontWeight: 500, color: "brief" === activeId ? "#34D399" : "#A8A4A0" }}>This Week</div>
-                <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>what to work on now</div>
-              </div>
-            </div>
-          </div>
-          <div className="agent-pill" onClick={() => setActiveId("handoff")}
-            style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${"handoff" === activeId ? "#34D39960" : "#111"}`, background: "handoff" === activeId ? "#34D3990A" : "transparent", marginBottom: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13 }}>◆</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, fontWeight: 500, color: "handoff" === activeId ? "#34D399" : "#A8A4A0" }}>Lead Handoff</div>
-                <div style={{ fontSize: 9, color: "#999", marginTop: 1 }}>review · send to Taylor</div>
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: 9, color: "#999", letterSpacing: "2px", marginBottom: 4 }}>AGENTS</div>
-          {(() => {
-            const agentIds = ["builder", "prospector", "monday", "dossier"];
-            const isAgentActive = agentIds.includes(activeId);
-            const lastAgent = agents.find(a => a.id === activeId && agentIds.includes(a.id));
-            return (
-              <div className="agent-pill" onClick={() => { if (!isAgentActive) setActiveId("builder"); }}
-                style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${isAgentActive ? "#FF6B2B50" : "#111"}`, background: isAgentActive ? "#FF6B2B0A" : "transparent" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13 }}>✦</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, fontWeight: 500, color: isAgentActive ? "#FF6B2B" : "#A8A4A0" }}>Agents</div>
-                    <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>
-                      {isAgentActive && lastAgent ? lastAgent.name : "Content · Pipeline · Projects"}
-                    </div>
+
+          {NAV_GROUPS.map(group => (
+            <div key={group.label} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "1.8px", color: TC.faint, padding: "0 10px 6px" }}>{group.label}</div>
+              {group.items.map(item => {
+                const on = activeId === item.id;
+                const badge = item.badge === "drafts" ? pendingDraftCount : item.badge === "signals" ? scoutSignalCount : null;
+                return (
+                  <div key={item.id} onClick={() => setActiveId(item.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 14, cursor: "pointer", marginBottom: 1,
+                      background: on ? TC.ink : "transparent", color: on ? TC.onInk : TC.sub,
+                      transition: "background 130ms ease" }}
+                    onMouseEnter={e => { if (!on) e.currentTarget.style.background = TC.navHover; }}
+                    onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
+                    <span style={{ flex: 1, fontSize: 13.5, fontWeight: on ? 500 : 400 }}>{item.label}</span>
+                    {badge ? (
+                      <span style={{ fontSize: 10.5, color: on ? "rgba(246,246,244,0.6)" : TC.faint }}>{badge > 999 ? `${(badge / 1000).toFixed(1)}k` : badge}</span>
+                    ) : null}
                   </div>
-                </div>
-              </div>
-            );
-          })()}
-          <div style={{ marginTop: 8, borderTop: "1px solid #0D0D0D", paddingTop: 8 }}>
-            <div style={{ fontSize: 9, color: "#444", letterSpacing: "2px", marginBottom: 4, padding: "0 2px" }}>INTELLIGENCE</div>
-            <div className="agent-pill" onClick={() => setActiveId("opportunities")}
-              style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${"opportunities" === activeId ? "#A78BFA50" : "#111"}`, background: "opportunities" === activeId ? "#A78BFA0A" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>◈</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "opportunities" === activeId ? "#A78BFA" : "#A8A4A0" }}>Opportunities</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>RFPs · signals · prospects</div>
-                </div>
-              </div>
+                );
+              })}
             </div>
-            <div className="agent-pill" onClick={() => setActiveId("sales")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"sales" === activeId ? "#FB923C50" : "#111"}`, background: "sales" === activeId ? "#FB923C08" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>◐</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "sales" === activeId ? "#FB923C" : "#A8A4A0" }}>Sales Queue</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>briefs · assignment · status</div>
-                </div>
-              </div>
-            </div>
-            <div className="agent-pill" onClick={() => setActiveId("crm")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"crm" === activeId ? "#4ECDC450" : "#111"}`, background: "crm" === activeId ? "#4ECDC408" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>◎</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "crm" === activeId ? "#4ECDC4" : "#A8A4A0" }}>CRM</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>contacts · outreach · signals</div>
-                </div>
-                {pendingDraftCount > 0 && (
-                  <span style={{ fontSize: 8, padding: "1px 6px", borderRadius: 8, background: "#F7C94815", color: "#F7C948", border: "1px solid #F7C94830" }}>
-                    {pendingDraftCount}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="agent-pill" onClick={() => setActiveId("targets")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"targets" === activeId ? "#4ECDC450" : "#111"}`, background: "targets" === activeId ? "#4ECDC408" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>◇</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "targets" === activeId ? "#4ECDC4" : "#A8A4A0" }}>Target Accounts</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>named accounts · contacts</div>
-                </div>
-              </div>
-            </div>
-            <div className="agent-pill" onClick={() => setActiveId("flex")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"flex" === activeId ? "#FB923C50" : "#111"}`, background: "flex" === activeId ? "#FB923C0A" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>◐</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "flex" === activeId ? "#FB923C" : "#A8A4A0" }}>Flex Intel</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>clients · venues · history</div>
-                </div>
-              </div>
-            </div>
-            <div className="agent-pill" onClick={() => setActiveId("brain")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"brain" === activeId ? "#F7C94850" : "#111"}`, background: "brain" === activeId ? "#F7C94808" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>◉</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "brain" === activeId ? "#F7C948" : "#A8A4A0" }}>Brain</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>brief · strategy · trends</div>
-                </div>
-              </div>
+          ))}
+
+          {/* Live agent — the one bit of "alive" the dark theme used to carry */}
+          <div style={{ marginTop: "auto", background: TC.card, borderRadius: 16, padding: "11px 13px" }}>
+            <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "1.6px", color: TC.faint, marginBottom: 5 }}>LIVE AGENT</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <span className="ff-pulse" style={{ width: 7, height: 7, borderRadius: 999, background: TC.accent, flexShrink: 0 }} />
+              <span style={{ fontSize: 11.5, color: TC.sub }}>Scout · daily 13:00 UTC</span>
             </div>
           </div>
-          <div style={{ marginTop: 8, borderTop: "1px solid #0D0D0D", paddingTop: 8 }}>
-            <div style={{ fontSize: 9, color: "#444", letterSpacing: "2px", marginBottom: 4, padding: "0 2px" }}>EXECUTION</div>
-            <div className="agent-pill" onClick={() => setActiveId("actions")}
-              style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${"actions" === activeId ? "#FB923C50" : "#111"}`, background: "actions" === activeId ? "#FB923C0A" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>⚡</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "actions" === activeId ? "#FB923C" : "#A8A4A0" }}>Actions</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>run jobs · trigger now</div>
-                </div>
-              </div>
-            </div>
-            <div className="agent-pill" onClick={() => setActiveId("openclaw")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"openclaw" === activeId ? "#34D39950" : "#111"}`, background: "openclaw" === activeId ? "#34D39908" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>🦞</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "openclaw" === activeId ? "#34D399" : "#A8A4A0" }}>OpenClaw</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>runtime · crons · health</div>
-                </div>
-              </div>
-            </div>
-            <div className="agent-pill" onClick={() => setActiveId("publisher")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"publisher" === activeId ? "#34D39950" : "#111"}`, background: "publisher" === activeId ? "#34D39908" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>◈</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "publisher" === activeId ? "#34D399" : "#A8A4A0" }}>Publisher</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>SEO · Webflow · SmugMug</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style={{ marginTop: 8, borderTop: "1px solid #0D0D0D", paddingTop: 8 }}>
-            <div style={{ fontSize: 9, color: "#444", letterSpacing: "2px", marginBottom: 4, padding: "0 2px" }}>SYSTEM</div>
-            <div className="agent-pill" onClick={() => setActiveId("memory")} style={{ padding: "10px 11px", borderRadius: 7, border: `1px solid ${"memory" === activeId ? "#F7C94850" : "#111"}`, background: "memory" === activeId ? "#F7C94808" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>◈</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "memory" === activeId ? "#F7C948" : "#A8A4A0" }}>Memory</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>agent context · accounts</div>
-                </div>
-              </div>
-            </div>
-            <div className="agent-pill" onClick={() => setActiveId("chat")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"chat" === activeId ? "#A78BFA50" : "#111"}`, background: "chat" === activeId ? "#A78BFA08" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>◎</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "chat" === activeId ? "#A78BFA" : "#A8A4A0" }}>Chat</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>persistent · threaded</div>
-                </div>
-              </div>
-            </div>
-            <div className="agent-pill" onClick={() => setActiveId("usage")} style={{ marginTop: 6, padding: "10px 11px", borderRadius: 7, border: `1px solid ${"usage" === activeId ? "#F7C94850" : "#111"}`, background: "usage" === activeId ? "#F7C94808" : "transparent" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>◎</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "usage" === activeId ? "#F7C948" : "#A8A4A0" }}>Usage</div>
-                  <div style={{ fontSize: 9, color: "#555", marginTop: 1 }}>cost · tokens · job stats</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style={{ marginTop: "auto", padding: 10, background: "rgba(4,14,34,0.62)", borderRadius: 7, border: "1px solid #111" }}>
-            <div style={{ fontSize: 9, color: "#999", letterSpacing: "2px", marginBottom: 10 }}>MARCH BUDGET</div>
-            <BudgetBar label="CLAUDE · $90" spent={claudeSpent} cap={CLAUDE_BUDGET} color="#FF6B2B" />
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #111", display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 9, color: "#999" }}>REMAINING</span>
-              <span style={{ fontSize: 10, color: totalColor, fontWeight: 500 }}>{formatUSD(TOTAL_BUDGET - totalSpent)}</span>
+
+          {/* Spend — real information, restyled rather than dropped */}
+          <div style={{ marginTop: 8, background: TC.card, borderRadius: 16, padding: "11px 13px" }}>
+            <BudgetBar label="OPENAI · $60" spent={openaiSpent} cap={OPENAI_BUDGET} color={TC.muted} />
+            <BudgetBar label="CLAUDE · $90" spent={claudeSpent} cap={CLAUDE_BUDGET} color={TC.ink} />
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${TC.line}`, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "1.4px", color: TC.faint }}>REMAINING</span>
+              <span style={{ fontSize: 11.5, color: TC.ink, fontWeight: 500 }}>{formatUSD(TOTAL_BUDGET - totalSpent)}</span>
             </div>
           </div>
         </div>

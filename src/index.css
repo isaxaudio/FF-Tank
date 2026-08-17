@@ -7,8 +7,13 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: #020912;
-  color: #E4F4FF;
+  /* Redesign: light warm-gray ground. See src/tokens.js — these two values are the only
+     place the palette is duplicated outside that module, because the body has to paint
+     before React mounts. */
+  background: #E7E7E4;
+  color: #161613;
+  font-family: Inter, ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
