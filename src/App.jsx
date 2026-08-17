@@ -249,10 +249,10 @@ function BudgetBar({ label, spent, cap, color }) {
   return (
     <div style={{ marginBottom: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ fontSize: 10, color: "#999", letterSpacing: "1px" }}>{label}</span>
-        <span style={{ fontSize: 10, color: warn }}>{formatUSD(spent)}<span style={{ color: "#999" }}>/{formatUSD(cap)}</span></span>
+        <span style={{ fontSize: 9.5, fontWeight: 600, color: TC.faint, letterSpacing: "1.2px" }}>{label}</span>
+        <span style={{ fontSize: 11, color: TC.ink }}>{formatUSD(spent)}<span style={{ color: TC.faint }}>/{formatUSD(cap)}</span></span>
       </div>
-      <div style={{ height: 3, background: "#1A1A1A", borderRadius: 2 }}>
+      <div style={{ height: 4, background: TC.barTrack, borderRadius: 999 }}>
         <div style={{ width: `${pct}%`, height: "100%", background: warn, borderRadius: 2, transition: "width 0.6s ease" }} />
       </div>
     </div>
@@ -3196,7 +3196,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
                         </span>
                       </div>
                       <div style={{ height: 4, background: "#141414", borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${((Number(c.total_revenue) || 0) / maxClientRev * 100).toFixed(1)}%`, background: "#34D399" }} />
+                        <div style={{ height: "100%", width: `${((Number(c.total_revenue) || 0) / maxClientRev * 100).toFixed(1)}%`, background: TC.accentDeep }} />
                       </div>
                     </div>
                   ))}
@@ -9522,8 +9522,11 @@ Cite URLs.`;
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap');
         html, body, #root { width: 100%; height: 100%; margin: 0; padding: 0; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #0A0A0A; } ::-webkit-scrollbar-thumb { background: #222; }
-        * { scrollbar-width: thin; scrollbar-color: #222 #0A0A0A; }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(20,20,15,0.18); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(20,20,15,0.3); border: 3px solid transparent; background-clip: content-box; }
+        * { scrollbar-width: thin; scrollbar-color: rgba(20,20,15,0.18) transparent; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
         @keyframes fadeUp { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
         .msg { animation: fadeUp 0.2s ease forwards; }
@@ -9674,19 +9677,19 @@ Cite URLs.`;
             )}
           </div>
           <button onClick={() => setShowSettings(s => !s)} title="Settings"
-            style={{ background: showSettings ? "#141414" : "none", border: "1px solid #1A1A1A", borderRadius: 6, color: showSettings ? "#F7C948" : "#999", fontSize: 13, padding: "3px 9px", cursor: "pointer" }}>
+            style={{ background: showSettings ? TC.ink : "transparent", border: `1px solid ${TC.lineStrong}`, borderRadius: 999, color: showSettings ? TC.onInk : TC.muted, fontSize: 13, padding: "4px 10px", cursor: "pointer" }}>
             ⚙
           </button>
-          <div className="header-status-pill" style={{ padding: "3px 10px", background: "#34D39908", border: "1px solid #34D39928", borderRadius: 20, display: "flex", alignItems: "center", gap: 5 }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#34D399" }} />
-            <span style={{ fontSize: 9, color: "#34D399" }}>Brain</span>
+          <div className="header-status-pill" style={{ padding: "4px 11px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 999, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: TC.accentDeep }} />
+            <span style={{ fontSize: 11, color: TC.sub }}>Brain</span>
           </div>
           <div className="header-status-pill" style={{ padding: "3px 10px", background: supabaseUrl && supabaseAnonKey ? "#4ECDC408" : "transparent", border: `1px solid ${supabaseUrl && supabaseAnonKey ? "#4ECDC428" : "#1A1A1A"}`, borderRadius: 20, display: "flex", alignItems: "center", gap: 5 }}>
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: supabaseUrl && supabaseAnonKey ? "#4ECDC4" : "#333" }} />
-            <span style={{ fontSize: 9, color: supabaseUrl && supabaseAnonKey ? "#4ECDC4" : "#555" }}>DB</span>
+            <span style={{ fontSize: 11, color: supabaseUrl && supabaseAnonKey ? TC.sub : TC.fainter }}>DB</span>
           </div>
-          <div className="header-claude-pill" style={{ padding: "3px 10px", background: "rgba(3,12,30,0.7)", border: "1px solid #FF6B2B28", borderRadius: 20, display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#FF6B2B" }} />
+          <div className="header-claude-pill" style={{ padding: "4px 11px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 999, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: TC.warn }} />
             <span style={{ fontSize: 9, color: "#888" }}>Claude</span>
             <span style={{ fontSize: 9, color: "#FF6B2B" }}>{formatUSD(claudeSpent)}<span style={{ color: "#999" }}>/$90</span></span>
           </div>
