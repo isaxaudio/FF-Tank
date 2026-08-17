@@ -2779,6 +2779,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
   const [syncing, setSyncing] = useState(false);
   const [toast, setToast] = useState(null);
   const [dataTab, setDataTab] = useState("clients");
+  const [dismissVenues, setDismissVenues] = useState(false);
   const [dataRows, setDataRows] = useState([]);
   const [loadingRows, setLoadingRows] = useState(false);
   const [lookalikes, setLookalikes] = useState([]);
@@ -3148,129 +3149,109 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
 
         {/* OVERVIEW */}
         {activeTab === "overview" && (
-          <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
-            {/* Stat cards */}
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {[
-                { label: "Booked value", value: usd(totalBooked), color: TC.ink },
-                { label: "Clients", value: billed.length, color: TC.ink },
-                { label: "Jobs", value: totalJobs, color: TC.ink },
-                { label: "Active 12mo", value: activeClients.length, color: TC.ink },
-                { label: "Repeat", value: repeatClients, color: TC.ink },
-              ].map(s => (
-                <div key={s.label} style={{ flex: "1 1 100px", minWidth: 90, background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, padding: "16px 18px" }}>
-                  <div style={{ fontSize: 26, fontWeight: 700, color: s.color, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loadingData ? "—" : s.value}</div>
-                  <div style={{ fontSize: 9, color: TC.fainter, letterSpacing: "1.5px", marginTop: 7, textTransform: "uppercase" }}>{s.label}</div>
+          <div style={{ padding: "8px 48px 60px", display: "flex", flexDirection: "column", gap: 22, maxWidth: 1280 }}>
+
+            {/* Stat tiles — 36px numbers, 22 radius, per the handoff spec */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 22 }}>
+              {[{ v: usd(totalBooked), l: `booked · ${years.length} years` },
+                { v: billed.length, l: "clients" },
+                { v: projects.length.toLocaleString(), l: "projects" },
+                { v: usd(totalJobs ? totalBooked / totalJobs : 0), l: "avg per job" }].map(s => (
+                <div key={s.l} style={{ background: TC.card, borderRadius: 22, padding: "22px 24px" }}>
+                  <div style={{ fontSize: 36, fontWeight: 500, letterSpacing: "-1.5px", color: TC.ink }}>{loadingData ? "—" : s.v}</div>
+                  <div style={{ fontSize: 12.5, color: TC.muted, marginTop: 4 }}>{s.l}</div>
                 </div>
               ))}
             </div>
 
-            {/* Strategic Snapshot */}
-            <div style={{ background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8 }}>
-              <div style={{ padding: "12px 18px", borderBottom: `1px solid ${TC.card}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: TC.muted, letterSpacing: "1.8px" }}>◐ STRATEGIC SNAPSHOT</span>
-                <button onClick={() => generate("overview")} disabled={generating === "overview" || !hasData}
-                  style={{ fontSize: 9, padding: "3px 10px", background: generating === "overview" ? `${TC.warnInk}12` : "transparent", border: `1px solid ${generating === "overview" ? `${TC.warnInk}40` : TC.line}`, borderRadius: 5, color: generating === "overview" ? TC.warnInk : TC.fainter, cursor: generating === "overview" || !hasData ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
-                  {generating === "overview" ? "◌ Analyzing…" : insights.overview ? "↻ Refresh" : "◐ Generate Snapshot"}
-                </button>
-              </div>
-              <div style={{ padding: "16px 18px" }}>
-                {!hasData && <div style={{ fontSize: 10, color: TC.line }}>Sync Flex data first.</div>}
-                {hasData && !insights.overview && generating !== "overview" && <div style={{ fontSize: 10, color: TC.fainter }}>Generate an executive summary of your historical client work, top patterns, and strategic positioning.</div>}
-                {generating === "overview" && <div style={{ fontSize: 10, color: TC.fainter }}>◌ Analyzing {billed.length} billed clients across all sectors…</div>}
-                {insights.overview && generating !== "overview" && <pre style={{ fontSize: 11, color: TC.warnInk, lineHeight: 1.8, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{insights.overview}</pre>}
-              </div>
-            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.15fr) minmax(0,1fr)", gap: 22, alignItems: "start" }}>
 
-            {/* Who pays the bills + how it trends by year */}
-            {billed.length > 0 && (
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 320px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, padding: "16px 18px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: TC.muted, letterSpacing: "1.8px" }}>TOP CLIENTS BY BOOKED VALUE</span>
-                    <span style={{ fontSize: 9, color: concentration > 25 ? TC.warnInk : TC.fainter }}>
-                      top client = {concentration.toFixed(0)}% of revenue
-                    </span>
+              {/* Revenue by year — a real column chart. Height is proportional, the peak year is
+                  ink with a green value pill, every other year is a neutral bar. */}
+              <div style={{ background: TC.card, borderRadius: 26, padding: "24px 28px" }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "2px", color: TC.muted, marginBottom: 24 }}>REVENUE BY YEAR</div>
+                {years.length ? (
+                  <div style={{ display: "flex", gap: 28, alignItems: "flex-end", padding: "0 8px", minHeight: 210 }}>
+                    {years.map(([y, v]) => {
+                      const top = v.rev === maxYearRev;
+                      return (
+                        <div key={y} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
+                          {top && (
+                            <span style={{ fontSize: 12.5, fontWeight: 600, background: TC.accent, color: TC.onAccent, padding: "4px 12px", borderRadius: 999, whiteSpace: "nowrap" }}>{usd(v.rev)}</span>
+                          )}
+                          <div title={`${y} · ${usd(v.rev)} · ${v.jobs} jobs`}
+                            style={{ width: "100%", height: Math.max(6, Math.round((v.rev / maxYearRev) * 170)),
+                              background: top ? TC.ink : TC.bar, borderRadius: "10px 10px 4px 4px" }} />
+                          <span style={{ fontSize: 12, color: TC.muted }}>{y}</span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {topClients.map(c => (
-                    <div key={c.id} style={{ marginBottom: 10 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 11, marginBottom: 3 }}>
-                        <span style={{ color: TC.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                        <span style={{ color: TC.warnInk, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                          {usd(Number(c.total_revenue) || 0)} <span style={{ color: TC.fainter }}>· {c.total_events || 0}j</span>
-                        </span>
-                      </div>
-                      <div style={{ height: 4, background: TC.barTrack, borderRadius: 999, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${((Number(c.total_revenue) || 0) / maxClientRev * 100).toFixed(1)}%`, background: (Number(c.total_revenue) || 0) === maxClientRev ? TC.ink : TC.bar, borderRadius: 999 }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ flex: "1 1 240px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 8, padding: "16px 18px" }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: TC.muted, letterSpacing: "1.8px", marginBottom: 14 }}>BOOKED BY YEAR</div>
-                  {years.length ? years.map(([y, v]) => (
-                    <div key={y} style={{ marginBottom: 10 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
-                        <span style={{ color: TC.warnInk }}>{y}</span>
-                        <span style={{ color: TC.warnInk, fontVariantNumeric: "tabular-nums" }}>
-                          {usd(v.rev)} <span style={{ color: TC.fainter }}>· {v.jobs}j</span>
-                        </span>
-                      </div>
-                      <div style={{ height: 4, background: TC.barTrack, borderRadius: 999, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${(v.rev / maxYearRev * 100).toFixed(1)}%`, background: v.rev === maxYearRev ? TC.ink : TC.bar, borderRadius: 999 }} />
-                      </div>
-                    </div>
-                  )) : <div style={{ fontSize: 10, color: TC.line }}>No dated projects yet.</div>}
-                </div>
+                ) : <div style={{ fontSize: 13, color: TC.faint }}>No dated projects yet.</div>}
               </div>
-            )}
 
-            {/* Win-back: clients who paid before and have gone quiet */}
-            {winback.length > 0 && (
-              <div style={{ background: TC.card, border: `1px solid ${TC.line}`, borderLeft: `3px solid ${TC.warnInk}`, borderRadius: 8, padding: "16px 18px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: TC.muted, letterSpacing: "1.8px" }}>◇ WIN-BACK · NO BOOKING IN 12 MONTHS</span>
-                  <span style={{ fontSize: 9, color: TC.fainter }}>{winback.length} clients · {usd(winbackValue)} of past business</span>
+              {/* Win-back list — each row ends in an action, so the panel produces sends not charts */}
+              <div style={{ background: TC.card, borderRadius: 26, padding: "24px 28px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "2px", color: TC.muted }}>WIN-BACK LIST</span>
+                  <span style={{ fontSize: 11.5, color: TC.faint }}>lapsed 12+ months</span>
                 </div>
-                <div style={{ fontSize: 10, color: TC.fainter, marginBottom: 14 }}>They already bought from you once. Warmer than anything the Scout finds cold.</div>
-                {winback.slice(0, 10).map(c => (
-                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${TC.card}`, fontSize: 11, flexWrap: "wrap" }}>
-                    <span style={{ color: TC.warnInk, flex: "1 1 150px" }}>
-                      {c.name}
-                      {(c.contact_email || c.location) && (
-                        <span style={{ color: TC.fainter, fontSize: 10 }}> · {c.contact_email || c.location}</span>
-                      )}
-                    </span>
-                    <span style={{ color: TC.warnInk, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
-                      {usd(Number(c.total_revenue) || 0)}
-                      <span style={{ color: TC.fainter }}> · last {c.last_event_date || "—"}</span>
-                    </span>
+                {winback.slice(0, 6).map(c => (
+                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 2px", borderTop: `1px solid ${TC.lineSoft}` }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: TC.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+                      <div style={{ fontSize: 11.5, color: TC.faint }}>{c.total_events || 0} job{(c.total_events || 0) === 1 ? "" : "s"}{c.location ? ` · ${c.location}` : ""}</div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: TC.ink }}>{usd(Number(c.total_revenue) || 0)}</div>
+                      <div style={{ fontSize: 11, color: TC.faint }}>last {c.last_event_date || "—"}</div>
+                    </div>
+                    <button onClick={() => onNavigate && onNavigate("brief")}
+                      style={{ fontFamily: "inherit", fontSize: 12, fontWeight: 500, background: "transparent", color: TC.sub,
+                        border: `1px solid ${TC.lineStrong}`, borderRadius: 999, padding: "7px 15px", cursor: "pointer", flexShrink: 0 }}>
+                      Draft
+                    </button>
                   </div>
                 ))}
+                {!winback.length && <div style={{ fontSize: 13, color: TC.faint, paddingTop: 12 }}>No lapsed clients.</div>}
+              </div>
+            </div>
+
+            {/* "Can never have data" — dashed, no fill, and removable. A dead end must not look
+                like a feature that merely happens to be empty today. */}
+            {venues.length === 0 && !dismissVenues && (
+              <div style={{ border: `1.5px dashed ${TC.lineStrong}`, borderRadius: 26, padding: "28px 32px", display: "flex", alignItems: "center", gap: 20 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 500, color: TC.muted, marginBottom: 3 }}>Venue data unavailable</div>
+                  <div style={{ fontSize: 12.5, color: TC.faint }}>Not exposed on this Flex plan — this panel can never have data.</div>
+                </div>
+                <button onClick={() => setDismissVenues(true)}
+                  style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 500, background: "transparent", color: TC.muted,
+                    border: `1px solid ${TC.lineStrong}`, borderRadius: 999, padding: "9px 17px", cursor: "pointer" }}>
+                  Remove this panel
+                </button>
               </div>
             )}
 
-            {/* Nav cards to other sections */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))", gap: 8 }}>
-              {[
-                { id: "industries", icon: "◈", label: "Industries", desc: "Sector strengths & repeat wins" },
-                { id: "markets", icon: "◉", label: "Markets & Venues", desc: "Geographic & venue patterns" },
-                { id: "growth", icon: "⚡", label: "Growth Opps", desc: "Dormant clients & lookalikes" },
-                { id: "content", icon: "✦", label: "Content Strategy", desc: "Pages, campaigns & proof points" },
-              ].map(s => (
-                <div key={s.id} onClick={() => setActiveTab(s.id)}
-                  style={{ background: TC.card, border: `1px solid ${insights[s.id] ? ACCENT[s.id] + "30" : TC.line}`, borderRadius: 8, padding: "13px 15px", cursor: "pointer", transition: "border-color 0.1s" }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = ACCENT[s.id] + "50"}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = insights[s.id] ? ACCENT[s.id] + "30" : TC.line}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-                    <span style={{ fontSize: 11, color: ACCENT[s.id] }}>{s.icon}</span>
-                    <span style={{ fontSize: 10, color: ACCENT[s.id], fontWeight: 500 }}>{s.label}</span>
-                    {insights[s.id] && <span style={{ fontSize: 8, color: TC.accentDeep, marginLeft: "auto" }}>✓</span>}
-                  </div>
-                  <div style={{ fontSize: 9, color: TC.fainter }}>{s.desc}</div>
-                </div>
-              ))}
+            {/* Strategic snapshot keeps its place, restyled */}
+            <div style={{ background: TC.card, borderRadius: 26, padding: "24px 28px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "2px", color: TC.muted }}>STRATEGIC SNAPSHOT</span>
+                <button onClick={() => generate("overview")} disabled={generating === "overview" || !hasData}
+                  style={{ fontFamily: "inherit", fontSize: 12.5, fontWeight: 500, padding: "8px 16px", borderRadius: 999,
+                    border: `1px solid ${TC.lineStrong}`, background: "transparent",
+                    color: generating === "overview" ? TC.faint : TC.sub, cursor: generating === "overview" || !hasData ? "not-allowed" : "pointer" }}>
+                  {generating === "overview" ? "Analysing…" : insights.overview ? "Refresh" : "Generate"}
+                </button>
+              </div>
+              {!hasData && <div style={{ fontSize: 13, color: TC.faint }}>Sync Flex data first.</div>}
+              {hasData && !insights.overview && generating !== "overview" && (
+                <div style={{ fontSize: 13.5, color: TC.muted, lineHeight: 1.6 }}>An executive read on {billed.length} billed clients — top patterns, concentration and positioning.</div>
+              )}
+              {generating === "overview" && <div style={{ fontSize: 13, color: TC.faint }}>Analysing {billed.length} billed clients…</div>}
+              {insights.overview && generating !== "overview" && (
+                <pre style={{ fontSize: 13.5, color: TC.sub, lineHeight: 1.75, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit" }}>{insights.overview}</pre>
+              )}
             </div>
           </div>
         )}
