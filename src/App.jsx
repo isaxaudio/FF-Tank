@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import TankOceanBg from "./components/TankOceanBg";
-import { c as TC } from "./tokens.js";
+import { c as TC, font as TF } from "./tokens.js";
+const FONT = TF.sans;
 
 export class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -9517,8 +9517,7 @@ Cite URLs.`;
   const modelInfo = PRICING[agent.model] || PRICING.claude;
 
   return (
-    <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#020912", color: "#E8E4DC", height: "100vh", width: "100%", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-      <TankOceanBg />
+    <div style={{ fontFamily: FONT, background: TC.bg, color: TC.ink, height: "100vh", width: "100%", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap');
         html, body, #root { width: 100%; height: 100%; margin: 0; padding: 0; }
@@ -9562,10 +9561,10 @@ Cite URLs.`;
         }
       `}</style>
 
-      <div style={{ padding: "14px 24px", borderBottom: "1px solid rgba(255,255,255,0.04)", background: "rgba(2,10,26,0.7)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", rowGap: 8, flexShrink: 0, position: "relative", zIndex: 10 }}>
+      <div style={{ padding: "14px 24px", borderBottom: `1px solid ${TC.line}`, background: TC.bg, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", rowGap: 8, flexShrink: 0, position: "relative", zIndex: 10 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-          <span onClick={() => setActiveId("home")} style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 800, color: "#FF6B2B", letterSpacing: "-0.5px", flexShrink: 0, cursor: "pointer" }}>FF TANK</span>
-          <span className="header-tagline" style={{ fontSize: 9, color: "#999", letterSpacing: "3px" }}>SALES · MARKETING · AI</span>
+          <span onClick={() => setActiveId("home")} style={{ fontSize: 16, fontWeight: 600, color: TC.ink, letterSpacing: "-0.3px", flexShrink: 0, cursor: "pointer" }}>FF Tank</span>
+          <span className="header-tagline" style={{ fontSize: 10, fontWeight: 600, color: TC.faint, letterSpacing: "2px" }}>SALES · MARKETING · AI</span>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", rowGap: 6 }}>
           {/* Notification bell */}
