@@ -25,7 +25,7 @@ const norm = s => (s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9
 const domainOf = s => { if (!s) return null; let d = s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[/?#]/)[0]; return d.includes('.') ? d : null; };
 
 const stats = { companies_created: 0, linked_by_domain: 0, linked_same_system: 0, candidates: 0, skipped: 0 };
-const byDomain = new Map(), byName = new Map();
+const byDomain = new Map(), byName = new Map(), flexOwned = new Set(); // companies created from flex_clients in this run
 const existing = await q('select id, name, domain from companies where merged_into_id is null');
 for (const r of existing) { if (r.domain) byDomain.set(r.domain.toLowerCase(), r.id); byName.set(norm(r.name), r.id); }
 
@@ -71,11 +71,15 @@ for (const f of fcs) {
   const emailDomain = f.contact_email && !/gmail|yahoo|hotmail|outlook|icloud/.test(f.contact_email) ? domainOf(f.contact_email.split('@')[1]) : null;
   if (emailDomain && byDomain.has(emailDomain)) { await link('flex_clients', f.id, byDomain.get(emailDomain)); stats.linked_by_domain++; continue; }
   const n = norm(f.name);
+  if (n && byName.has(n) && flexOwned.has(byName.get(n))) { // duplicate Flex client name inside Flex itself: same system, link directly
+    await link('flex_clients', f.id, byName.get(n)); stats.linked_same_system++; continue;
+  }
   if (n && byName.has(n)) {
     await candidate(byName.get(n), 'flex_clients', f.id, f.flex_id, f.name, 'name_exact', 0.9, `Flex client "${f.name}" matches company by normalised name; revenue ${f.total_revenue ?? 'n/a'}`);
     continue;
   }
   const r = await ensureCompany({ name: f.name, domain: emailDomain, kind: 'client', tier: 'existing_client', industry: f.industry, location: f.location, source: 'flex' });
+  flexOwned.add(r.id);
   await link('flex_clients', f.id, r.id); stats.linked_same_system++;
 }
 
