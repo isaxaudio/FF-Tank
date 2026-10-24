@@ -103,15 +103,16 @@ function SignalsTable({ onNavigate }) {
         </div>
       )}
       <div style={{ flex: 1, overflow: "auto", margin: "0 24px 24px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 12 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table style={{ width: "100%", minWidth: 960, borderCollapse: "collapse", tableLayout: "fixed" }}>
+          <colgroup><col style={{ width: 64 }} /><col style={{ width: 130 }} /><col style={{ width: 200 }} /><col /><col style={{ width: 96 }} /><col style={{ width: 96 }} /><col style={{ width: 168 }} /></colgroup>
           <thead><tr><th style={th}>Score</th><th style={th}>Signal</th><th style={th}>Company</th><th style={th}>Why it matters</th><th style={th}>Source</th><th style={th}>Found</th><th style={th}></th></tr></thead>
           <tbody>
             {rows.map(o => (
               <tr key={o.id}>
                 <td style={td}><span style={pill(scoreTone(o.overall_score || 0))}>{o.overall_score ?? "—"}</span></td>
-                <td style={td}><span style={pill(SIGNAL_TONE[o.signal] || "sand")}>{o.signal_type || o.signal || "—"}</span></td>
-                <td style={{ ...td, minWidth: 180 }}><div style={{ fontWeight: 450 }}>{o.company || o.companies?.name || "—"}</div><div style={{ ...TT.caption, color: TC.muted }}>{[o.city, o.state].filter(Boolean).join(", ")}</div></td>
-                <td style={{ ...td, maxWidth: 420 }}><div>{o.title}</div>{o.why_this_matters && <div style={{ ...TT.caption, color: TC.sub, marginTop: 2 }}>{o.why_this_matters.slice(0, 160)}{o.why_this_matters.length > 160 ? "…" : ""}</div>}</td>
+                <td style={td}><span style={{ ...pill(SIGNAL_TONE[o.signal] || "sand"), maxWidth: 118, overflow: "hidden", textOverflow: "ellipsis", display: "inline-block" }}>{o.signal_type || o.signal || "—"}</span></td>
+                <td style={{ ...td, overflow: "hidden" }}><div style={{ fontWeight: 450, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.company || o.companies?.name || "—"}</div><div style={{ ...TT.caption, color: TC.muted }}>{[o.city, o.state].filter(Boolean).join(", ")}</div></td>
+                <td style={{ ...td, overflow: "hidden" }}><div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.title}</div>{o.why_this_matters && <div style={{ ...TT.caption, color: TC.sub, marginTop: 2 }}>{o.why_this_matters.slice(0, 160)}{o.why_this_matters.length > 160 ? "…" : ""}</div>}</td>
                 <td style={{ ...td, color: TC.muted, whiteSpace: "nowrap" }}>{o.url ? <a href={o.url} target="_blank" rel="noreferrer" style={{ color: TC.link, display: "inline-flex", alignItems: "center", gap: 3, textDecoration: "none" }}>link <ExternalLink size={11} /></a> : "—"}{o.deadline ? <div style={TT.caption}>due {String(o.deadline).slice(0, 10)}</div> : null}</td>
                 <td style={{ ...td, color: TC.muted, whiteSpace: "nowrap" }}>{String(o.created_at).slice(0, 10)}</td>
                 <td style={{ ...td, whiteSpace: "nowrap" }}>
