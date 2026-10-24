@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { c as TC, font as TF } from "./tokens.js";
+import { db } from "./lib/db.js";
+import { auth } from "./lib/auth.js";
+import Login from "./screens/Login.jsx";
 const FONT = TF.sans;
 
 export class ErrorBoundary extends React.Component {
@@ -1776,10 +1779,10 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
       // Only patterns with >= 3 ratings qualify; cap adjustment to ±1.0 per opp.
       let signalWeights = {}, eventTypeWeights = {};
       try {
-        const supabaseUrl = localStorage.getItem("supabaseUrl") || "";
-        const supabaseKey = localStorage.getItem("supabaseAnonKey") || "";
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
         if (supabaseUrl && supabaseKey) {
-          const sbH = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` };
+          const sbH = { apikey: supabaseKey, Authorization: `Bearer ${auth.accessToken() || supabaseKey}` };
           const fbRes  = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/opportunity_feedback?select=opportunity_id,rating`, { headers: sbH });
           const fbRows = fbRes.ok ? await fbRes.json() : [];
           if (Array.isArray(fbRows) && fbRows.length > 0) {
@@ -1869,7 +1872,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
       } else {
         // Fallback: direct Vercel endpoint (no OpenClaw)
         const fallbackMap = { scout: "/api/cron-scout", prospector: "/api/cron-daily" };
-        const res = await fetch(fallbackMap[name] || "/api/cron-scout", { method: "POST" });
+        const res = await fetch(fallbackMap[name] || "/api/cron-scout", { method: "POST", headers: { Authorization: `Bearer ${await auth.token()}` } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         const inserted = (data.saved || []).filter(s => s.status === 201).length;
@@ -4809,12 +4812,12 @@ function ChatHistoryView({ db, fetchGoogleAdsData }) {
 
   async function newThread() {
     const title = `Chat ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
-    const sbUrl  = (localStorage.getItem("supabaseUrl") || "").replace(/\/$/, "");
-    const sbKey  = localStorage.getItem("supabaseAnonKey") || "";
+    const sbUrl  = (import.meta.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+    const sbKey  = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
     if (!sbUrl || !sbKey) return;
     const r = await fetch(`${sbUrl}/rest/v1/chat_threads`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${sbKey}`, "Prefer": "return=representation" },
+      headers: { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}`, "Prefer": "return=representation" },
       body: JSON.stringify({ title, mode: "direct", agents: ["claude-sonnet-4-6"], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
     });
     const data = await r.json();
@@ -4832,9 +4835,9 @@ function ChatHistoryView({ db, fetchGoogleAdsData }) {
     setInput("");
     setSending(true);
 
-    const sbUrl = (localStorage.getItem("supabaseUrl") || "").replace(/\/$/, "");
-    const sbKey = localStorage.getItem("supabaseAnonKey") || "";
-    const sbH   = { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${sbKey}`, "Prefer": "return=minimal" };
+    const sbUrl = (import.meta.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+    const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+    const sbH   = { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}`, "Prefer": "return=minimal" };
 
     // Save user message
     const userMsg = { thread_id: activeThread.id, role: "user", content: userText, created_at: new Date().toISOString() };
@@ -6366,11 +6369,11 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
   async function loadDrafts() {
     setLoadingDrafts(true);
     try {
-      const sbUrl = localStorage.getItem("supabaseUrl") || "";
-      const sbKey = localStorage.getItem("supabaseAnonKey") || "";
+      const sbUrl = import.meta.env.VITE_SUPABASE_URL || "";
+      const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
       if (!sbUrl || !sbKey) return;
       const r = await fetch(`${sbUrl.replace(/\/$/, "")}/rest/v1/outreach_drafts?order=created_at.desc&limit=20`, {
-        headers: { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${sbKey}` },
+        headers: { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}` },
       });
       const d = await r.json();
       setDrafts(Array.isArray(d) ? d : []);
@@ -6378,12 +6381,12 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
   }
 
   async function patchDraft(id, patch) {
-    const sbUrl = localStorage.getItem("supabaseUrl") || "";
-    const sbKey = localStorage.getItem("supabaseAnonKey") || "";
+    const sbUrl = import.meta.env.VITE_SUPABASE_URL || "";
+    const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
     if (!sbUrl || !sbKey) return;
     await fetch(`${sbUrl.replace(/\/$/, "")}/rest/v1/outreach_drafts?id=eq.${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${sbKey}` },
+      headers: { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}` },
       body: JSON.stringify(patch),
     });
     setDrafts(prev => prev ? prev.map(d => d.id === id ? { ...d, ...patch } : d) : prev);
@@ -6699,11 +6702,11 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
         {/* STRATEGY BRIEFS */}
         {activeTab === "strategy" && (() => {
           const [strategyBriefs, setStrategyBriefs] = React.useState([]);
-          const sbUrl = localStorage.getItem("supabaseUrl") || "";
-          const sbKey = localStorage.getItem("supabaseAnonKey") || "";
+          const sbUrl = import.meta.env.VITE_SUPABASE_URL || "";
+          const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
           React.useEffect(() => {
             if (!sbUrl || !sbKey) return;
-            const h = { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${sbKey}` };
+            const h = { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}` };
             fetch(`${sbUrl.replace(/\/$/, "")}/rest/v1/strategy_briefs?order=created_at.desc&limit=20`, { headers: h })
               .then(r => r.json()).then(d => setStrategyBriefs(Array.isArray(d) ? d : [])).catch(() => {});
           }, []);
@@ -6729,11 +6732,11 @@ function CeoBrainView({ briefEmail, slackWebhookUrl, vpsUrl, agentSecret }) {
         {/* CONTENT LIBRARY */}
         {activeTab === "content" && (() => {
           const [library, setLibrary] = React.useState([]);
-          const sbUrl = localStorage.getItem("supabaseUrl") || "";
-          const sbKey = localStorage.getItem("supabaseAnonKey") || "";
+          const sbUrl = import.meta.env.VITE_SUPABASE_URL || "";
+          const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
           React.useEffect(() => {
             if (!sbUrl || !sbKey) return;
-            const h = { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${sbKey}` };
+            const h = { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}` };
             fetch(`${sbUrl.replace(/\/$/, "")}/rest/v1/content_library?order=created_at.desc&limit=50`, { headers: h })
               .then(r => r.json()).then(d => setLibrary(Array.isArray(d) ? d : [])).catch(() => {});
           }, []);
@@ -8545,7 +8548,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
                       if (!r.ok) throw new Error(data.error || "Run failed");
                       setAutopilotResult({ ran_at: new Date().toISOString(), message: "Scout started via OpenClaw" });
                     } else {
-                      const r = await fetch("/api/cron-daily", { method: "POST" });
+                      const r = await fetch("/api/cron-daily", { method: "POST", headers: { Authorization: `Bearer ${await auth.token()}` } });
                       const data = await r.json();
                       if (!r.ok) throw new Error(data.error || "Run failed");
                       setAutopilotResult(data);
@@ -8601,7 +8604,7 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
   );
 }
 
-export default function FFTank() {
+function FFTank({ onSignOut }) {
   const [agents, setAgents] = useState(AGENTS);
   const [activeId, setActiveId] = useState("home");
   const [messages, setMessages] = useState({});
@@ -8633,8 +8636,8 @@ export default function FFTank() {
   const googleAdsTokenCache = useRef({ token: null, expiry: 0 });
   const [webflowApiKey, setWebflowApiKey] = useState(() => localStorage.getItem("webflowApiKey") || "");
   const [webflowCollectionId, setWebflowCollectionId] = useState(() => localStorage.getItem("webflowCollectionId") || "");
-  const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem("supabaseUrl") || "");
-  const [supabaseAnonKey, setSupabaseAnonKey] = useState(() => localStorage.getItem("supabaseAnonKey") || "");
+  const [supabaseUrl, setSupabaseUrl] = useState(() => import.meta.env.VITE_SUPABASE_URL || "");
+  const [supabaseAnonKey, setSupabaseAnonKey] = useState(() => import.meta.env.VITE_SUPABASE_ANON_KEY || "");
   const [smugmugKey, setSmugmugKey] = useState(() => localStorage.getItem("smugmugKey") || "");
   const [smugmugSecret, setSmugmugSecret] = useState(() => localStorage.getItem("smugmugSecret") || "");
   const [smugmugUsername, setSmugmugUsername] = useState(() => localStorage.getItem("smugmugUsername") || "");
@@ -8672,8 +8675,6 @@ export default function FFTank() {
   useEffect(() => { localStorage.setItem("googleAdsManagerId", googleAdsManagerId); }, [googleAdsManagerId]);
   useEffect(() => { localStorage.setItem("webflowApiKey", webflowApiKey); }, [webflowApiKey]);
   useEffect(() => { localStorage.setItem("webflowCollectionId", webflowCollectionId); }, [webflowCollectionId]);
-  useEffect(() => { localStorage.setItem("supabaseUrl", supabaseUrl); }, [supabaseUrl]);
-  useEffect(() => { localStorage.setItem("supabaseAnonKey", supabaseAnonKey); }, [supabaseAnonKey]);
   useEffect(() => { localStorage.setItem("smugmugKey", smugmugKey); }, [smugmugKey]);
   useEffect(() => { localStorage.setItem("smugmugSecret", smugmugSecret); }, [smugmugSecret]);
   useEffect(() => { localStorage.setItem("smugmugUsername", smugmugUsername); }, [smugmugUsername]);
@@ -8702,7 +8703,7 @@ export default function FFTank() {
       const sbUrl = (supabaseUrl || "").replace(/\/$/, "");
       const sbKey = supabaseAnonKey;
       if (!sbUrl || !sbKey) return;
-      const h = { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` };
+      const h = { "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}` };
       await Promise.allSettled([
         fetch(`${sbUrl}/rest/v1/notifications?order=created_at.desc&limit=25`, { headers: h })
           .then(r => r.json()).then(d => { if (Array.isArray(d)) setNotifs(d); }).catch(() => {}),
@@ -8734,7 +8735,7 @@ export default function FFTank() {
     try {
       await fetch(`${sbUrl}/rest/v1/notifications?read=eq.false`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${sbKey}` },
+        headers: { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}` },
         body: JSON.stringify({ read: true }),
       });
       setNotifs(prev => prev.map(n => ({ ...n, read: true })));
@@ -8746,7 +8747,7 @@ export default function FFTank() {
     const sbUrl = (supabaseUrl || "").replace(/\/$/, "");
     const sbKey = supabaseAnonKey;
     if (!sbUrl || !sbKey) return null;
-    const sbH = { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${sbKey}`, "Prefer": "return=representation" };
+    const sbH = { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}`, "Prefer": "return=representation" };
     const agentObj = agents.find(a => a.id === agentId) || {};
     const title = `${agentObj.name || agentId} · ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
     try {
@@ -8767,7 +8768,7 @@ export default function FFTank() {
     if (!sbUrl || !sbKey) return;
     ensureChatThread(agentId).then(threadId => {
       if (!threadId) return;
-      const sbH = { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${sbKey}`, "Prefer": "return=minimal" };
+      const sbH = { "Content-Type": "application/json", "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}`, "Prefer": "return=minimal" };
       const agentObj = agents.find(a => a.id === agentId);
       const isOpenAI = agentObj?.model === "openai";
       const row = {
@@ -9091,63 +9092,7 @@ export default function FFTank() {
     }
   }
 
-  const db = {
-    _req(method, table, data, query) {
-      // Read from localStorage as fallback in case of stale closure
-      const url = supabaseUrl || localStorage.getItem("supabaseUrl") || "";
-      const key = supabaseAnonKey || localStorage.getItem("supabaseAnonKey") || "";
-      console.log("Supabase direct call:", method, table, "URL:", url, "Key set:", !!key);
-      if (!url || !key) {
-        console.warn("Supabase: missing credentials — url:", url, "key set:", !!key);
-        return Promise.resolve(null);
-      }
-      const qs = query ? "?" + new URLSearchParams(query).toString() : "";
-      return fetch(`${url.replace(/\/$/, "")}/rest/v1/${table}${qs}`, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": key,
-          "Authorization": `Bearer ${key}`,
-          "Prefer": method === "POST" ? "return=representation" : "",
-        },
-        body: data ? JSON.stringify(data) : undefined,
-      }).then(async r => {
-        const body = await r.json();
-        console.log(`Supabase ${method} ${table} — status: ${r.status}`, body);
-        return body;
-      }).catch(e => { console.error("Supabase fetch error:", e); return null; });
-    },
-    insert(table, data) { return this._req("POST", table, data, null); },
-    select(table, filters) { return this._req("GET", table, null, filters); },
-    // PostgREST caps a response at 1,000 rows, so plain select() silently truncates any table
-    // bigger than that (flex_projects is 2,035; opportunities is 7,300+). Page until exhausted.
-    // Exact row count without downloading the rows — reads PostgREST's Content-Range header.
-    count(table, filters) {
-      const url = supabaseUrl || localStorage.getItem("supabaseUrl") || "";
-      const key = supabaseAnonKey || localStorage.getItem("supabaseAnonKey") || "";
-      if (!url || !key) return Promise.resolve(null);
-      const qs = "?" + new URLSearchParams({ select: "id", ...(filters || {}) }).toString();
-      return fetch(`${url.replace(/\/$/, "")}/rest/v1/${table}${qs}`, {
-        headers: { "apikey": key, "Authorization": `Bearer ${key}`, "Prefer": "count=exact", "Range": "0-0" },
-      }).then(r => {
-        const cr = r.headers.get("content-range") || "";
-        const n = parseInt(cr.split("/")[1], 10);
-        return Number.isFinite(n) ? n : null;
-      }).catch(() => null);
-    },
-    async selectAll(table, filters, pageSize = 1000) {
-      const out = [];
-      for (let offset = 0; offset < 100000; offset += pageSize) {
-        const page = await this._req("GET", table, null, { ...(filters || {}), limit: pageSize, offset });
-        if (!Array.isArray(page) || page.length === 0) break;
-        out.push(...page);
-        if (page.length < pageSize) break;
-      }
-      return out;
-    },
-    update(table, id, data) { return this._req("PATCH", table, data, { id: `eq.${id}` }); },
-    delete(table, id) { return this._req("DELETE", table, null, { id: `eq.${id}` }); },
-  };
+  // db: see src/lib/db.js (PostgREST helper, user JWT, env-configured).
 
   async function runAgent() {
     if (!prompt.trim() || running) return;
@@ -9221,7 +9166,7 @@ export default function FFTank() {
 
       const sbUrl = (supabaseUrl || "").replace(/\/$/, "");
       const sbKey = supabaseAnonKey;
-      const sbH = sbUrl && sbKey ? { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` } : null;
+      const sbH = sbUrl && sbKey ? { "apikey": sbKey, "Authorization": `Bearer ${auth.accessToken() || sbKey}` } : null;
       const enc = encodeURIComponent;
 
       // ── PERSON LOOKUP MODE ─────────────────────────────────────────────────────
@@ -9761,6 +9706,11 @@ Cite URLs.`;
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: TC.accentDeep }} />
             <span style={{ fontSize: 11, color: TC.sub }}>Brain</span>
           </div>
+          {auth.user() && (
+            <button onClick={onSignOut} title={auth.user().email} style={{ padding: "3px 10px", fontSize: 11, fontFamily: FONT, color: TC.sub, background: "transparent", border: `1px solid ${TC.line}`, borderRadius: 999, cursor: "pointer" }}>
+              Sign out
+            </button>
+          )}
           <div className="header-status-pill" style={{ padding: "3px 10px", background: supabaseUrl && supabaseAnonKey ? "#4ECDC408" : "transparent", border: `1px solid ${supabaseUrl && supabaseAnonKey ? "#4ECDC428" : "#1A1A1A"}`, borderRadius: 20, display: "flex", alignItems: "center", gap: 5 }}>
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: supabaseUrl && supabaseAnonKey ? "#4ECDC4" : "#333" }} />
             <span style={{ fontSize: 11, color: supabaseUrl && supabaseAnonKey ? TC.sub : TC.fainter }}>DB</span>
@@ -10357,4 +10307,15 @@ Cite URLs.`;
       </div>
     </div>
   );
+}
+export default function App() {
+  const [session, setSession] = useState(() => auth.session());
+  useEffect(() => {
+    if (!session) return;
+    auth.token();
+    const t = setInterval(() => auth.token(), 10 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [session]);
+  if (auth.configured() && !session) return <Login onSignedIn={() => setSession(auth.session())} />;
+  return <FFTank onSignOut={async () => { await auth.signOut(); setSession(null); }} />;
 }

@@ -1,0 +1,1561 @@
+{
+  "checkedAt": "2026-10-24T04:01:07.575Z",
+  "tables": {
+    "opportunities": {
+      "id": "uuid NOT NULL PK",
+      "company_id": "uuid FK->companies.id",
+      "title": "text",
+      "source": "text",
+      "url": "text",
+      "budget_estimate": "text",
+      "deadline": "text",
+      "status": "text",
+      "notes": "text",
+      "created_at": "timestamp without time zone",
+      "company": "text",
+      "contact": "text",
+      "email": "text",
+      "signal": "text",
+      "linkedin_url": "text",
+      "fit_score": "integer",
+      "urgency_score": "integer",
+      "confidence_score": "integer",
+      "overall_score": "integer",
+      "why_this_matters": "text",
+      "qualified_at": "timestamp with time zone",
+      "signal_type": "text",
+      "action": "text",
+      "access_status": "text",
+      "city": "text",
+      "state": "text",
+      "metadata": "jsonb",
+      "session_id": "text"
+    },
+    "flex_venues": {
+      "id": "uuid NOT NULL PK",
+      "name": "text NOT NULL",
+      "city": "text",
+      "state": "text",
+      "capacity": "integer",
+      "venue_type": "text",
+      "notes": "text",
+      "created_at": "timestamp with time zone NOT NULL"
+    },
+    "outreach_drafts": {
+      "id": "uuid NOT NULL PK",
+      "opportunity_id": "uuid FK->opportunities.id",
+      "company": "text",
+      "contact_name": "text",
+      "contact_title": "text",
+      "contact_email": "text",
+      "contact_linkedin": "text",
+      "subject": "text",
+      "body": "text",
+      "signal": "text",
+      "status": "text",
+      "created_at": "timestamp with time zone",
+      "sent_at": "timestamp with time zone",
+      "sent_via": "text",
+      "reply_status": "text"
+    },
+    "artifacts": {
+      "id": "uuid NOT NULL PK",
+      "type": "text NOT NULL",
+      "title": "text",
+      "content": "text",
+      "job_id": "uuid FK->jobs.id",
+      "opportunity_id": "uuid FK->opportunities.id",
+      "status": "text NOT NULL",
+      "created_at": "timestamp with time zone NOT NULL"
+    },
+    "content_library": {
+      "id": "uuid NOT NULL PK",
+      "type": "text NOT NULL",
+      "title": "text",
+      "body": "text",
+      "status": "text NOT NULL",
+      "performance_score": "integer",
+      "tags": "text[]",
+      "created_at": "timestamp with time zone NOT NULL",
+      "published_at": "timestamp with time zone"
+    },
+    "contacts": {
+      "id": "uuid NOT NULL PK",
+      "company_id": "uuid FK->companies.id",
+      "name": "text",
+      "title": "text",
+      "email": "text",
+      "linkedin": "text",
+      "score": "integer",
+      "notes": "text",
+      "created_at": "timestamp without time zone"
+    },
+    "chat_messages": {
+      "id": "uuid NOT NULL PK",
+      "thread_id": "uuid FK->chat_threads.id",
+      "role": "text NOT NULL",
+      "agent_name": "text",
+      "content": "text NOT NULL",
+      "input_tokens": "integer",
+      "output_tokens": "integer",
+      "provider": "text",
+      "model": "text",
+      "created_at": "timestamp with time zone"
+    },
+    "competitor_signals": {
+      "id": "uuid NOT NULL PK",
+      "company": "text",
+      "title": "text",
+      "source": "text",
+      "content": "text",
+      "signal_type": "text",
+      "created_at": "timestamp with time zone"
+    },
+    "job_runs": {
+      "id": "uuid NOT NULL PK",
+      "job_name": "text NOT NULL",
+      "agent_name": "text",
+      "provider": "text",
+      "model": "text",
+      "input_tokens": "integer",
+      "output_tokens": "integer",
+      "total_tokens": "integer",
+      "estimated_cost": "numeric",
+      "duration_ms": "integer",
+      "status": "text",
+      "error_message": "text",
+      "result_summary": "text",
+      "related_account": "text",
+      "related_opportunity_id": "uuid",
+      "triggered_by": "text",
+      "created_at": "timestamp with time zone",
+      "completed_at": "timestamp with time zone"
+    },
+    "sales_notes": {
+      "id": "uuid NOT NULL PK",
+      "sales_brief_id": "uuid FK->sales_briefs.id",
+      "author": "text",
+      "body": "text NOT NULL",
+      "note_type": "text",
+      "created_at": "timestamp with time zone"
+    },
+    "agent_memory": {
+      "id": "uuid NOT NULL PK",
+      "agent_name": "text",
+      "memory_type": "text",
+      "scope": "text",
+      "scope_id": "text",
+      "content": "text NOT NULL",
+      "tags": "text[]",
+      "created_at": "timestamp with time zone",
+      "updated_at": "timestamp with time zone"
+    },
+    "jobs": {
+      "id": "uuid NOT NULL PK",
+      "title": "text NOT NULL",
+      "status": "text NOT NULL",
+      "agent": "text",
+      "opportunity_id": "uuid FK->opportunities.id",
+      "output": "text",
+      "notes": "text",
+      "created_at": "timestamp with time zone NOT NULL",
+      "updated_at": "timestamp with time zone NOT NULL"
+    },
+    "weekly_briefs": {
+      "id": "uuid NOT NULL PK",
+      "content": "text NOT NULL",
+      "sections": "jsonb",
+      "generated_at": "timestamp with time zone"
+    },
+    "tasks": {
+      "id": "uuid NOT NULL PK",
+      "title": "text",
+      "agent": "text",
+      "priority": "text",
+      "status": "text",
+      "due_date": "date",
+      "created_at": "timestamp without time zone"
+    },
+    "companies": {
+      "id": "uuid NOT NULL PK",
+      "name": "text NOT NULL",
+      "industry": "text",
+      "location": "text",
+      "website": "text",
+      "signal": "text",
+      "confidence": "text",
+      "notes": "text",
+      "created_at": "timestamp without time zone"
+    },
+    "account_signals": {
+      "id": "uuid NOT NULL PK",
+      "account_id": "uuid FK->target_accounts.id",
+      "signal_type": "text",
+      "title": "text",
+      "source": "text",
+      "content": "text",
+      "confidence": "integer",
+      "created_at": "timestamp with time zone NOT NULL"
+    },
+    "target_accounts": {
+      "id": "uuid NOT NULL PK",
+      "name": "text NOT NULL",
+      "domain": "text",
+      "industry": "text",
+      "notes": "text",
+      "status": "text NOT NULL",
+      "last_scanned": "timestamp with time zone",
+      "created_at": "timestamp with time zone NOT NULL",
+      "confidence_score": "integer",
+      "signal_count": "integer",
+      "vertical": "text",
+      "lookalike_client": "text",
+      "website": "text",
+      "apollo_id": "text",
+      "employees": "integer",
+      "city": "text",
+      "state": "text",
+      "source": "text",
+      "contact_name": "text",
+      "contact_title": "text",
+      "contact_email": "text",
+      "contact_linkedin": "text",
+      "company_name": "text",
+      "company_domain": "text",
+      "linkedin_url": "text",
+      "tier": "text",
+      "segment": "text",
+      "estimated_revenue": "text",
+      "employee_count_range": "text",
+      "region": "text",
+      "why_fit": "text",
+      "known_events": "text[]",
+      "budget_indicator": "text",
+      "is_monitored": "boolean",
+      "monitoring_keywords": "text[]",
+      "last_scanned_at": "timestamp with time zone",
+      "existing_relationship": "boolean",
+      "relationship_notes": "text",
+      "warm_contact_ids": "uuid[]",
+      "updated_at": "timestamp with time zone",
+      "metadata": "jsonb"
+    },
+    "sales_briefs": {
+      "id": "uuid NOT NULL PK",
+      "opportunity_id": "uuid FK->opportunities.id",
+      "company": "text",
+      "signal_summary": "text",
+      "why_this_matters": "text",
+      "likely_event_type": "text",
+      "urgency": "text",
+      "budget_band": "text",
+      "positioning_angle": "text",
+      "recommended_next_step": "text",
+      "contacts_snapshot": "jsonb",
+      "outreach_draft_id": "uuid",
+      "source_links": "jsonb",
+      "assigned_to": "text",
+      "assigned_by": "text",
+      "assigned_at": "timestamp with time zone",
+      "status": "text",
+      "priority": "text",
+      "notes": "text",
+      "follow_up_date": "date",
+      "sent_to_sales_at": "timestamp with time zone",
+      "created_at": "timestamp with time zone",
+      "updated_at": "timestamp with time zone",
+      "outreach_draft_snapshot": "jsonb"
+    },
+    "flex_clients": {
+      "id": "uuid NOT NULL PK",
+      "name": "text NOT NULL",
+      "industry": "text",
+      "location": "text",
+      "contact_name": "text",
+      "contact_email": "text",
+      "first_event_date": "date",
+      "last_event_date": "date",
+      "total_events": "integer",
+      "total_revenue": "numeric",
+      "notes": "text",
+      "created_at": "timestamp with time zone NOT NULL",
+      "flex_id": "text"
+    },
+    "agent_runs": {
+      "id": "uuid NOT NULL PK",
+      "session_id": "text",
+      "status": "text",
+      "opportunities_saved": "integer",
+      "opportunities_skipped": "integer",
+      "searches_performed": "integer",
+      "created_at": "timestamp with time zone",
+      "completed_at": "timestamp with time zone"
+    },
+    "approvals": {
+      "id": "uuid NOT NULL PK",
+      "type": "text NOT NULL",
+      "reference_id": "uuid",
+      "reference_table": "text",
+      "status": "text NOT NULL",
+      "notes": "text",
+      "created_at": "timestamp with time zone NOT NULL",
+      "decided_at": "timestamp with time zone"
+    },
+    "chat_threads": {
+      "id": "uuid NOT NULL PK",
+      "title": "text",
+      "mode": "text",
+      "agents": "text[]",
+      "created_at": "timestamp with time zone",
+      "updated_at": "timestamp with time zone"
+    },
+    "account_leader_snapshots": {
+      "id": "uuid NOT NULL PK",
+      "org_id": "text NOT NULL",
+      "apollo_person_id": "text NOT NULL",
+      "person_name": "text",
+      "person_title": "text",
+      "person_linkedin": "text",
+      "person_email": "text",
+      "seniority": "text",
+      "first_seen_at": "timestamp with time zone",
+      "last_seen_at": "timestamp with time zone",
+      "is_active": "boolean",
+      "metadata": "jsonb"
+    },
+    "content": {
+      "id": "uuid NOT NULL PK",
+      "type": "text",
+      "title": "text",
+      "body": "text",
+      "status": "text",
+      "published_at": "timestamp without time zone",
+      "created_at": "timestamp without time zone",
+      "agent": "text"
+    },
+    "industry_signals": {
+      "id": "uuid NOT NULL PK",
+      "topic": "text",
+      "title": "text",
+      "source": "text",
+      "content": "text",
+      "created_at": "timestamp with time zone"
+    },
+    "brief_deliveries": {
+      "id": "uuid NOT NULL PK",
+      "channel": "text NOT NULL",
+      "recipient": "text",
+      "subject": "text",
+      "status": "text",
+      "error": "text",
+      "sent_at": "timestamp with time zone"
+    },
+    "outreach": {
+      "id": "uuid NOT NULL PK",
+      "contact_id": "uuid FK->contacts.id",
+      "type": "text",
+      "subject": "text",
+      "body": "text",
+      "status": "text",
+      "sent_at": "timestamp without time zone",
+      "created_at": "timestamp without time zone"
+    },
+    "flex_projects": {
+      "id": "uuid NOT NULL PK",
+      "client_name": "text",
+      "venue_name": "text",
+      "event_type": "text",
+      "event_date": "date",
+      "budget_estimate": "numeric",
+      "services": "text[]",
+      "notes": "text",
+      "created_at": "timestamp with time zone NOT NULL",
+      "flex_id": "text"
+    },
+    "performance_insights": {
+      "id": "uuid NOT NULL PK",
+      "type": "text NOT NULL",
+      "metric": "text",
+      "value": "numeric",
+      "insight": "text",
+      "period_start": "date",
+      "period_end": "date",
+      "created_at": "timestamp with time zone NOT NULL"
+    },
+    "account_snapshot_seed": {
+      "id": "uuid NOT NULL PK",
+      "org_id": "text NOT NULL",
+      "seeded_at": "timestamp with time zone"
+    },
+    "strategy_briefs": {
+      "id": "uuid NOT NULL PK",
+      "title": "text NOT NULL",
+      "type": "text",
+      "content": "text",
+      "period_start": "date",
+      "period_end": "date",
+      "created_at": "timestamp with time zone NOT NULL"
+    },
+    "signals": {
+      "id": "uuid NOT NULL PK",
+      "signal_type": "text NOT NULL",
+      "source": "text NOT NULL",
+      "source_url": "text",
+      "company_name": "text NOT NULL",
+      "company_domain": "text",
+      "company_location": "text",
+      "target_account_id": "uuid FK->target_accounts.id",
+      "title": "text NOT NULL",
+      "summary": "text",
+      "raw_content": "text",
+      "signal_date": "date",
+      "discovered_at": "timestamp with time zone",
+      "person_name": "text",
+      "person_title": "text",
+      "person_linkedin": "text",
+      "prior_company": "text",
+      "funding_amount": "numeric",
+      "funding_round": "text",
+      "event_name": "text",
+      "event_date": "date",
+      "event_type": "text",
+      "found_by_agent": "text",
+      "agent_run_id": "uuid",
+      "confidence_score": "integer",
+      "fit_score": "integer",
+      "status": "text",
+      "promoted_to_opportunity_id": "uuid FK->opportunities.id",
+      "dismissed_reason": "text",
+      "metadata": "jsonb",
+      "signal_key": "text"
+    },
+    "notifications": {
+      "id": "uuid NOT NULL PK",
+      "type": "text NOT NULL",
+      "title": "text NOT NULL",
+      "body": "text",
+      "read": "boolean NOT NULL",
+      "reference_id": "uuid",
+      "reference_table": "text",
+      "created_at": "timestamp with time zone NOT NULL"
+    },
+    "opportunity_feedback": {
+      "id": "uuid NOT NULL PK",
+      "opportunity_id": "uuid NOT NULL",
+      "rating": "integer NOT NULL",
+      "created_at": "timestamp with time zone"
+    }
+  },
+  "claims": {
+    "opportunities": {
+      "missing": [
+        "recommended_angle",
+        "red_flags",
+        "estimated_budget_band",
+        "estimated_timeline",
+        "recommended_next_step",
+        "event_type",
+        "event_start_date"
+      ],
+      "extra": [
+        "id",
+        "company_id",
+        "url",
+        "budget_estimate",
+        "contact",
+        "email",
+        "linkedin_url",
+        "signal_type",
+        "action",
+        "access_status",
+        "city",
+        "state",
+        "metadata"
+      ]
+    },
+    "target_accounts": {
+      "missing": [],
+      "extra": [
+        "id",
+        "industry",
+        "notes",
+        "last_scanned",
+        "confidence_score",
+        "signal_count",
+        "lookalike_client",
+        "website",
+        "apollo_id",
+        "employees",
+        "city",
+        "source",
+        "contact_email",
+        "contact_linkedin",
+        "linkedin_url",
+        "estimated_revenue",
+        "employee_count_range",
+        "why_fit",
+        "known_events",
+        "budget_indicator",
+        "monitoring_keywords",
+        "last_scanned_at",
+        "relationship_notes",
+        "updated_at"
+      ]
+    },
+    "contacts": {
+      "missing": [
+        "company"
+      ],
+      "extra": [
+        "id",
+        "company_id"
+      ]
+    },
+    "outreach_drafts": {
+      "missing": [],
+      "extra": [
+        "id",
+        "opportunity_id",
+        "contact_title",
+        "sent_at",
+        "sent_via",
+        "reply_status"
+      ]
+    },
+    "flex_clients": {
+      "missing": [],
+      "extra": [
+        "id",
+        "contact_name",
+        "created_at"
+      ]
+    },
+    "flex_projects": {
+      "missing": [],
+      "extra": [
+        "id",
+        "created_at"
+      ]
+    },
+    "signals": {
+      "missing": [],
+      "extra": [
+        "id",
+        "company_domain",
+        "company_location",
+        "title",
+        "summary",
+        "raw_content",
+        "signal_date",
+        "discovered_at",
+        "person_name",
+        "person_title",
+        "person_linkedin",
+        "prior_company",
+        "funding_amount",
+        "funding_round",
+        "event_name",
+        "event_date",
+        "event_type",
+        "found_by_agent",
+        "agent_run_id",
+        "confidence_score",
+        "fit_score",
+        "dismissed_reason",
+        "metadata",
+        "signal_key"
+      ]
+    },
+    "tasks": {
+      "missing": [],
+      "extra": [
+        "id"
+      ]
+    },
+    "companies": {
+      "missing": [],
+      "extra": [
+        "id",
+        "name",
+        "industry",
+        "location",
+        "website",
+        "signal",
+        "confidence",
+        "notes",
+        "created_at"
+      ]
+    },
+    "outreach": {
+      "missing": [],
+      "extra": [
+        "id",
+        "contact_id",
+        "type",
+        "subject",
+        "body",
+        "status",
+        "sent_at",
+        "created_at"
+      ]
+    },
+    "approvals": {
+      "missing": [],
+      "extra": [
+        "id",
+        "type",
+        "reference_id",
+        "reference_table",
+        "status",
+        "notes",
+        "created_at",
+        "decided_at"
+      ]
+    },
+    "agent_runs": {
+      "missing": [],
+      "extra": [
+        "id",
+        "session_id",
+        "status",
+        "opportunities_saved",
+        "opportunities_skipped",
+        "searches_performed",
+        "created_at",
+        "completed_at"
+      ]
+    },
+    "sales_briefs": {
+      "missing": [],
+      "extra": [
+        "id",
+        "opportunity_id",
+        "company",
+        "signal_summary",
+        "why_this_matters",
+        "likely_event_type",
+        "urgency",
+        "budget_band",
+        "positioning_angle",
+        "recommended_next_step",
+        "outreach_draft_id",
+        "source_links",
+        "assigned_by",
+        "assigned_at",
+        "notes",
+        "follow_up_date",
+        "sent_to_sales_at",
+        "created_at",
+        "updated_at",
+        "outreach_draft_snapshot"
+      ]
+    },
+    "sales_notes": {
+      "missing": [],
+      "extra": [
+        "id",
+        "created_at"
+      ]
+    },
+    "opportunity_feedback": {
+      "missing": [],
+      "extra": [
+        "id",
+        "created_at"
+      ]
+    },
+    "job_runs": {
+      "missing": [],
+      "extra": [
+        "id",
+        "agent_name",
+        "provider",
+        "model",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "estimated_cost",
+        "duration_ms",
+        "error_message",
+        "result_summary",
+        "related_account",
+        "related_opportunity_id",
+        "triggered_by",
+        "created_at",
+        "completed_at"
+      ]
+    }
+  },
+  "counts": {
+    "opportunities": 7806,
+    "target_accounts": 393,
+    "contacts": 30,
+    "outreach_drafts": 99,
+    "flex_clients": 1169,
+    "flex_projects": 2035,
+    "signals": 2,
+    "tasks": 990,
+    "companies": 0,
+    "outreach": 0,
+    "approvals": 0,
+    "agent_runs": 0,
+    "sales_briefs": 4,
+    "sales_notes": 0,
+    "opportunity_feedback": 34,
+    "job_runs": 761
+  },
+  "pg": {
+    "schemas": [
+      {
+        "schema_name": "auth"
+      },
+      {
+        "schema_name": "extensions"
+      },
+      {
+        "schema_name": "graphql"
+      },
+      {
+        "schema_name": "graphql_public"
+      },
+      {
+        "schema_name": "pg_temp_1"
+      },
+      {
+        "schema_name": "pg_temp_10"
+      },
+      {
+        "schema_name": "pg_temp_11"
+      },
+      {
+        "schema_name": "pg_temp_13"
+      },
+      {
+        "schema_name": "pg_temp_14"
+      },
+      {
+        "schema_name": "pg_temp_16"
+      },
+      {
+        "schema_name": "pg_temp_18"
+      },
+      {
+        "schema_name": "pg_temp_2"
+      },
+      {
+        "schema_name": "pg_temp_20"
+      },
+      {
+        "schema_name": "pg_temp_21"
+      },
+      {
+        "schema_name": "pg_temp_23"
+      },
+      {
+        "schema_name": "pg_temp_27"
+      },
+      {
+        "schema_name": "pg_temp_28"
+      },
+      {
+        "schema_name": "pg_temp_29"
+      },
+      {
+        "schema_name": "pg_temp_31"
+      },
+      {
+        "schema_name": "pg_temp_38"
+      },
+      {
+        "schema_name": "pg_temp_39"
+      },
+      {
+        "schema_name": "pg_temp_4"
+      },
+      {
+        "schema_name": "pg_temp_42"
+      },
+      {
+        "schema_name": "pg_temp_44"
+      },
+      {
+        "schema_name": "pg_temp_45"
+      },
+      {
+        "schema_name": "pg_temp_46"
+      },
+      {
+        "schema_name": "pg_temp_47"
+      },
+      {
+        "schema_name": "pg_temp_49"
+      },
+      {
+        "schema_name": "pg_temp_5"
+      },
+      {
+        "schema_name": "pg_temp_50"
+      },
+      {
+        "schema_name": "pg_temp_52"
+      },
+      {
+        "schema_name": "pg_temp_53"
+      },
+      {
+        "schema_name": "pg_temp_54"
+      },
+      {
+        "schema_name": "pg_temp_55"
+      },
+      {
+        "schema_name": "pg_temp_56"
+      },
+      {
+        "schema_name": "pg_temp_57"
+      },
+      {
+        "schema_name": "pg_temp_59"
+      },
+      {
+        "schema_name": "pg_temp_6"
+      },
+      {
+        "schema_name": "pg_temp_8"
+      },
+      {
+        "schema_name": "pg_temp_9"
+      },
+      {
+        "schema_name": "pg_toast_temp_1"
+      },
+      {
+        "schema_name": "pg_toast_temp_10"
+      },
+      {
+        "schema_name": "pg_toast_temp_11"
+      },
+      {
+        "schema_name": "pg_toast_temp_13"
+      },
+      {
+        "schema_name": "pg_toast_temp_14"
+      },
+      {
+        "schema_name": "pg_toast_temp_16"
+      },
+      {
+        "schema_name": "pg_toast_temp_18"
+      },
+      {
+        "schema_name": "pg_toast_temp_2"
+      },
+      {
+        "schema_name": "pg_toast_temp_20"
+      },
+      {
+        "schema_name": "pg_toast_temp_21"
+      },
+      {
+        "schema_name": "pg_toast_temp_23"
+      },
+      {
+        "schema_name": "pg_toast_temp_27"
+      },
+      {
+        "schema_name": "pg_toast_temp_28"
+      },
+      {
+        "schema_name": "pg_toast_temp_29"
+      },
+      {
+        "schema_name": "pg_toast_temp_31"
+      },
+      {
+        "schema_name": "pg_toast_temp_38"
+      },
+      {
+        "schema_name": "pg_toast_temp_39"
+      },
+      {
+        "schema_name": "pg_toast_temp_4"
+      },
+      {
+        "schema_name": "pg_toast_temp_42"
+      },
+      {
+        "schema_name": "pg_toast_temp_44"
+      },
+      {
+        "schema_name": "pg_toast_temp_45"
+      },
+      {
+        "schema_name": "pg_toast_temp_46"
+      },
+      {
+        "schema_name": "pg_toast_temp_47"
+      },
+      {
+        "schema_name": "pg_toast_temp_49"
+      },
+      {
+        "schema_name": "pg_toast_temp_5"
+      },
+      {
+        "schema_name": "pg_toast_temp_50"
+      },
+      {
+        "schema_name": "pg_toast_temp_52"
+      },
+      {
+        "schema_name": "pg_toast_temp_53"
+      },
+      {
+        "schema_name": "pg_toast_temp_54"
+      },
+      {
+        "schema_name": "pg_toast_temp_55"
+      },
+      {
+        "schema_name": "pg_toast_temp_56"
+      },
+      {
+        "schema_name": "pg_toast_temp_57"
+      },
+      {
+        "schema_name": "pg_toast_temp_59"
+      },
+      {
+        "schema_name": "pg_toast_temp_6"
+      },
+      {
+        "schema_name": "pg_toast_temp_8"
+      },
+      {
+        "schema_name": "pg_toast_temp_9"
+      },
+      {
+        "schema_name": "pgbouncer"
+      },
+      {
+        "schema_name": "public"
+      },
+      {
+        "schema_name": "rankpilot"
+      },
+      {
+        "schema_name": "realtime"
+      },
+      {
+        "schema_name": "storage"
+      },
+      {
+        "schema_name": "supabase_migrations"
+      },
+      {
+        "schema_name": "vault"
+      }
+    ],
+    "rls": [
+      {
+        "schemaname": "public",
+        "tablename": "account_leader_snapshots",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "account_signals",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "account_snapshot_seed",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "agent_memory",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "agent_runs",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "approvals",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "artifacts",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "brief_deliveries",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "chat_messages",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "chat_threads",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "companies",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "competitor_signals",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "contacts",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "content",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "content_library",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "flex_clients",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "flex_projects",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "flex_venues",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "industry_signals",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "job_runs",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "jobs",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "notifications",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "opportunities",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "opportunity_feedback",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "outreach",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "outreach_drafts",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "performance_insights",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "sales_briefs",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "sales_notes",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "signals",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "strategy_briefs",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "target_accounts",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "tasks",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "public",
+        "tablename": "weekly_briefs",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "actions",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "aeo_prompts",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "aeo_samples",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "citation_kit",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "citation_targets",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "clarity_snapshots",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "ga4_snapshots",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "gsc_snapshots",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "job_runs",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "keyword_snapshots",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "keywords",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "schema_migrations",
+        "rowsecurity": false
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "site_state",
+        "rowsecurity": true
+      },
+      {
+        "schemaname": "rankpilot",
+        "tablename": "sites",
+        "rowsecurity": true
+      }
+    ],
+    "policies": [],
+    "fks": [
+      {
+        "table_schema": "public",
+        "table_name": "account_signals",
+        "column_name": "account_id",
+        "ref_table": "target_accounts",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "artifacts",
+        "column_name": "job_id",
+        "ref_table": "jobs",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "artifacts",
+        "column_name": "opportunity_id",
+        "ref_table": "opportunities",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "chat_messages",
+        "column_name": "thread_id",
+        "ref_table": "chat_threads",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "contacts",
+        "column_name": "company_id",
+        "ref_table": "companies",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "jobs",
+        "column_name": "opportunity_id",
+        "ref_table": "opportunities",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "opportunities",
+        "column_name": "company_id",
+        "ref_table": "companies",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "outreach",
+        "column_name": "contact_id",
+        "ref_table": "contacts",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "outreach_drafts",
+        "column_name": "opportunity_id",
+        "ref_table": "opportunities",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "sales_briefs",
+        "column_name": "opportunity_id",
+        "ref_table": "opportunities",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "sales_notes",
+        "column_name": "sales_brief_id",
+        "ref_table": "sales_briefs",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "signals",
+        "column_name": "promoted_to_opportunity_id",
+        "ref_table": "opportunities",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "public",
+        "table_name": "signals",
+        "column_name": "target_account_id",
+        "ref_table": "target_accounts",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "actions",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "aeo_prompts",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "aeo_samples",
+        "column_name": "prompt_id",
+        "ref_table": "aeo_prompts",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "aeo_samples",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "citation_kit",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "citation_targets",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "clarity_snapshots",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "ga4_snapshots",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "gsc_snapshots",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "job_runs",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "keyword_snapshots",
+        "column_name": "keyword_id",
+        "ref_table": "keywords",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "keyword_snapshots",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "keywords",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      },
+      {
+        "table_schema": "rankpilot",
+        "table_name": "site_state",
+        "column_name": "site_id",
+        "ref_table": "sites",
+        "ref_column": "id"
+      }
+    ],
+    "uniques": [
+      {
+        "table_name": "account_leader_snapshots",
+        "column_name": "apollo_person_id"
+      },
+      {
+        "table_name": "account_leader_snapshots",
+        "column_name": "id"
+      },
+      {
+        "table_name": "account_leader_snapshots",
+        "column_name": "org_id"
+      },
+      {
+        "table_name": "account_signals",
+        "column_name": "id"
+      },
+      {
+        "table_name": "account_snapshot_seed",
+        "column_name": "id"
+      },
+      {
+        "table_name": "account_snapshot_seed",
+        "column_name": "org_id"
+      },
+      {
+        "table_name": "agent_memory",
+        "column_name": "id"
+      },
+      {
+        "table_name": "agent_runs",
+        "column_name": "id"
+      },
+      {
+        "table_name": "approvals",
+        "column_name": "id"
+      },
+      {
+        "table_name": "artifacts",
+        "column_name": "id"
+      },
+      {
+        "table_name": "brief_deliveries",
+        "column_name": "id"
+      },
+      {
+        "table_name": "chat_messages",
+        "column_name": "id"
+      },
+      {
+        "table_name": "chat_threads",
+        "column_name": "id"
+      },
+      {
+        "table_name": "companies",
+        "column_name": "id"
+      },
+      {
+        "table_name": "competitor_signals",
+        "column_name": "id"
+      },
+      {
+        "table_name": "contacts",
+        "column_name": "id"
+      },
+      {
+        "table_name": "content",
+        "column_name": "id"
+      },
+      {
+        "table_name": "content_library",
+        "column_name": "id"
+      },
+      {
+        "table_name": "flex_clients",
+        "column_name": "flex_id"
+      },
+      {
+        "table_name": "flex_clients",
+        "column_name": "id"
+      },
+      {
+        "table_name": "flex_projects",
+        "column_name": "flex_id"
+      },
+      {
+        "table_name": "flex_projects",
+        "column_name": "id"
+      },
+      {
+        "table_name": "flex_venues",
+        "column_name": "id"
+      },
+      {
+        "table_name": "industry_signals",
+        "column_name": "id"
+      },
+      {
+        "table_name": "job_runs",
+        "column_name": "id"
+      },
+      {
+        "table_name": "job_runs",
+        "column_name": "id"
+      },
+      {
+        "table_name": "jobs",
+        "column_name": "id"
+      },
+      {
+        "table_name": "notifications",
+        "column_name": "id"
+      },
+      {
+        "table_name": "opportunities",
+        "column_name": "id"
+      },
+      {
+        "table_name": "opportunity_feedback",
+        "column_name": "id"
+      },
+      {
+        "table_name": "outreach",
+        "column_name": "id"
+      },
+      {
+        "table_name": "outreach_drafts",
+        "column_name": "id"
+      },
+      {
+        "table_name": "performance_insights",
+        "column_name": "id"
+      },
+      {
+        "table_name": "sales_briefs",
+        "column_name": "id"
+      },
+      {
+        "table_name": "sales_notes",
+        "column_name": "id"
+      },
+      {
+        "table_name": "signals",
+        "column_name": "id"
+      },
+      {
+        "table_name": "strategy_briefs",
+        "column_name": "id"
+      },
+      {
+        "table_name": "target_accounts",
+        "column_name": "id"
+      },
+      {
+        "table_name": "tasks",
+        "column_name": "id"
+      },
+      {
+        "table_name": "weekly_briefs",
+        "column_name": "id"
+      }
+    ],
+    "authUsers": [
+      {
+        "n": 0
+      }
+    ]
+  }
+}

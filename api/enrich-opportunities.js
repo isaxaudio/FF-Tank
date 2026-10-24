@@ -115,7 +115,7 @@ module.exports = async function handler(req, res) {
   const forceOverride = req.query.force === 'true' || req.body?.force === true;
 
   const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, '');
-  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
   const apolloKey   = process.env.APOLLO_API_KEY;
 
   if (!supabaseUrl || !supabaseKey || !apolloKey) {

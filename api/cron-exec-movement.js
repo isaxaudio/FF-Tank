@@ -1,3 +1,4 @@
+import { requireAuth } from '../lib/server/auth.cjs';
 // api/cron-exec-movement.js
 // Runs daily. Finds CMO/VP Marketing/Head of Events/Brand Director transitions
 // at Mountain West companies and writes qualified signals.
@@ -239,12 +240,8 @@ async function writeSignal(signal) {
 
 // Main handler
 export default async function handler(req, res) {
-  // Vercel cron auth
-  if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
-    if (!req.query.manual) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-  }
+  // Cron secret or a signed-in user; the old `?manual=1` bypass let anyone trigger this.
+  if (!(await requireAuth(req, res))) return;
 
   const startTime = Date.now();
   const runLog = {

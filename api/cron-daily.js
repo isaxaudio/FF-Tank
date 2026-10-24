@@ -1,14 +1,17 @@
+const { requireAuth } = require('../lib/server/auth.cjs');
+
 module.exports = async function handler(req, res) {
+  if (!(await requireAuth(req, res))) return;
   const runId = `daily-${Date.now()}`;
   const startedAt = new Date().toISOString();
   console.log(`[cron-daily] START run_id=${runId} at=${startedAt} triggered_by=${req.headers['x-triggered-by'] || 'unknown'}`);
 
-  console.log('[cron-daily] env check:', { TAVILY_API_KEY: !!process.env.TAVILY_API_KEY, SUPABASE_URL: !!process.env.SUPABASE_URL, SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY });
+  console.log('[cron-daily] env check:', { TAVILY_API_KEY: !!process.env.TAVILY_API_KEY, SUPABASE_URL: !!process.env.SUPABASE_URL, SUPABASE_ANON_KEY: !!(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) });
 
   try {
     const tavilyKey = process.env.TAVILY_API_KEY;
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
 
     if (!tavilyKey || !supabaseUrl || !supabaseKey) {
       console.error('[cron-daily] missing env vars — aborting');

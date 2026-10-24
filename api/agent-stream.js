@@ -40,7 +40,7 @@ module.exports = async function handler(req, res) {
   }, 20000);
 
   const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-  const sbKey  = process.env.SUPABASE_ANON_KEY;
+  const sbKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
 
   function updateRun(status, extras = {}) {
     if (!runId || !sbBase || !sbKey) return;

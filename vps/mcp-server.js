@@ -9,7 +9,7 @@ require('dotenv').config();
 const http = require('http');
 
 const SB_BASE = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-const SB_KEY  = process.env.SUPABASE_ANON_KEY || '';
+const SB_KEY  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || '';
 const SB_H    = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` };
 const PORT    = process.env.MCP_PORT || 3002;
 

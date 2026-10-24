@@ -26,7 +26,7 @@ function auth(req, res, next) {
 
 // ─── Supabase helpers ─────────────────────────────────────────────────────────
 const SB_BASE = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-const SB_KEY  = process.env.SUPABASE_ANON_KEY || '';
+const SB_KEY  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || '';
 const SB_H    = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` };
 
 const log = (job, msg) => console.log(`[${new Date().toISOString()}] [${job}] ${msg}`);

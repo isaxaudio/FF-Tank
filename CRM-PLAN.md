@@ -67,3 +67,25 @@ It prints every table PostgREST exposes, which claimed columns are missing, row 
 
 ### 7. End-to-end verification before more automation
 Prospect captured at a trade show (source_detail) → contact + company created → task to follow up → activity logged → deal created, stage proposal → Flex project linked by stable id → stage booked → shows in Reports as won with its source. Scripted as `scripts/e2e-smoke.js` against a preview deployment.
+
+## Live verification results (2026-10-23, `scripts/live-schema.json`)
+
+| Finding | Effect on the plan |
+| --- | --- |
+| 34 public tables, **no RLS, zero policies, zero auth users**. Rankpilot schema has RLS on all 12 tables, no policies (service key only) | Migration 001 enables RLS on all 34 + `crm_migrations`, policy for `authenticated` only |
+| Server code used the anon key in 8 of 9 files (only `cron-exec-movement` used service role). VPS `.env.example` lists only the anon key | All server files now prefer `SUPABASE_SERVICE_ROLE_KEY` with anon fallback. **Vercel env and the VPS `.env` need the service key before 001 is applied**, or every job breaks |
+| `companies` exists (empty) and already has FKs from `contacts.company_id` and `opportunities.company_id` (both all null) | Phase 2 extends `companies` instead of creating a new table; backfill fills the existing FKs |
+| `outreach` exists (empty) with `contact_id` FK, `type, status, sent_at`. `outreach_drafts` has `opportunity_id` FK, `sent_at, sent_via, reply_status`, all 99 rows `draft`, none sent | `outreach` becomes the sent-outreach log; drafts stay drafts. Confirms the "drafts are not sent" rule is already representable |
+| `flex_projects.flex_id`: 2,035 rows, 0 null, 2,035 distinct. `flex_clients.flex_id`: 40 null, 1,169 rows, 1,129 distinct (duplicates exist) | Deals link to `flex_projects.flex_id` (stable). Company ↔ Flex client link needs a review step for the 40 nulls and the duplicate ids |
+| `flex_clients` = 1,169 rows, 229 with revenue > 0 (STATUS.md said 260) | Reports use the live number |
+| `opportunities` = 7,806. Live columns differ from CLAUDE.md: has `company_id, url, budget_estimate, contact, email, linkedin_url, signal_type, action, access_status, city, state, metadata, session_id`; lacks `recommended_angle, red_flags, estimated_budget_band, estimated_timeline, recommended_next_step, event_type, event_start_date`. Status values live: `new 7,610 · enriched 93 · archived 49 · contacted 32 · skipped 22` | Signals stay here untouched. `signal_type` already carries `trade_show, conference, commencement, upcoming_event, official_rfp` |
+| `tasks` = 990 rows, all `status=pending, agent=home`, no due dates: generated suggestions, not worked tasks | Phase 3 adds `kind` (`generated` for existing rows, `crm` for new), plus `company_id, contact_id, deal_id, owner, completed_at`. Nothing deleted |
+| `contacts` = 30 rows, most with null name and email; company name in `notes` | Backfill links what it can; the rest go to review |
+| `target_accounts` = 393, `source` values `lookalike 251 · utah-sweep-2026-08 122 · null 20`; tier null on 262 | Source carried into `companies.source` |
+| `signals` = 2 rows only; `sales_briefs` 4; `job_runs` 761 | Signals table is nearly unused; the promote path will be built on `opportunities` first |
+| Postgres 17.6. No views, no functions in `public` | Views and RPCs are free to add |
+
+Order of operations for phase 1 (so nothing breaks in production):
+1. Add `SUPABASE_SERVICE_ROLE_KEY` to Vercel env (needs Vercel token) and to the VPS `.env` (needs SSH to the droplet; key is on the MacBook). Deploy the service-key-first server code.
+2. Create the first auth user. Wire `src/lib/auth.js` + `db.js` into `App.jsx` with a login screen, set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in Vercel, deploy to a preview, sign in.
+3. Only then `node scripts/migrate.js up` to apply 001. Verify: anon request returns empty, signed-in UI works, VPS health and a job run succeed.

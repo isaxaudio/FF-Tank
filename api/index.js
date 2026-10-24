@@ -74,7 +74,7 @@ const COST_RATES = {
 };
 const logRun = (handler, provider, model, inT, outT, durationMs, success) => {
   const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-  const sbKey  = process.env.SUPABASE_ANON_KEY || '';
+  const sbKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || '';
   if (!sbBase || !sbKey) return;
   const r    = COST_RATES[model] || { input: 0, output: 0 };
   const cost = (inT * r.input + outT * r.output) / 1_000_000;
@@ -226,7 +226,7 @@ module.exports = async (req, res) => {
         // Dedup: skip if a draft already exists for this contact email
         if (email) {
           const sbUrl = process.env.SUPABASE_URL;
-          const sbKey = process.env.SUPABASE_ANON_KEY;
+          const sbKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
           if (sbUrl && sbKey) {
             try {
               const base = sbUrl.replace(/\/$/, '');
@@ -499,7 +499,7 @@ async function handleQualify(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
   const openaiKey   = process.env.OPENAI_API_KEY;
   if (!supabaseUrl || !supabaseKey || !openaiKey) return res.status(500).json({ error: 'Missing env vars' });
 
@@ -592,7 +592,7 @@ async function handleFlexAnalyze(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
   if (!anthropicKey || !supabaseUrl || !supabaseKey) return res.status(500).json({ error: 'Missing env vars' });
 
   const base = supabaseUrl.replace(/\/$/, '');
@@ -627,7 +627,7 @@ async function handleFlexSync(req, res) {
 
   const { flexApiKey } = req.body || {};
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
 
   if (!flexApiKey) return res.status(400).json({ error: 'flexApiKey is required' });
   if (!supabaseUrl || !supabaseKey) return res.status(500).json({ error: 'Missing Supabase env vars' });
@@ -866,7 +866,7 @@ async function handleFlexLookalike(req, res) {
   // Fallback: use Flex client names if no orgs extracted
   if (targetOrgs.length === 0) {
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
     if (supabaseUrl && supabaseKey) {
       const base = supabaseUrl.replace(/\/$/, '');
       const sbH = { 'Content-Type': 'application/json', 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` };
@@ -937,7 +937,7 @@ async function handleLookalikeEngine(req, res) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const apolloKey    = process.env.APOLLO_API_KEY;
   const supabaseUrl  = process.env.SUPABASE_URL;
-  const supabaseKey  = process.env.SUPABASE_ANON_KEY;
+  const supabaseKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
 
   if (!anthropicKey || !supabaseUrl || !supabaseKey)
     return res.status(500).json({ error: 'Missing env vars: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY' });
@@ -1152,7 +1152,7 @@ async function handleFlexIntelligence(req, res) {
   const { section } = req.body || {};
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
 
   if (!section) return res.status(400).json({ error: 'section is required' });
   if (!anthropicKey || !supabaseUrl || !supabaseKey) return res.status(500).json({ error: 'Missing env vars' });
@@ -1341,7 +1341,7 @@ async function handleCeoBrain(req, res) {
   const tavilyKey = process.env.TAVILY_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
 
   if (!anthropicKey || !supabaseUrl || !supabaseKey) return res.status(500).json({ error: 'Missing env vars' });
 
@@ -1540,7 +1540,7 @@ async function handleBriefDeliver(req, res) {
   const defaultEmail = process.env.BRIEF_TO_EMAIL;
   const defaultSlack = process.env.SLACK_WEBHOOK_URL;
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
 
   if (!supabaseUrl || !supabaseKey) return res.status(500).json({ error: 'Missing Supabase env vars' });
   const base = supabaseUrl.replace(/\/$/, '');
@@ -2017,7 +2017,7 @@ async function handleOpenAI(req, res) {
       const rates = OPENAI_RATES[model] || OPENAI_RATES[Object.keys(OPENAI_RATES).find(k => model.startsWith(k)) || ''] || { input: 0, output: 0 };
       const cost = (inT * rates.input + outT * rates.output) / 1_000_000;
       const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-      const sbKey  = process.env.SUPABASE_ANON_KEY || '';
+      const sbKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || '';
       if (sbBase && sbKey) {
         const h = { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}`, 'Prefer': 'return=minimal' };
         fetch(`${sbBase}/rest/v1/job_runs`, { method: 'POST', headers: h, body: JSON.stringify({ job_name: 'ui-openai', provider: 'openai', model, input_tokens: inT, output_tokens: outT, total_tokens: inT + outT, estimated_cost: cost, duration_ms: Date.now() - start, triggered_by: 'ui', status: 'completed', created_at: new Date().toISOString(), completed_at: new Date().toISOString() }) }).catch(() => {});
@@ -2032,7 +2032,7 @@ async function handleOpenAI(req, res) {
 // ─── Memory API (Priority 3: Agent Memory) ───────────────────────────────────
 async function handleMemory(req, res) {
   const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-  const sbKey  = process.env.SUPABASE_ANON_KEY || '';
+  const sbKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || '';
   if (!sbBase || !sbKey) return res.status(500).json({ error: 'Supabase not configured' });
   const h = { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` };
 
@@ -2073,7 +2073,7 @@ async function handleSalesBrief(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-  const sbKey  = process.env.SUPABASE_ANON_KEY || '';
+  const sbKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || '';
   const oaiKey = process.env.OPENAI_API_KEY || '';
   if (!sbBase || !sbKey) return res.status(500).json({ error: 'Supabase not configured' });
   if (!oaiKey)           return res.status(500).json({ error: 'OPENAI_API_KEY not set' });
@@ -2194,7 +2194,7 @@ Return ONLY valid JSON in this exact shape — no markdown, no commentary:
 // ─── Sales Notes — CRUD ───────────────────────────────────────────────────────
 async function handleSalesNotes(req, res) {
   const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-  const sbKey  = process.env.SUPABASE_ANON_KEY || '';
+  const sbKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || '';
   if (!sbBase || !sbKey) return res.status(500).json({ error: 'Supabase not configured' });
   const sbH = { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` };
 
@@ -2231,7 +2231,7 @@ async function handleSalesEnrich(req, res) {
   if (!apolloKey) return res.status(400).json({ error: 'apolloKey required' });
 
   const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-  const sbKey  = process.env.SUPABASE_ANON_KEY || '';
+  const sbKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || '';
   const sbH = { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` };
 
   const apolloH = { 'Content-Type': 'application/json', 'x-api-key': apolloKey };
@@ -2655,7 +2655,7 @@ async function handleClaudeProxy(req, res) {
     const upstream = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }, body: JSON.stringify(req.body) });
     const data = await upstream.json();
     if (upstream.status === 200 && data.usage) {
-      const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, ''), sbKey = process.env.SUPABASE_ANON_KEY || '';
+      const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, ''), sbKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) || '';
       if (sbBase && sbKey) {
         const model = req.body?.model || data.model || 'claude-sonnet-4-6';
         const inp = data.usage.input_tokens || 0, out = data.usage.output_tokens || 0;
@@ -2880,7 +2880,7 @@ async function handleAgentSetup(req, res) {
 async function handleAgentRun(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   const agentId = process.env.AGENT_ID, envId = process.env.ENVIRONMENT_ID, anthKey = process.env.ANTHROPIC_API_KEY;
-  const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, ''), sbKey = process.env.SUPABASE_ANON_KEY;
+  const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, ''), sbKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
   if (!agentId || !envId) return res.status(500).json({ error: 'AGENT_ID and ENVIRONMENT_ID not set — run /api/index?service=agent-setup first' });
   if (!anthKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
 
@@ -2984,7 +2984,7 @@ async function handleAgentTools(req, res) {
   if (!tool_name) return res.status(400).json({ error: 'tool_name required' });
   console.log(`[agent-tools] session=${session_id} tool=${tool_name}`);
 
-  const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, ''), sbKey = process.env.SUPABASE_ANON_KEY;
+  const sbBase = (process.env.SUPABASE_URL || '').replace(/\/$/, ''), sbKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
   const sbH = { 'Content-Type': 'application/json', apikey: sbKey, Authorization: `Bearer ${sbKey}` };
 
   // Resolve run_id from session_id (used for tracking counters)
