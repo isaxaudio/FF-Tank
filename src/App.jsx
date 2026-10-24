@@ -1216,7 +1216,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
     const CHUNK = 100;
     for (let i = 0; i < projectRows.length; i += CHUNK) {
       const chunk = projectRows.slice(i, i + CHUNK);
-      await db._req("POST", "flex_projects", chunk, null);
+      await db.insert("flex_projects", chunk);
       imported += chunk.length;
     }
 
