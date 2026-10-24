@@ -3,6 +3,7 @@ import { c as TC, font as TF } from "./tokens.js";
 import { db } from "./lib/db.js";
 import { auth } from "./lib/auth.js";
 import Login from "./screens/Login.jsx";
+import Relationships from "./screens/Relationships.jsx";
 const FONT = TF.sans;
 
 export class ErrorBoundary extends React.Component {
@@ -1094,6 +1095,7 @@ const NAV_GROUPS = [
     { id: "handoff", label: "Handoff", badge: "signals" },
   ] },
   { label: "WEEKLY", items: [
+    { id: "relationships", label: "Relationships" },
     { id: "targets", label: "Target Accounts" },
     { id: "flex", label: "Flex Intel" },
     { id: "opportunities", label: "Signals" },
@@ -9990,6 +9992,8 @@ Cite URLs.`;
             <UsageView db={db} onNavigate={setActiveId} />
           ) : activeId === "sales" ? (
             <SalesView db={db} apolloKey={apolloKey} gmailRefreshToken={gmailRefreshToken} />
+          ) : activeId === "relationships" ? (
+            <Relationships />
           ) : activeId === "crm" ? (
             <CRMView db={db} apolloKey={apolloKey} gmailRefreshToken={gmailRefreshToken} />
           ) : activeId === "memory" ? (
