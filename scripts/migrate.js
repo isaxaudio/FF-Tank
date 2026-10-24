@@ -1,7 +1,7 @@
 // scripts/migrate.js — reversible migrations for the CRM build.
 // Files: migrations/NNN_name.up.sql and migrations/NNN_name.down.sql
 // Applied migrations are recorded in public.crm_migrations.
-// Usage: node scripts/migrate.js status | up | down [N] | up --dry
+// Usage: node scripts/migrate.js status | up [--to NAME] | down [N] | up --dry
 // Needs SUPABASE_DB_URL in .env.local (direct Postgres; PostgREST cannot run DDL).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,6 +18,8 @@ for (const f of ['.env.local', '.env']) {
 if (!process.env.SUPABASE_DB_URL) { console.error('SUPABASE_DB_URL missing'); process.exit(1); }
 const [cmd = 'status', arg] = process.argv.slice(2);
 const dry = process.argv.includes('--dry');
+const toIdx = process.argv.indexOf('--to');
+const upTo = toIdx > -1 ? process.argv[toIdx + 1] : null; // apply up to and including this migration
 const dir = path.join(process.cwd(), 'migrations');
 const files = fs.readdirSync(dir).filter(f => f.endsWith('.up.sql')).sort();
 const nameOf = f => f.replace(/\.up\.sql$/, '');
@@ -32,6 +34,7 @@ if (cmd === 'status') {
 } else if (cmd === 'up') {
   for (const f of files) {
     const n = nameOf(f); if (applied.has(n)) continue;
+    if (upTo && n > upTo) break;
     const sql = fs.readFileSync(path.join(dir, f), 'utf8');
     console.log(`-> up ${n}${dry ? ' (dry run)' : ''}`);
     if (dry) continue;
