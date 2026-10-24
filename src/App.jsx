@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { c as TC, font as TF } from "./tokens.js";
 import { db } from "./lib/db.js";
 import { auth } from "./lib/auth.js";
+import { logActivity } from "./lib/activities.js";
 import Login from "./screens/Login.jsx";
 import Relationships from "./screens/Relationships.jsx";
 import Today from "./screens/Today.jsx";
