@@ -6,6 +6,9 @@ import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
 import { Search, Plus, Check, X, Building2, ExternalLink } from "lucide-react";
 import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
+import { logActivity } from "../lib/activities.js";
+import Timeline from "../components/Timeline.jsx";
+import TasksPanel from "../components/TasksPanel.jsx";
 
 const money = n => (n == null ? "—" : "$" + Math.round(Number(n)).toLocaleString());
 const day = d => (d ? String(d).slice(0, 10) : "—");
@@ -124,6 +127,7 @@ function NewCompanyForm({ onDone, onCancel }) {
     e.preventDefault(); if (!f.name.trim()) return; setBusy(true); setErr("");
     try {
       const rows = await db.insert("companies", { name: f.name.trim(), domain: f.domain.trim().toLowerCase() || null, kind: f.kind, vertical: f.vertical || null, source: f.source || "manual", source_detail: f.source_detail || null });
+      await logActivity({ type: "company_created", company_id: rows[0].id, subject: rows[0].name, body: [f.source, f.source_detail].filter(Boolean).join(" · ") || null });
       onDone(rows[0]);
     } catch (e2) { setErr(e2.message); }
     setBusy(false);
@@ -151,6 +155,7 @@ function CompanyPage({ id, onChanged }) {
   const [co, setCo] = useState(null); const [projects, setProjects] = useState([]); const [err, setErr] = useState("");
   const [edit, setEdit] = useState(false); const [form, setForm] = useState({});
   const [showContact, setShowContact] = useState(false);
+  const [timelineKey, setTimelineKey] = useState(0);
 
   async function load() {
     setErr("");
@@ -256,6 +261,14 @@ function CompanyPage({ id, onChanged }) {
         )}
       </Section>
 
+      <Section title="Tasks">
+        <TasksPanel companyId={id} contacts={contacts} onChanged={() => setTimelineKey(k => k + 1)} />
+      </Section>
+
+      <Section title="Activity" note="Everything logged for this company. Drafts and Slack handoffs are labelled as such; only confirmed sends count as outreach.">
+        <Timeline key={timelineKey} companyId={id} contacts={contacts} />
+      </Section>
+
       {/* Signals: research, not deals */}
       <Section title={`Research signals · ${(co.opportunities || []).length}`} note="Scouted signals about this company. They are not deals until promoted.">
         {(co.opportunities || []).length === 0 && <div style={{ fontSize: 13, color: TC.muted }}>None.</div>}
@@ -304,7 +317,8 @@ function NewContactForm({ companyId, onDone, onCancel }) {
   async function save(e) {
     e.preventDefault(); if (!f.name.trim()) return; setBusy(true); setErr("");
     try {
-      await db.insert("contacts", { company_id: companyId, name: f.name.trim(), title: f.title || null, email: f.email.trim().toLowerCase() || null, linkedin: f.linkedin || null, marketing_status: f.marketing_status, source: f.source || "manual", source_detail: f.source_detail || null, created_at: new Date().toISOString() });
+      const rows = await db.insert("contacts", { company_id: companyId, name: f.name.trim(), title: f.title || null, email: f.email.trim().toLowerCase() || null, linkedin: f.linkedin || null, marketing_status: f.marketing_status, source: f.source || "manual", source_detail: f.source_detail || null, created_at: new Date().toISOString() });
+      await logActivity({ type: "contact_created", company_id: companyId, contact_id: rows?.[0]?.id || null, subject: f.name.trim(), body: [f.title, f.source, f.source_detail].filter(Boolean).join(" · ") || null });
       onDone();
     } catch (e2) { setErr(e2.message.includes("contacts_email_uniq") ? "A contact with that email already exists." : e2.message); }
     setBusy(false);

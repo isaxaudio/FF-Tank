@@ -4,6 +4,7 @@ import { db } from "./lib/db.js";
 import { auth } from "./lib/auth.js";
 import Login from "./screens/Login.jsx";
 import Relationships from "./screens/Relationships.jsx";
+import { logActivity } from "./lib/activities.js";
 import { Home as IcHome, CalendarDays, Inbox, Building2, Target, BarChart3, Radar, Bot, PenLine, ListTodo, Contact, Brain as IcBrain, Globe, Server, Database, MessageSquare, Gauge, Settings as IcSettings, Bell as IcBell, Sparkles } from "lucide-react";
 const FONT = TF.sans;
 
@@ -736,7 +737,7 @@ function LeadHandoffView({ db }) {
 
   // Learning loop: record approve (+1) / skip (-1) so the queue learns what Isaac wants.
   async function recordFeedback(o, rating) {
-    try { await db.insert("opportunity_feedback", { opportunity_id: o.id, rating, created_at: new Date().toISOString() }); } catch {}
+    try { await db.insert("opportunity_feedback", { opportunity_id: o.id, rating, created_at: new Date().toISOString() }); await logActivity({ type: "feedback", opportunity_id: o.id, company_id: o.company_id || null, subject: rating > 0 ? "Good lead" : "Not relevant", body: o.title || null, metadata: { rating } }); } catch {}
   }
   // Load feedback → per-signal net weight (≥2 ratings to count), applied to ranking.
   React.useEffect(() => { (async () => {
@@ -1843,6 +1844,7 @@ function OpportunitiesView({ db, tavilyKey, vpsUrl, agentSecret }) {
     setFeedbackGiven(p => ({ ...p, [oppId]: rating }));
     try {
       await db.insert("opportunity_feedback", { opportunity_id: oppId, rating, created_at: new Date().toISOString() });
+      try { await logActivity({ type: "feedback", opportunity_id: oppId, subject: rating > 0 ? "Good lead" : "Not relevant", metadata: { rating } }); } catch {}
     } catch (_) {}
   }
 

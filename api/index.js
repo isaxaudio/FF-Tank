@@ -1,3 +1,4 @@
+const { logActivity, companyIdFor, contactIdForEmail } = require('../lib/server/activity.cjs');
 const crypto = require('crypto');
 
 // ─── Anthropic shared headers ─────────────────────────────────────────────────
@@ -1697,6 +1698,12 @@ async function handleGmailDraft(req, res) {
   if (!draftRes.ok) {
     return res.status(draftRes.status).json({ error: draftData.error?.message || 'Gmail API error' });
   }
+  {
+    const { companyId, contactId, opportunityId } = req.body || {};
+    const c = contactId ? { id: contactId, company_id: companyId || null } : await contactIdForEmail(to);
+    await logActivity({ type: 'email_draft', company_id: companyId || c?.company_id || null, contact_id: c?.id || null, opportunity_id: opportunityId || null,
+      subject: subject || '(no subject)', body: `Gmail draft saved for ${to}`, actor: req.auth?.user?.email || 'ui', source: 'gmail-draft', external_id: String(draftData.id), metadata: { to } });
+  }
   return res.json({ ok: true, draftId: draftData.id });
 }
 
@@ -1859,6 +1866,11 @@ async function handleSendLead(req, res) {
     }
   } catch (e) { /* non-fatal */ }
 
+  if (slack_sent) {
+    // A Slack handoff is its own activity type. It is not a sent email.
+    await logActivity({ type: 'slack_handoff', opportunity_id: opp.id || null, company_id: await companyIdFor(opp), subject: `Handed to ${repName}: ${opp.title || opp.company || 'lead'}`,
+      body: draft ? `Draft attached: ${draft.subject || ''}` : null, actor: req.auth?.user?.email || 'ui', source: 'send-lead', metadata: { repName, draft_id: draft?.id || null, markStatus } });
+  }
   if (!slack_sent) return res.status(502).json({ ok: false, error: slackErr || 'Slack post failed' });
   return res.json({ ok: true, slack_sent, statusUpdated, draftMatched: !!draft, repName });
 }
@@ -2212,7 +2224,18 @@ async function handleSalesNotes(req, res) {
       headers: { ...sbH, 'Prefer': 'return=representation' },
       body: JSON.stringify({ sales_brief_id, body, author, note_type, created_at: new Date().toISOString() }),
     });
-    return res.status(r.status).json(await r.json());
+    const created = await r.json();
+    if (r.ok) {
+      let opportunity_id = null, company_id = req.body?.company_id || null;
+      try {
+        const b = await (await fetch(`${sbBase}/rest/v1/sales_briefs?id=eq.${sales_brief_id}&select=opportunity_id,company`, { headers: sbH })).json();
+        opportunity_id = b?.[0]?.opportunity_id || null;
+        if (!company_id && opportunity_id) { const o = await (await fetch(`${sbBase}/rest/v1/opportunities?id=eq.${opportunity_id}&select=company_id,company`, { headers: sbH })).json(); company_id = await companyIdFor(o?.[0] || {}); }
+        if (!company_id && b?.[0]?.company) company_id = await companyIdFor({ company: b[0].company });
+      } catch { /* best effort */ }
+      await logActivity({ type: 'note', company_id, opportunity_id, subject: note_type, body, actor: author, source: 'sales-notes', external_id: created?.[0]?.id ? `sales_note:${created[0].id}` : null, metadata: { sales_brief_id } });
+    }
+    return res.status(r.status).json(created);
   }
   if (req.method === 'DELETE') {
     const { id } = req.query || {};

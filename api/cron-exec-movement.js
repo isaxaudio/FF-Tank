@@ -1,4 +1,5 @@
 import { requireAuth } from '../lib/server/auth.cjs';
+import { logActivity, companyIdFor } from '../lib/server/activity.cjs';
 // api/cron-exec-movement.js
 // Runs daily. Finds CMO/VP Marketing/Head of Events/Brand Director transitions
 // at Mountain West companies and writes qualified signals.
@@ -235,7 +236,13 @@ async function writeSignal(signal) {
     throw new Error(`Supabase insert failed: ${err}`);
   }
 
-  return response.json();
+  const rows = await response.json();
+  // Timeline entry on the matching company (exact name only; no company is created from a signal).
+  try {
+    const company_id = await companyIdFor({ company_id: signal.company_id, company: signal.company_name });
+    if (company_id) await logActivity({ type: 'signal', company_id, subject: signal.title, body: signal.summary || null, actor: 'cron-exec-movement', source: 'cron-exec-movement', external_id: rows?.[0]?.id ? `signal:${rows[0].id}` : null, occurred_at: signal.signal_date || undefined, metadata: { signal_type: signal.signal_type, person_name: signal.person_name, person_title: signal.person_title, source_url: signal.source_url } });
+  } catch { /* best effort */ }
+  return rows;
 }
 
 // Main handler
