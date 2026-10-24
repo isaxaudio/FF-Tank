@@ -9,6 +9,7 @@
 require('dotenv').config();
 const express = require('express');
 const { execFile } = require('child_process');
+const { timingSafeEqual } = require('crypto');
 
 const app = express();
 app.use(express.json());
@@ -17,10 +18,19 @@ const PORT         = process.env.PORT || 3001;
 const AGENT_SECRET = process.env.AGENT_SECRET || '';
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
+// Fail CLOSED: if no secret is configured the server refuses every request
+// rather than waving them through. Uses a constant-time compare to avoid
+// leaking the secret via response timing.
 function auth(req, res, next) {
-  if (!AGENT_SECRET) return next();
-  const header = req.headers['authorization'] || '';
-  if (header === `Bearer ${AGENT_SECRET}`) return next();
+  if (!AGENT_SECRET) {
+    log('auth', 'AGENT_SECRET not set — refusing request (fail-closed)');
+    return res.status(503).json({ error: 'Server auth not configured' });
+  }
+  const header   = req.headers['authorization'] || '';
+  const expected = `Bearer ${AGENT_SECRET}`;
+  const a = Buffer.from(header);
+  const b = Buffer.from(expected);
+  if (a.length === b.length && timingSafeEqual(a, b)) return next();
   return res.status(401).json({ error: 'Unauthorized' });
 }
 
@@ -160,7 +170,7 @@ app.get('/health', async (req, res) => {
   // Check OpenClaw gateway
   let clawStatus = 'unknown';
   try {
-    const r = await fetch('http://127.0.0.1:18789/__openclaw__/canvas/', { signal: AbortSignal.timeout(2000) });
+    const r = await fetch('http://127.0.0.1:18789/__openclaw__/health', { signal: AbortSignal.timeout(2000) });
     clawStatus = r.ok || r.status === 404 ? 'running' : 'error';
   } catch { clawStatus = 'unreachable'; }
 
@@ -475,5 +485,9 @@ app.post('/cleanup-stuck', auth, async (req, res) => {
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => log('server', `FF Tank bridge server listening on :${PORT}`));
+// Bind to loopback only. Public traffic must come through the Caddy HTTPS
+// reverse proxy (tank-api.fatfishmedia.com → 127.0.0.1:3001). This means the
+// raw, unencrypted port is no longer reachable from the internet.
+const BIND_HOST = process.env.BIND_HOST || '127.0.0.1';
+app.listen(PORT, BIND_HOST, () => log('server', `FF Tank bridge server listening on ${BIND_HOST}:${PORT}`));
 log('server', 'OpenClaw owns scheduling — no crons here. Bridge only.');
