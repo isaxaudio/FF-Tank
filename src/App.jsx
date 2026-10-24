@@ -1052,7 +1052,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
       // PostgREST's 1,000-row ceiling, which would quietly drop data out of every figure below.
       const [c, v, p] = await Promise.all([
         db.selectAll("flex_clients", { order: "created_at.desc" }),
-        db.selectAll("flex_venues", {}),
+        Promise.resolve([]), // flex_venues was dropped (Flex never exposed venue data)
         db.selectAll("flex_projects", { order: "event_date.desc" }),
       ]);
       const clientData = Array.isArray(c) ? c : [];
@@ -1224,9 +1224,7 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
     const venueMap = {};
     projectRows.forEach(r => { if (r.venue_name) venueMap[r.venue_name] = { flex_id: `csv-venue-${r.venue_name.replace(/\s/g, '').slice(0, 30)}`, name: r.venue_name }; });
     const venueRows = Object.values(venueMap);
-    if (venueRows.length) {
-      await db._req("POST", "flex_venues", venueRows, null);
-    }
+    // flex_venues table was retired; venue names stay on flex_projects.venue_name
 
     setToast({ ok: true, msg: `Imported ${imported} projects, ${venueRows.length} venues from CSV` });
     setTimeout(() => setToast(null), 6000);
