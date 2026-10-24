@@ -11,6 +11,8 @@ import Timeline from "../components/Timeline.jsx";
 import TasksPanel from "../components/TasksPanel.jsx";
 import { NewDealForm } from "./Pipeline.jsx";
 import { STAGE_LABEL, STAGE_TONE } from "../lib/deals.js";
+import { LIFECYCLE, LIFECYCLE_LABEL, LIFECYCLE_TONE, LEAD_STATUS, LEAD_STATUS_LABEL, LEAD_STATUS_TONE, CONSENT_SOURCES, CONSENT_LABEL, CAMPAIGN_KIND_LABEL, CAMPAIGN_KIND_TONE, ago } from "../lib/status.js";
+import { membershipsForCompany } from "../lib/campaigns.js";
 
 const money = n => (n == null ? "—" : "$" + Math.round(Number(n)).toLocaleString());
 const day = d => (d ? String(d).slice(0, 10) : "—");
@@ -18,17 +20,18 @@ const quoteIn = names => "in.(" + names.map(n => '"' + String(n).replace(/"/g, '
 const KINDS = ["prospect", "client", "competitor", "partner", "venue", "other"];
 const TIERS = ["", "existing_client", "warm", "target_a", "target_b", "watchlist"];
 const MKT = ["unknown", "subscribed", "unsubscribed"];
+const lifecyclePill = s => <span style={pill(LIFECYCLE_TONE[s] || "sand")}>{LIFECYCLE_LABEL[s] || s}</span>;
 const input = inputStyle();
 const label = { ...TT.label, marginBottom: 6, display: "block" };
 const th = { ...TT.tableHead, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${TC.line}`, background: TC.bg };
 const td = { fontSize: 13, lineHeight: "20px", color: TC.ink, padding: "10px 10px", borderBottom: `1px solid ${TC.lineSoft}`, verticalAlign: "top" };
 
-export default function Relationships({ initialReview = false, onNavigate }) {
+export default function Relationships({ initialReview = false, initialCompanyId = null, onNavigate }) {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState("all");
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(initialCompanyId);
   const [showReview, setShowReview] = useState(!!initialReview);
   const [candidates, setCandidates] = useState([]);
   const [showNew, setShowNew] = useState(false);
@@ -38,7 +41,7 @@ export default function Relationships({ initialReview = false, onNavigate }) {
     setLoading(true); setErr("");
     try {
       const [rows, cands] = await Promise.all([
-        db.selectAll("companies", { select: "id,name,domain,kind,tier,vertical,source,source_detail,updated_at,flex_clients(total_revenue,total_events,last_event_date)", merged_into_id: "is.null", order: "name.asc" }),
+        db.selectAll("companies", { select: "id,name,domain,kind,tier,vertical,source,source_detail,lifecycle_stage,owner,last_touch_at,updated_at,flex_clients(total_revenue,total_events,last_event_date)", merged_into_id: "is.null", order: "name.asc" }),
         db.select("company_match_candidates", { select: "*,companies(id,name)", status: "eq.pending", order: "confidence.desc,source_name.asc" }),
       ]);
       setCompanies((rows || []).map(r => {
@@ -54,12 +57,12 @@ export default function Relationships({ initialReview = false, onNavigate }) {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return companies
-      .filter(co => kind === "all" || co.kind === kind)
+      .filter(co => kind === "all" || (LIFECYCLE.includes(kind) ? co.lifecycle_stage === kind : co.kind === kind))
       .filter(co => !q || (co.name || "").toLowerCase().includes(q) || (co.domain || "").toLowerCase().includes(q) || (co.vertical || "").toLowerCase().includes(q))
       .sort((a, b) => (b.revenue - a.revenue) || (a.name || "").localeCompare(b.name || ""));
   }, [companies, search, kind]);
 
-  const counts = useMemo(() => ({ all: companies.length, client: companies.filter(c => c.kind === "client").length, prospect: companies.filter(c => c.kind === "prospect").length, competitor: companies.filter(c => c.kind === "competitor").length }), [companies]);
+  const counts = useMemo(() => ({ all: companies.length, customer: companies.filter(c => c.lifecycle_stage === "customer").length, engaged: companies.filter(c => c.lifecycle_stage === "engaged").length, prospect: companies.filter(c => c.lifecycle_stage === "prospect").length, former: companies.filter(c => c.lifecycle_stage === "former").length, competitor: companies.filter(c => c.kind === "competitor").length }), [companies]);
 
   return (
     <div style={{ flex: 1, display: "flex", minHeight: 0, background: TC.bg }}>
@@ -70,7 +73,7 @@ export default function Relationships({ initialReview = false, onNavigate }) {
             <div style={{ ...TT.h3, color: TC.ink }}>Relationships</div>
             <button onClick={() => setShowNew(s => !s)} style={{ ...btn("primary"), padding: "4px 12px" }}><Plus size={16} strokeWidth={1.5} /> Company</button>
           </div>
-          <div style={{ ...TT.meta, color: TC.muted, marginTop: 4 }}>{counts.all} companies · {counts.client} clients · {counts.prospect} prospects</div>
+          <div style={{ ...TT.meta, color: TC.muted, marginTop: 4 }}>{counts.all} companies · {counts.customer} customers · {counts.engaged} engaged · {counts.prospect} prospects</div>
           {candidates.length > 0 && (
             <button onClick={() => { setShowReview(s => !s); setSelectedId(null); }} style={{ ...pill("ember"), marginTop: 10, cursor: "pointer" }}>
               {candidates.length} matches to review
@@ -81,7 +84,7 @@ export default function Relationships({ initialReview = false, onNavigate }) {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search companies" style={{ ...input, paddingLeft: 32 }} />
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-            {[["all", "All"], ["client", "Clients"], ["prospect", "Prospects"], ["competitor", "Competitors"]].map(([id, lbl]) => (
+            {[["all", "All"], ["customer", "Customers"], ["engaged", "Engaged"], ["prospect", "Prospects"], ["former", "Former"], ["competitor", "Competitors"]].map(([id, lbl]) => (
               <button key={id} onClick={() => setKind(id)} style={{ ...pill(kind === id ? "ink" : "outline"), cursor: "pointer", padding: "3px 10px" }}>{lbl}{counts[id] != null ? ` ${counts[id]}` : ""}</button>
             ))}
           </div>
@@ -100,10 +103,10 @@ export default function Relationships({ initialReview = false, onNavigate }) {
                 {co.revenue > 0 && <div style={{ fontSize: 12.5, color: TC.sub, flexShrink: 0 }}>{money(co.revenue)}</div>}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 4, alignItems: "center" }}>
-                <span style={pill(co.kind === "client" ? "evergreen" : co.kind === "competitor" ? "rust" : co.kind === "prospect" ? "ocean" : "sand")}>{co.kind}</span>
+                {co.kind === "competitor" || co.kind === "partner" || co.kind === "venue" ? <span style={pill(co.kind === "competitor" ? "rust" : "sand")}>{co.kind}</span> : lifecyclePill(co.lifecycle_stage)}
                 {co.tier && <span style={pill("outline")}>{co.tier.replace("_", " ")}</span>}
-                {co.vertical && <span style={{ ...TT.meta, color: TC.muted }}>{co.vertical}</span>}
-                {co.lastEvent && <span style={{ ...TT.meta, color: TC.faint, marginLeft: "auto" }}>last {day(co.lastEvent)}</span>}
+                {co.vertical && <span style={{ ...TT.meta, color: TC.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{co.vertical}</span>}
+                <span style={{ ...TT.meta, color: TC.faint, marginLeft: "auto", flexShrink: 0 }}>{co.last_touch_at ? `touched ${ago(co.last_touch_at)}` : co.lastEvent ? `event ${day(co.lastEvent)}` : ""}</span>
               </div>
             </div>
           ))}
@@ -159,24 +162,33 @@ function CompanyPage({ id, onChanged, onNavigate }) {
   const [showContact, setShowContact] = useState(false);
   const [timelineKey, setTimelineKey] = useState(0);
   const [showDeal, setShowDeal] = useState(false);
+  const [memberships, setMemberships] = useState([]);
 
   async function load() {
     setErr("");
     try {
-      const rows = await db.select("companies", { select: "*,flex_clients(*),target_accounts(id,name,tier,vertical,status,source,website,why_fit,relationship_notes,contact_name,contact_title,contact_email,contact_linkedin,last_scanned_at),contacts(*),opportunities(id,title,signal,signal_type,status,overall_score,created_at,url,source),outreach_drafts(id,subject,status,created_at,contact_name,sent_at),deals(id,name,stage,amount_estimate,next_action_due)", id: `eq.${id}` });
+      const rows = await db.select("companies", { select: "*,flex_clients(*),target_accounts(id,name,tier,vertical,status,source,website,why_fit,relationship_notes,contact_name,contact_title,contact_email,contact_linkedin,last_scanned_at),contacts(*),opportunities(id,title,signal,signal_type,status,overall_score,created_at,url,source),outreach_drafts(id,subject,status,created_at,contact_name,sent_at),deals(id,name,stage,probability,amount_estimate,next_action_due,last_touch_at)", id: `eq.${id}` });
       const row = rows?.[0]; setCo(row || null);
-      setForm({ name: row?.name || "", domain: row?.domain || "", kind: row?.kind || "prospect", tier: row?.tier || "", vertical: row?.vertical || "", source: row?.source || "", source_detail: row?.source_detail || "", notes: row?.notes || "" });
+      setForm({ name: row?.name || "", domain: row?.domain || "", kind: row?.kind || "prospect", tier: row?.tier || "", vertical: row?.vertical || "", source: row?.source || "", source_detail: row?.source_detail || "", notes: row?.notes || "", lifecycle_stage: row?.lifecycle_stage || "prospect", owner: row?.owner || "", why_fit: row?.why_fit || "" });
       const names = (row?.flex_clients || []).map(f => f.name).filter(Boolean);
-      setProjects(names.length ? await db.selectAll("flex_projects", { select: "id,flex_id,client_name,venue_name,event_type,event_date,budget_estimate,services", client_name: quoteIn(names), order: "event_date.desc" }) : []);
+      const [projs, mems] = await Promise.all([
+        names.length ? db.selectAll("flex_projects", { select: "id,flex_id,client_name,venue_name,event_type,event_date,budget_estimate,services", client_name: quoteIn(names), order: "event_date.desc" }) : [],
+        membershipsForCompany(id),
+      ]);
+      setProjects(projs || []); setMemberships(mems || []);
     } catch (e) { setErr(e.message); }
   }
   useEffect(() => { Promise.resolve().then(load); }, [id]); // page is keyed by id, so edit state resets on change
 
   async function save() {
     try {
-      await db.update("companies", id, { name: form.name.trim(), domain: form.domain.trim().toLowerCase() || null, kind: form.kind, tier: form.tier || null, vertical: form.vertical || null, source: form.source || null, source_detail: form.source_detail || null, notes: form.notes || null, updated_at: new Date().toISOString() });
+      await db.update("companies", id, { name: form.name.trim(), domain: form.domain.trim().toLowerCase() || null, kind: form.kind, tier: form.tier || null, vertical: form.vertical || null, source: form.source || null, source_detail: form.source_detail || null, notes: form.notes || null, lifecycle_stage: form.lifecycle_stage, owner: form.owner.trim() || null, why_fit: form.why_fit || null, updated_at: new Date().toISOString() });
       setEdit(false); await load(); onChanged();
     } catch (e) { setErr(e.message); }
+  }
+  // Inline lead-status change on a contact row. Status is the rep's call; the triggers only move it forward.
+  async function setLeadStatus(contact, lead_status) {
+    try { await db.update("contacts", contact.id, { lead_status, updated_at: new Date().toISOString() }); await load(); } catch (e) { setErr(e.message); }
   }
 
   if (err) return <div style={{ padding: 32 }}><span style={pill("critical")}>{err}</span></div>;
@@ -195,12 +207,19 @@ function CompanyPage({ id, onChanged, onNavigate }) {
           {edit ? <input style={{ ...input, fontSize: 22, fontWeight: 500 }} value={form.name} onChange={set("name")} />
             : <div style={{ display: "flex", alignItems: "center", gap: 10 }}><div style={{ width: 36, height: 36, borderRadius: 8, background: TC.bg, border: `1px solid ${TC.line}`, display: "flex", alignItems: "center", justifyContent: "center", color: TC.sub }}><Building2 size={18} strokeWidth={1.5} /></div><div style={{ ...TT.h2, color: TC.ink }}>{co.name}</div></div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={pill(co.kind === "client" ? "evergreen" : co.kind === "competitor" ? "rust" : co.kind === "prospect" ? "ocean" : "sand")}>{co.kind}</span>
+            {lifecyclePill(co.lifecycle_stage)}
+            {co.kind !== "prospect" && co.kind !== "client" && <span style={pill(co.kind === "competitor" ? "rust" : "sand")}>{co.kind}</span>}
             {co.tier && <span style={pill("outline")}>{co.tier.replace("_", " ")}</span>}
             {co.vertical && <span style={pill("outline")}>{co.vertical}</span>}
             {co.domain && <a href={`https://${co.domain}`} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: TC.link, display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "none" }}>{co.domain} <ExternalLink size={12} strokeWidth={1.5} /></a>}
             {(co.source || co.source_detail) && <span style={{ ...TT.meta, color: TC.muted }}>source: {[co.source, co.source_detail].filter(Boolean).join(" · ")}</span>}
           </div>
+          <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap", ...TT.meta, color: TC.muted }}>
+            <span>Owner: <b style={{ fontWeight: 450, color: TC.sub }}>{co.owner || "unassigned"}</b></span>
+            <span>Last touch: <b style={{ fontWeight: 450, color: co.last_touch_at ? TC.sub : TC.faint }}>{co.last_touch_at ? `${ago(co.last_touch_at)} (${day(co.last_touch_at)})` : "never"}</b></span>
+            {memberships.length > 0 && <span>Campaigns: <b style={{ fontWeight: 450, color: TC.sub }}>{[...new Set(memberships.map(m => m.campaigns?.name).filter(Boolean))].join(", ")}</b></span>}
+          </div>
+          {co.why_fit && !edit && <div style={{ ...TT.body2, color: TC.sub, marginTop: 10, maxWidth: 760 }}>{co.why_fit}</div>}
         </div>
         {edit ? <div style={{ display: "flex", gap: 8 }}><button onClick={save} style={btn("primary")}>Save</button><button onClick={() => setEdit(false)} style={btn("secondary")}>Cancel</button></div>
           : <button onClick={() => setEdit(true)} style={btn("secondary")}>Edit</button>}
@@ -208,12 +227,15 @@ function CompanyPage({ id, onChanged, onNavigate }) {
 
       {edit && (
         <div style={{ ...tile({ marginTop: 18 }), display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+          <div><span style={label}>Lifecycle stage</span><select style={input} value={form.lifecycle_stage} onChange={set("lifecycle_stage")}>{LIFECYCLE.map(k => <option key={k} value={k}>{LIFECYCLE_LABEL[k]}</option>)}</select></div>
+          <div><span style={label}>Owner</span><input style={input} value={form.owner} onChange={set("owner")} placeholder={auth.user()?.email || "email"} /></div>
           <div><span style={label}>Domain</span><input style={input} value={form.domain} onChange={set("domain")} /></div>
           <div><span style={label}>Kind</span><select style={input} value={form.kind} onChange={set("kind")}>{KINDS.map(k => <option key={k}>{k}</option>)}</select></div>
           <div><span style={label}>Tier</span><select style={input} value={form.tier} onChange={set("tier")}>{TIERS.map(k => <option key={k} value={k}>{k ? k.replace("_", " ") : "—"}</option>)}</select></div>
           <div><span style={label}>Vertical</span><input style={input} value={form.vertical} onChange={set("vertical")} /></div>
           <div><span style={label}>Source</span><input style={input} value={form.source} onChange={set("source")} /></div>
           <div><span style={label}>Source detail</span><input style={input} value={form.source_detail} onChange={set("source_detail")} /></div>
+          <div style={{ gridColumn: "1 / -1" }}><span style={label}>Why this account fits</span><textarea style={{ ...input, minHeight: 50 }} value={form.why_fit} onChange={set("why_fit")} /></div>
           <div style={{ gridColumn: "1 / -1" }}><span style={label}>Notes</span><textarea style={{ ...input, minHeight: 70 }} value={form.notes} onChange={set("notes")} /></div>
         </div>
       )}
@@ -244,7 +266,7 @@ function CompanyPage({ id, onChanged, onNavigate }) {
         <Section title="Target account">
           {ta.map(a => (
             <div key={a.id} style={{ fontSize: 13.5, color: TC.ink, lineHeight: 1.6 }}>
-              {a.why_fit && <div>{a.why_fit}</div>}
+              {a.why_fit && a.why_fit !== co.why_fit && <div>{a.why_fit}</div>}
               {a.relationship_notes && <div style={{ color: TC.sub }}>{a.relationship_notes}</div>}
               <div style={{ ...TT.meta, color: TC.muted, marginTop: 4 }}>status {a.status || "—"} · source {a.source || "—"}{a.last_scanned_at ? ` · scanned ${day(a.last_scanned_at)}` : ""}{a.contact_name ? ` · named contact: ${a.contact_name}${a.contact_title ? ", " + a.contact_title : ""}` : ""}</div>
             </div>
@@ -258,19 +280,44 @@ function CompanyPage({ id, onChanged, onNavigate }) {
         {contacts.length === 0 && !showContact && <div style={{ fontSize: 13, color: TC.muted }}>No contacts linked yet.</div>}
         {contacts.length > 0 && (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><th style={th}>Name</th><th style={th}>Title</th><th style={th}>Email</th><th style={th}>Marketing</th><th style={th}>Source</th></tr></thead>
-            <tbody>{contacts.map(p => <tr key={p.id}><td style={td}>{p.name || <span style={{ color: TC.muted }}>unnamed</span>}{p.linkedin && <a href={p.linkedin} target="_blank" rel="noreferrer" style={{ marginLeft: 6, color: TC.link, verticalAlign: "middle" }}><span style={{ fontSize: 11, fontWeight: 550 }}>in</span></a>}</td><td style={td}>{p.title || "—"}</td><td style={td}>{p.email || "—"}</td><td style={td}><span style={pill(p.marketing_status === "subscribed" ? "evergreen" : p.marketing_status === "unsubscribed" ? "rust" : "outline")}>{p.marketing_status || "unknown"}</span></td><td style={{ ...td, color: TC.muted }}>{[p.source, p.source_detail].filter(Boolean).join(" · ") || "—"}</td></tr>)}</tbody>
+            <thead><tr><th style={th}>Name</th><th style={th}>Title</th><th style={th}>Email · phone</th><th style={th}>Lead status</th><th style={th}>Lifecycle</th><th style={th}>Marketing</th><th style={th}>Last touch</th><th style={th}>Owner</th></tr></thead>
+            <tbody>{contacts.map(p => (
+              <tr key={p.id}>
+                <td style={td}>{p.name || <span style={{ color: TC.muted }}>unnamed</span>}{p.linkedin && <a href={p.linkedin} target="_blank" rel="noreferrer" style={{ marginLeft: 6, color: TC.link, verticalAlign: "middle" }}><span style={{ fontSize: 11, fontWeight: 550 }}>in</span></a>}{(p.source || p.source_detail) && <div style={{ ...TT.meta, color: TC.faint }}>{[p.source, p.source_detail].filter(Boolean).join(" · ")}</div>}</td>
+                <td style={td}>{p.title || "—"}</td>
+                <td style={td}>{p.email || "—"}{p.phone && <div style={{ ...TT.meta, color: TC.muted }}>{p.phone}</div>}</td>
+                <td style={td}><select value={p.lead_status || "new"} onChange={e => setLeadStatus(p, e.target.value)} title="Lead status: where outreach to this person stands" style={{ ...pill(LEAD_STATUS_TONE[p.lead_status] || "sand"), cursor: "pointer", fontFamily: "inherit", appearance: "none", WebkitAppearance: "none", paddingRight: 10 }}>{LEAD_STATUS.map(s => <option key={s} value={s}>{LEAD_STATUS_LABEL[s]}</option>)}</select></td>
+                <td style={td}>{lifecyclePill(p.lifecycle_stage || "prospect")}</td>
+                <td style={td}><span style={pill(p.marketing_status === "subscribed" ? "evergreen" : p.marketing_status === "unsubscribed" ? "rust" : "outline")} title={p.consent_source ? `Consent: ${CONSENT_LABEL[p.consent_source] || p.consent_source}${p.consent_at ? " · " + day(p.consent_at) : ""}` : ""}>{p.marketing_status || "unknown"}</span></td>
+                <td style={{ ...td, color: p.last_touch_at ? TC.ink : TC.faint }}>{p.last_touch_at ? ago(p.last_touch_at) : "never"}</td>
+                <td style={{ ...td, color: TC.muted }}>{p.owner || "—"}</td>
+              </tr>
+            ))}</tbody>
           </table>
         )}
       </Section>
+
+      {memberships.length > 0 && (
+        <Section title={`Campaigns · ${memberships.length}`} note="Where this company and its people came from, and which sends they were part of.">
+          {memberships.map(m => (
+            <div key={m.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${TC.lineSoft}`, fontSize: 13.5, color: TC.ink }}>
+              <span style={pill(CAMPAIGN_KIND_TONE[m.campaigns?.kind] || "sand")}>{CAMPAIGN_KIND_LABEL[m.campaigns?.kind] || m.campaigns?.kind}</span>
+              <span style={{ flex: 1 }}>{m.campaigns?.name}{m.contact_id ? <span style={{ color: TC.muted }}> · {contacts.find(x => x.id === m.contact_id)?.name || "contact"}</span> : ""}</span>
+              <span style={pill(m.responded ? "evergreen" : "outline")}>{m.status}</span>
+              <span style={{ ...TT.meta, color: TC.muted }}>{day(m.added_at)}</span>
+            </div>
+          ))}
+        </Section>
+      )}
 
       <Section title={`Deals · ${(co.deals || []).length}`} action={<button onClick={() => setShowDeal(s => !s)} style={{ ...btn("secondary"), padding: "4px 10px" }}><Plus size={14} strokeWidth={1.5} /> Deal</button>}>
         {showDeal && <NewDealForm company={co} onDone={d => { setShowDeal(false); load(); onNavigate?.("pipeline", { dealId: d.id }); }} onCancel={() => setShowDeal(false)} />}
         {(co.deals || []).length === 0 && !showDeal && <div style={{ fontSize: 13, color: TC.muted }}>No deals. Promote a signal or add one.</div>}
         {(co.deals || []).map(d => (
           <div key={d.id} onClick={() => onNavigate?.("pipeline", { dealId: d.id })} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${TC.lineSoft}`, cursor: "pointer" }}>
-            <span style={pill(STAGE_TONE[d.stage])}>{STAGE_LABEL[d.stage]}</span>
+            <span style={pill(STAGE_TONE[d.stage])}>{STAGE_LABEL[d.stage]}{d.probability != null ? ` · ${d.probability}%` : ""}</span>
             <span style={{ ...TT.body2Med, color: TC.ink, flex: 1 }}>{d.name}</span>
+            {d.last_touch_at && <span style={{ ...TT.caption, color: TC.muted }}>touched {ago(d.last_touch_at)}</span>}
             {d.next_action_due && <span style={{ ...TT.caption, color: TC.muted }}>next {d.next_action_due}</span>}
             <span style={{ ...TT.body2, color: TC.ink }}>{d.amount_estimate != null ? money(d.amount_estimate) : "—"}</span>
           </div>
@@ -327,13 +374,14 @@ function Section({ title, note, action, children }) {
 }
 
 function NewContactForm({ companyId, onDone, onCancel }) {
-  const [f, setF] = useState({ name: "", title: "", email: "", linkedin: "", marketing_status: "unknown", source: "manual", source_detail: "" });
+  const [f, setF] = useState({ name: "", title: "", email: "", phone: "", linkedin: "", marketing_status: "unknown", consent_source: "", lead_status: "new", owner: auth.user()?.email || "", source: "manual", source_detail: "" });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const set = k => e => setF(s => ({ ...s, [k]: e.target.value }));
   async function save(e) {
     e.preventDefault(); if (!f.name.trim()) return; setBusy(true); setErr("");
     try {
-      const rows = await db.insert("contacts", { company_id: companyId, name: f.name.trim(), title: f.title || null, email: f.email.trim().toLowerCase() || null, linkedin: f.linkedin || null, marketing_status: f.marketing_status, source: f.source || "manual", source_detail: f.source_detail || null, created_at: new Date().toISOString() });
+      const subscribed = f.marketing_status === "subscribed";
+      const rows = await db.insert("contacts", { company_id: companyId, name: f.name.trim(), title: f.title || null, email: f.email.trim().toLowerCase() || null, phone: f.phone.trim() || null, linkedin: f.linkedin || null, marketing_status: f.marketing_status, consent_source: subscribed ? (f.consent_source || "other") : null, consent_at: subscribed ? new Date().toISOString() : null, lead_status: f.lead_status, owner: f.owner.trim() || null, source: f.source || "manual", source_detail: f.source_detail || null, created_at: new Date().toISOString() });
       await logActivity({ type: "contact_created", company_id: companyId, contact_id: rows?.[0]?.id || null, subject: f.name.trim(), body: [f.title, f.source, f.source_detail].filter(Boolean).join(" · ") || null });
       onDone();
     } catch (e2) { setErr(e2.message.includes("contacts_email_uniq") ? "A contact with that email already exists." : e2.message); }
@@ -344,9 +392,13 @@ function NewContactForm({ companyId, onDone, onCancel }) {
       <div><span style={label}>Name</span><input style={input} value={f.name} onChange={set("name")} autoFocus required /></div>
       <div><span style={label}>Title</span><input style={input} value={f.title} onChange={set("title")} /></div>
       <div><span style={label}>Email</span><input style={input} type="email" value={f.email} onChange={set("email")} /></div>
+      <div><span style={label}>Phone</span><input style={input} value={f.phone} onChange={set("phone")} /></div>
       <div><span style={label}>LinkedIn</span><input style={input} value={f.linkedin} onChange={set("linkedin")} /></div>
+      <div><span style={label}>Owner</span><input style={input} value={f.owner} onChange={set("owner")} /></div>
+      <div><span style={label}>Lead status</span><select style={input} value={f.lead_status} onChange={set("lead_status")}>{LEAD_STATUS.map(k => <option key={k} value={k}>{LEAD_STATUS_LABEL[k]}</option>)}</select></div>
       <div><span style={label}>Marketing status</span><select style={input} value={f.marketing_status} onChange={set("marketing_status")}>{MKT.map(k => <option key={k}>{k}</option>)}</select></div>
-      <div><span style={label}>Source · detail</span><div style={{ display: "flex", gap: 6 }}><select style={{ ...input, width: 120 }} value={f.source} onChange={set("source")}>{["manual", "trade_show", "referral", "apollo", "inbound", "other"].map(k => <option key={k}>{k}</option>)}</select><input style={input} value={f.source_detail} onChange={set("source_detail")} placeholder="e.g. booth 212" /></div></div>
+      {f.marketing_status === "subscribed" ? <div><span style={label}>Consent came from</span><select style={input} value={f.consent_source} onChange={set("consent_source")}><option value="">—</option>{CONSENT_SOURCES.map(k => <option key={k} value={k}>{CONSENT_LABEL[k]}</option>)}</select></div> : <div />}
+      <div style={{ gridColumn: "1 / -1" }}><span style={label}>Source · detail</span><div style={{ display: "flex", gap: 6 }}><select style={{ ...input, width: 140 }} value={f.source} onChange={set("source")}>{["manual", "trade_show", "referral", "apollo", "inbound", "other"].map(k => <option key={k}>{k}</option>)}</select><input style={input} value={f.source_detail} onChange={set("source_detail")} placeholder="which show, who referred, booth 212" /></div></div>
       {err && <div style={{ gridColumn: "1 / -1", ...pill("critical") }}>{err}</div>}
       <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8 }}>
         <button type="submit" disabled={busy} style={btn("primary")}>{busy ? "Saving…" : "Add contact"}</button>

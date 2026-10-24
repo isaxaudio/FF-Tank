@@ -1,5 +1,7 @@
 // src/lib/deals.js — deal lifecycle helpers. Every stage change writes deal_stage_history and an
 // activity. A Flex booking is linked only through linkFlexBooking(), by flex_id, by a person.
+// Stages, their order and probabilities come from public.deal_stages (migration 006); the
+// constants below are the seed values and the fallback while the table loads.
 import { db } from "./db.js";
 import { auth } from "./auth.js";
 import { logActivity } from "./activities.js";
@@ -7,12 +9,28 @@ import { logActivity } from "./activities.js";
 export const STAGES = ["prospect", "contacted", "qualified", "proposal", "negotiation", "booked", "lost"];
 export const STAGE_LABEL = { prospect: "Prospect", contacted: "Contacted", qualified: "Qualified", proposal: "Proposal", negotiation: "Negotiation", booked: "Booked", lost: "Lost" };
 export const STAGE_TONE = { prospect: "sand", contacted: "ocean", qualified: "ocean", proposal: "iris", negotiation: "ember", booked: "evergreen", lost: "rust" };
+export const STAGE_PROBABILITY = { prospect: 10, contacted: 25, qualified: 45, proposal: 65, negotiation: 85, booked: 100, lost: 0 };
 export const OPEN_STAGES = ["prospect", "contacted", "qualified", "proposal", "negotiation"];
+
+let stageCache = null;
+// Rows of deal_stages in position order. Updates the exported maps in place so screens that
+// imported the constants see the table's values once it has loaded.
+export async function loadStages() {
+  if (stageCache) return stageCache;
+  const rows = await db.select("deal_stages", { select: "key,label,position,probability,type,tone", order: "position.asc" });
+  if (Array.isArray(rows) && rows.length) {
+    STAGES.length = 0; OPEN_STAGES.length = 0;
+    for (const r of rows) { STAGES.push(r.key); if (r.type === "open") OPEN_STAGES.push(r.key); STAGE_LABEL[r.key] = r.label; STAGE_TONE[r.key] = r.tone || "sand"; STAGE_PROBABILITY[r.key] = r.probability; }
+    stageCache = rows;
+  }
+  return stageCache || [];
+}
+export const weighted = d => (Number(d.amount_estimate || 0) * (d.probability ?? STAGE_PROBABILITY[d.stage] ?? 0)) / 100;
 
 const me = () => auth.user()?.email || "user";
 
-export async function createDeal({ company_id, name, stage = "prospect", owner, amount_estimate, expected_event_date, event_type, next_action, next_action_due, source, source_detail, opportunity_id, signal_id, primary_contact_id, notes }) {
-  const rows = await db.insert("deals", { company_id, name, stage, owner: owner || me(), amount_estimate: amount_estimate ?? null, expected_event_date: expected_event_date || null, event_type: event_type || null, next_action: next_action || null, next_action_due: next_action_due || null, source: source || null, source_detail: source_detail || null, opportunity_id: opportunity_id || null, signal_id: signal_id || null, primary_contact_id: primary_contact_id || null, notes: notes || null, created_by: me() });
+export async function createDeal({ company_id, name, stage = "prospect", owner, amount_estimate, expected_event_date, event_type, next_action, next_action_due, source, source_detail, opportunity_id, signal_id, primary_contact_id, primary_campaign_id, deal_type, notes }) {
+  const rows = await db.insert("deals", { company_id, name, stage, owner: owner || me(), amount_estimate: amount_estimate ?? null, expected_event_date: expected_event_date || null, event_type: event_type || null, next_action: next_action || null, next_action_due: next_action_due || null, source: source || null, source_detail: source_detail || null, opportunity_id: opportunity_id || null, signal_id: signal_id || null, primary_contact_id: primary_contact_id || null, primary_campaign_id: primary_campaign_id || null, deal_type: deal_type || "new", notes: notes || null, created_by: me() });
   const deal = rows[0];
   await db.insert("deal_stage_history", { deal_id: deal.id, from_stage: null, to_stage: stage, changed_by: me(), note: "created" });
   await logActivity({ type: opportunity_id || signal_id ? "promoted" : "stage_change", company_id, deal_id: deal.id, opportunity_id: opportunity_id || null, contact_id: primary_contact_id || null, subject: opportunity_id || signal_id ? `Promoted to deal: ${name}` : `Deal created: ${name}`, body: [source, source_detail].filter(Boolean).join(" · ") || null, metadata: { stage } });
@@ -34,6 +52,18 @@ export async function updateDeal(deal, patch) {
   const rows = await db.update("deals", deal.id, { ...patch, updated_at: new Date().toISOString() });
   return rows[0];
 }
+
+// Contact roles on a deal. The database keeps deals.primary_contact_id in step with is_primary.
+export function dealContacts(deal_id) {
+  return db.select("deal_contacts", { deal_id: `eq.${deal_id}`, select: "id,contact_id,role,is_primary,created_at,contacts(id,name,email,title,lead_status,last_touch_at)", order: "is_primary.desc,created_at.asc" });
+}
+export async function addDealContact(deal_id, contact_id, role = "other", is_primary = false) {
+  const rows = await db.upsert("deal_contacts", { deal_id, contact_id, role, is_primary, added_by: me() }, "deal_id,contact_id");
+  return rows?.[0] || null;
+}
+export function setDealContactRole(id, role) { return db.update("deal_contacts", id, { role }); }
+export function setDealContactPrimary(id) { return db.update("deal_contacts", id, { is_primary: true }); }
+export function removeDealContact(id) { return db.delete("deal_contacts", id); }
 
 // Link a confirmed Flex booking by its stable id. Moves the deal to booked and logs flex_booking.
 export async function linkFlexBooking(deal, flexProject, { via = "manual" } = {}) {
@@ -62,5 +92,5 @@ export async function flexCandidatesFor(deal) {
 }
 
 export function listDeals(filters = {}) {
-  return db.selectAll("deals", { select: "*,companies(id,name,domain,kind,tier),contacts(id,name,email)", order: "updated_at.desc", ...filters });
+  return db.selectAll("deals", { select: "*,companies(id,name,domain,kind,tier,lifecycle_stage),contacts(id,name,email),campaigns(id,name,kind)", order: "updated_at.desc", ...filters });
 }

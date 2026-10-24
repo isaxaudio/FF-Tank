@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from "react";
 import { c as TC, t as TT, pill, tile } from "../tokens.js";
 import { db } from "../lib/db.js";
-import { STAGES, STAGE_LABEL, STAGE_TONE } from "../lib/deals.js";
+import { STAGES, STAGE_LABEL, STAGE_TONE, OPEN_STAGES, loadStages, weighted } from "../lib/deals.js";
 
 const money = n => "$" + Math.round(Number(n || 0)).toLocaleString();
 
@@ -33,9 +33,10 @@ function Conversion() {
   const [d, setD] = useState(null); const [err, setErr] = useState("");
   useEffect(() => { Promise.resolve().then(async () => {
     try {
+      await loadStages();
       const [signals, sendWorthy, contacted, deals] = await Promise.all([
         db.count("opportunities", {}), db.count("opportunities", { overall_score: "gte.5", status: "in.(new,enriched)" }), db.count("opportunities", { status: "eq.contacted" }),
-        db.selectAll("deals", { select: "id,stage,amount_estimate,source,source_detail,flex_project_id,created_at,closed_at" }),
+        db.selectAll("deals", { select: "id,stage,probability,amount_estimate,source,source_detail,flex_project_id,created_at,closed_at,campaigns(name)" }),
       ]);
       const byStage = Object.fromEntries(STAGES.map(s => [s, deals.filter(x => x.stage === s)]));
       const linked = deals.filter(x => x.flex_project_id);
@@ -45,8 +46,9 @@ function Conversion() {
         bookedFlex = (fp || []).reduce((s, p) => s + Number(p.budget_estimate || 0), 0);
       }
       const bySource = {};
-      for (const x of deals) { const k = [x.source || "unknown", x.source_detail].filter(Boolean).join(" · "); (bySource[k] ||= { n: 0, booked: 0, est: 0 }); bySource[k].n++; bySource[k].est += Number(x.amount_estimate || 0); if (x.stage === "booked") bySource[k].booked++; }
-      setD({ signals, sendWorthy, contacted, deals, byStage, linked: linked.length, bookedFlex, bySource: Object.entries(bySource).sort((a, b) => b[1].n - a[1].n) });
+      for (const x of deals) { const k = x.campaigns?.name || [x.source || "unknown", x.source_detail].filter(Boolean).join(" · "); (bySource[k] ||= { n: 0, booked: 0, est: 0 }); bySource[k].n++; bySource[k].est += Number(x.amount_estimate || 0); if (x.stage === "booked") bySource[k].booked++; }
+      const weightedOpen = deals.filter(x => OPEN_STAGES.includes(x.stage)).reduce((s, x) => s + weighted(x), 0);
+      setD({ signals, sendWorthy, contacted, deals, byStage, linked: linked.length, bookedFlex, weightedOpen, bySource: Object.entries(bySource).sort((a, b) => b[1].n - a[1].n) });
     } catch (e) { setErr(e.message); }
   }); }, []);
   if (err) return <div style={{ padding: 24 }}><span style={pill("rust")}>{err}</span></div>;
@@ -55,8 +57,9 @@ function Conversion() {
   const max = Math.max(1, ...steps.map(s => s[1]));
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", maxWidth: 1100 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
         <div style={tile()}><div style={TT.label}>Open deals</div><div style={{ ...TT.h1, color: TC.ink, marginTop: 6 }}>{d.deals.filter(x => !["booked", "lost"].includes(x.stage)).length}</div></div>
+        <div style={tile()} title="Each open deal's estimate times its stage probability"><div style={TT.label}>Weighted pipeline</div><div style={{ ...TT.h1, color: TC.ink, marginTop: 6 }}>{money(d.weightedOpen)}</div></div>
         <div style={tile()}><div style={TT.label}>Booked deals (Flex-linked)</div><div style={{ ...TT.h1, color: TC.ink, marginTop: 6 }}>{d.linked}</div></div>
         <div style={tile()}><div style={TT.label}>Booked value from Flex</div><div style={{ ...TT.h1, color: TC.ink, marginTop: 6 }}>{money(d.bookedFlex)}</div></div>
         <div style={tile()}><div style={TT.label}>Lost</div><div style={{ ...TT.h1, color: TC.ink, marginTop: 6 }}>{d.byStage.lost.length}</div></div>
@@ -78,7 +81,7 @@ function Conversion() {
           {STAGES.map(s => <div key={s} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${TC.lineSoft}` }}><span style={pill(STAGE_TONE[s])}>{STAGE_LABEL[s]}</span><span style={{ ...TT.body2, color: TC.ink }}>{d.byStage[s].length} · {money(d.byStage[s].reduce((a, x) => a + Number(x.amount_estimate || 0), 0))}</span></div>)}
         </div>
         <div style={tile()}>
-          <div style={{ ...TT.h4, color: TC.ink, marginBottom: 10 }}>Deals by source</div>
+          <div style={{ ...TT.h4, color: TC.ink, marginBottom: 10 }}>Deals by campaign or source</div>
           {d.bySource.length === 0 && <div style={{ ...TT.body2, color: TC.muted }}>No deals yet.</div>}
           {d.bySource.map(([k, v]) => <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${TC.lineSoft}` }}><span style={{ ...TT.body2, color: TC.ink }}>{k}</span><span style={{ ...TT.caption, color: TC.sub }}>{v.n} deals · {v.booked} booked · {money(v.est)} est.</span></div>)}
         </div>

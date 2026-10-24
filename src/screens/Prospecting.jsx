@@ -8,8 +8,9 @@ import { Search, Play, ArrowUpRight, ExternalLink } from "lucide-react";
 import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
 import { NewDealForm } from "./Pipeline.jsx";
+import Campaigns from "./Campaigns.jsx";
 
-const TABS = [["handoff", "Handoff"], ["signals", "Signals"], ["targets", "Target Accounts"]];
+const TABS = [["handoff", "Handoff"], ["signals", "Signals"], ["targets", "Target Accounts"], ["campaigns", "Campaigns"]];
 
 export default function Prospecting({ initialTab = "handoff", views = {}, db: legacyDb, legacyProps = {}, onNavigate }) {
   const [tab, setTab] = useState(initialTab);
@@ -28,6 +29,7 @@ export default function Prospecting({ initialTab = "handoff", views = {}, db: le
         {tab === "handoff" && Handoff && <Handoff db={legacyDb} />}
         {tab === "targets" && Targets && <Targets db={legacyDb} />}
         {tab === "signals" && <SignalsTable onNavigate={onNavigate} legacyProps={legacyProps} />}
+        {tab === "campaigns" && <Campaigns onNavigate={onNavigate} />}
       </div>
     </div>
   );

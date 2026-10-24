@@ -3,8 +3,9 @@
 // so nobody reads them as sent outreach.
 import React, { useEffect, useState } from "react";
 import { c as TC, t as TT, pill, btn, inputStyle } from "../tokens.js";
-import { StickyNote, Phone, Users, Mail, MailCheck, MessageSquare, Radar, ThumbsUp, GitBranch, ListTodo, CheckSquare, CalendarCheck, Building2, UserPlus, ArrowUpRight, Merge } from "lucide-react";
+import { StickyNote, Phone, Users, Mail, MailCheck, MessageSquare, Radar, ThumbsUp, GitBranch, ListTodo, CheckSquare, CalendarCheck, Building2, UserPlus, ArrowUpRight, Merge, ArrowDownLeft } from "lucide-react";
 import { logActivity, listActivities, ACTIVITY_LABEL } from "../lib/activities.js";
+import { CALL_OUTCOMES, OUTCOME_LABEL } from "../lib/status.js";
 
 const ICON = { note: StickyNote, call: Phone, meeting: Users, email_draft: Mail, email_sent: MailCheck, email_reply: MailCheck, slack_handoff: MessageSquare, signal: Radar, feedback: ThumbsUp, stage_change: GitBranch, task_created: ListTodo, task_done: CheckSquare, flex_booking: CalendarCheck, company_created: Building2, contact_created: UserPlus, promoted: ArrowUpRight, merged: Merge };
 const TONE = { email_sent: "evergreen", email_reply: "evergreen", flex_booking: "evergreen", slack_handoff: "ocean", email_draft: "sand", signal: "iris", feedback: "pebble", stage_change: "ocean", task_done: "evergreen", promoted: "ocean" };
@@ -22,6 +23,7 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
   const [type, setType] = useState("note");
   const [body, setBody] = useState("");
   const [contact, setContact] = useState("");
+  const [outcome, setOutcome] = useState("connected");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -36,7 +38,7 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
   async function submit(e) {
     e.preventDefault(); if (!body.trim() || busy) return; setBusy(true); setErr("");
     try {
-      await logActivity({ type, company_id: companyId || null, contact_id: contact || contactId || null, deal_id: dealId || null, body: body.trim() });
+      await logActivity({ type, company_id: companyId || null, contact_id: contact || contactId || null, deal_id: dealId || null, body: body.trim(), outcome: type === "call" ? outcome : null });
       setBody(""); await load(); onLogged?.();
     } catch (e2) { setErr(e2.message); }
     setBusy(false);
@@ -53,6 +55,11 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
             <option value="">No contact</option>{contacts.map(p => <option key={p.id} value={p.id}>{p.name || p.email || "unnamed"}</option>)}
           </select>
         )}
+        {type === "call" && (
+          <select value={outcome} onChange={e => setOutcome(e.target.value)} title="Call outcome" style={{ ...inputStyle(), width: 130 }}>
+            {CALL_OUTCOMES.map(o => <option key={o} value={o}>{OUTCOME_LABEL[o]}</option>)}
+          </select>
+        )}
         <input value={body} onChange={e => setBody(e.target.value)} placeholder={type === "note" ? "Add a note…" : `What happened on the ${type.replace("_", " ")}?`} style={inputStyle({ flex: 1 })} />
         <button type="submit" disabled={busy || !body.trim()} style={btn("secondary")}>{busy ? "Saving…" : "Log"}</button>
       </form>
@@ -67,7 +74,7 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
               <div style={{ width: 28, height: 28, borderRadius: 8, background: TC.bg, border: `1px solid ${TC.line}`, display: "flex", alignItems: "center", justifyContent: "center", color: TC.sub, flexShrink: 0 }}><Icon size={14} strokeWidth={1.5} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={pill(TONE[a.type] || "sand")}>{ACTIVITY_LABEL[a.type] || a.type}</span>
+                  <span style={pill(TONE[a.type] || "sand")}>{a.direction === "in" && <ArrowDownLeft size={11} strokeWidth={2} />}{ACTIVITY_LABEL[a.type] || a.type}{a.outcome ? ` · ${OUTCOME_LABEL[a.outcome] || a.outcome}` : ""}</span>
                   {a.subject && <span style={{ ...TT.body2Med, color: TC.ink }}>{a.subject}</span>}
                   {a.contacts?.name && <span style={{ ...TT.caption, color: TC.muted }}>· {a.contacts.name}</span>}
                   <span style={{ ...TT.caption, color: TC.muted, marginLeft: "auto" }}>{when(a.occurred_at)} · {a.actor || "system"}</span>

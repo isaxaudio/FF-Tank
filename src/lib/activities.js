@@ -12,12 +12,15 @@ export const ACTIVITY_LABEL = {
 };
 
 // Logged-from-the-UI activities carry the signed-in user's email as actor and source 'ui'.
-export async function logActivity({ type, company_id = null, contact_id = null, deal_id = null, task_id = null, opportunity_id = null, subject = null, body = null, occurred_at = null, source = "ui", external_id = null, metadata = {} }) {
+// direction (in / out) and outcome (connected, voicemail, …) are optional; the database fills a
+// default direction, rolls the row up to the contact's company and its only open deal, and moves
+// last_touch_at and lead status when the type is a real touch (call, meeting, email_sent, email_reply).
+export async function logActivity({ type, company_id = null, contact_id = null, deal_id = null, task_id = null, opportunity_id = null, subject = null, body = null, occurred_at = null, source = "ui", external_id = null, metadata = {}, direction = null, outcome = null, due_at = null }) {
   if (!ACTIVITY_TYPES.includes(type)) throw new Error(`Unknown activity type ${type}`);
   const rows = await db.insert("activities", {
     type, company_id, contact_id, deal_id, task_id, opportunity_id, subject, body,
     actor: auth.user()?.email || "user", source, external_id,
-    occurred_at: occurred_at || new Date().toISOString(), metadata,
+    occurred_at: occurred_at || new Date().toISOString(), metadata, direction, outcome, due_at,
   });
   return rows?.[0] || null;
 }

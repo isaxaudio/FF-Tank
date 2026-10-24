@@ -1764,7 +1764,7 @@ function FFTank({ onSignOut }) {
           {activeId === "today" ? (
             <Today onNavigate={navTo} WeeklyBrief={WeeklyBriefView} db={db} />
           ) : activeId === "relationships" ? (
-            <Relationships key={navParams.review ? "review" : "list"} initialReview={!!navParams.review} onNavigate={navTo} />
+            <Relationships key={navParams.review ? "review" : navParams.companyId || "list"} initialReview={!!navParams.review} initialCompanyId={navParams.companyId || null} onNavigate={navTo} />
           ) : activeId === "prospecting" ? (
             <Prospecting key={navParams.tab || "handoff"} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView, Targets: TargetAccountsView }} db={db} onNavigate={navTo} />
           ) : activeId === "pipeline" ? (

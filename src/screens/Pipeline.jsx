@@ -2,10 +2,12 @@
 // owner, amount, Flex booking link (by flex_id, person-confirmed), tasks and timeline.
 import React, { useEffect, useMemo, useState } from "react";
 import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
-import { Plus, CalendarDays, Link2, X, Building2 } from "lucide-react";
+import { Plus, CalendarDays, Link2, X, Building2, Star, Trash2 } from "lucide-react";
 import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
-import { STAGES, STAGE_LABEL, STAGE_TONE, OPEN_STAGES, createDeal, setStage, updateDeal, linkFlexBooking, flexCandidatesFor, listDeals } from "../lib/deals.js";
+import { STAGES, STAGE_LABEL, STAGE_TONE, STAGE_PROBABILITY, OPEN_STAGES, loadStages, weighted, createDeal, setStage, updateDeal, linkFlexBooking, flexCandidatesFor, listDeals, dealContacts, addDealContact, setDealContactRole, setDealContactPrimary, removeDealContact } from "../lib/deals.js";
+import { DEAL_ROLES, DEAL_ROLE_LABEL, DEAL_TYPES, DEAL_TYPE_LABEL, LEAD_STATUS_LABEL, LEAD_STATUS_TONE, CAMPAIGN_KIND_LABEL, ago } from "../lib/status.js";
+import { listCampaigns } from "../lib/campaigns.js";
 import Timeline from "../components/Timeline.jsx";
 import TasksPanel from "../components/TasksPanel.jsx";
 import CompanyPicker from "../components/CompanyPicker.jsx";
@@ -13,6 +15,13 @@ import CompanyPicker from "../components/CompanyPicker.jsx";
 const money = n => (n == null ? "—" : "$" + Math.round(Number(n)).toLocaleString());
 const today = () => new Date().toISOString().slice(0, 10);
 const label = { ...TT.label, marginBottom: 6, display: "block" };
+
+// Active campaigns for the campaign pickers; loaded once per screen mount.
+function useCampaigns() {
+  const [rows, setRows] = useState([]);
+  useEffect(() => { Promise.resolve().then(async () => { try { setRows(await listCampaigns({ status: "in.(planned,active)" })); } catch { setRows([]); } }); }, []);
+  return rows;
+}
 
 export default function Pipeline({ initialDealId = null }) {
   const [deals, setDeals] = useState([]);
@@ -25,7 +34,7 @@ export default function Pipeline({ initialDealId = null }) {
 
   async function load() {
     setLoading(true); setErr("");
-    try { setDeals((await listDeals()) || []); } catch (e) { setErr(e.message); }
+    try { await loadStages(); setDeals((await listDeals()) || []); } catch (e) { setErr(e.message); }
     setLoading(false);
   }
   useEffect(() => { Promise.resolve().then(load); }, []);
@@ -34,6 +43,7 @@ export default function Pipeline({ initialDealId = null }) {
   const visible = useMemo(() => deals.filter(d => owner === "all" || d.owner === owner), [deals, owner]);
   const open = visible.filter(d => OPEN_STAGES.includes(d.stage));
   const pipelineValue = open.reduce((s, d) => s + Number(d.amount_estimate || 0), 0);
+  const weightedValue = open.reduce((s, d) => s + weighted(d), 0);
   const overdue = open.filter(d => d.next_action_due && d.next_action_due < today()).length;
   const current = deals.find(d => d.id === selected);
 
@@ -43,7 +53,7 @@ export default function Pipeline({ initialDealId = null }) {
         <div style={{ padding: "18px 24px 12px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div>
             <div style={{ ...TT.h3, color: TC.ink }}>Pipeline</div>
-            <div style={{ ...TT.caption, color: TC.muted }}>{open.length} open deals · {money(pipelineValue)} estimated · {overdue ? `${overdue} overdue next actions` : "no overdue next actions"}</div>
+            <div style={{ ...TT.caption, color: TC.muted }}>{open.length} open deals · {money(pipelineValue)} estimated · {money(weightedValue)} weighted by stage · {overdue ? `${overdue} overdue next actions` : "no overdue next actions"}</div>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
             {owners.length > 1 && <select value={owner} onChange={e => setOwner(e.target.value)} style={inputStyle({ width: 180 })}><option value="all">All owners</option>{owners.map(o => <option key={o}>{o}</option>)}</select>}
@@ -74,6 +84,7 @@ function Board({ deals, selected, onSelect }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 4px 8px" }}>
                 <span style={pill(STAGE_TONE[stage])}>{STAGE_LABEL[stage]}</span>
                 <span style={{ ...TT.caption, color: TC.muted }}>{col.length}{val ? ` · ${money(val)}` : ""}</span>
+                <span style={{ ...TT.caption, color: TC.faint, marginLeft: "auto" }} title="Probability a deal at this stage books">{STAGE_PROBABILITY[stage]}%</span>
               </div>
               <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, paddingBottom: 8 }}>
                 {col.map(d => <DealCard key={d.id} d={d} active={selected === d.id} onClick={() => onSelect(d.id)} />)}
@@ -97,7 +108,11 @@ function DealCard({ d, active, onClick }) {
         <span style={{ ...TT.body2, color: TC.ink }}>{money(d.amount_estimate)}</span>
         {d.next_action_due && <span style={pill(late ? "rust" : d.next_action_due === today() ? "ember" : "sand")}><CalendarDays size={11} strokeWidth={1.5} /> {d.next_action_due.slice(5)}</span>}
       </div>
-      {d.source_detail && <div style={{ ...TT.caption, color: TC.faint, marginTop: 4 }}>{d.source_detail}</div>}
+      <div style={{ display: "flex", gap: 6, marginTop: 4, alignItems: "center", ...TT.caption, color: TC.faint }}>
+        {d.deal_type === "repeat" && <span style={pill("evergreen")}>repeat</span>}
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.campaigns?.name || d.source_detail || ""}</span>
+        {d.last_touch_at && <span style={{ marginLeft: "auto", flexShrink: 0 }}>touched {ago(d.last_touch_at)}</span>}
+      </div>
     </div>
   );
 }
@@ -108,12 +123,12 @@ function List({ deals, selected, onSelect }) {
   return (
     <div style={{ flex: 1, overflow: "auto", margin: "0 24px 24px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 12 }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead><tr><th style={th}>Deal</th><th style={th}>Company</th><th style={th}>Stage</th><th style={th}>Owner</th><th style={th}>Estimate</th><th style={th}>Next action</th><th style={th}>Due</th><th style={th}>Source</th></tr></thead>
+        <thead><tr><th style={th}>Deal</th><th style={th}>Company</th><th style={th}>Stage</th><th style={th}>Owner</th><th style={th}>Estimate</th><th style={th}>Weighted</th><th style={th}>Next action</th><th style={th}>Due</th><th style={th}>Last touch</th><th style={th}>Campaign</th></tr></thead>
         <tbody>{deals.map(d => (
           <tr key={d.id} onClick={() => onSelect(d.id)} style={{ cursor: "pointer", background: selected === d.id ? TC.selected : "transparent" }}>
-            <td style={{ ...td, fontWeight: 450 }}>{d.name}</td><td style={td}>{d.companies?.name}</td><td style={td}><span style={pill(STAGE_TONE[d.stage])}>{STAGE_LABEL[d.stage]}</span></td>
-            <td style={td}>{d.owner || "—"}</td><td style={td}>{money(d.amount_estimate)}</td><td style={td}>{d.next_action || "—"}</td>
-            <td style={{ ...td, color: d.next_action_due && d.next_action_due < today() ? TC.criticalInk : TC.ink }}>{d.next_action_due || "—"}</td><td style={{ ...td, color: TC.muted }}>{[d.source, d.source_detail].filter(Boolean).join(" · ") || "—"}</td>
+            <td style={{ ...td, fontWeight: 450 }}>{d.name}{d.deal_type === "repeat" && <span style={{ ...pill("evergreen"), marginLeft: 6 }}>repeat</span>}</td><td style={td}>{d.companies?.name}</td><td style={td}><span style={pill(STAGE_TONE[d.stage])}>{STAGE_LABEL[d.stage]} · {d.probability ?? STAGE_PROBABILITY[d.stage]}%</span></td>
+            <td style={td}>{d.owner || "—"}</td><td style={td}>{money(d.amount_estimate)}</td><td style={{ ...td, color: TC.sub }}>{d.amount_estimate != null ? money(weighted(d)) : "—"}</td><td style={td}>{d.next_action || "—"}</td>
+            <td style={{ ...td, color: d.next_action_due && d.next_action_due < today() ? TC.criticalInk : TC.ink }}>{d.next_action_due || "—"}</td><td style={{ ...td, color: d.last_touch_at ? TC.ink : TC.faint }}>{d.last_touch_at ? ago(d.last_touch_at) : "never"}</td><td style={{ ...td, color: TC.muted }}>{d.campaigns?.name || [d.source, d.source_detail].filter(Boolean).join(" · ") || "—"}</td>
           </tr>
         ))}</tbody>
       </table>
@@ -124,13 +139,19 @@ function List({ deals, selected, onSelect }) {
 
 export function NewDealForm({ company: presetCompany = null, opportunity = null, onDone, onCancel }) {
   const [company, setCompany] = useState(presetCompany);
-  const [f, setF] = useState({ name: opportunity?.title || "", amount_estimate: "", expected_event_date: "", event_type: opportunity?.signal_type || "", next_action: "", next_action_due: today(), source: opportunity ? "scout" : "manual", source_detail: opportunity ? (opportunity.signal_type || opportunity.signal || "") : "" });
+  const campaigns = useCampaigns();
+  const [f, setF] = useState({ name: opportunity?.title || "", amount_estimate: "", expected_event_date: "", event_type: opportunity?.signal_type || "", next_action: "", next_action_due: today(), source: opportunity ? "scout" : "manual", source_detail: opportunity ? (opportunity.signal_type || opportunity.signal || "") : "", primary_campaign_id: "", deal_type: presetCompany?.lifecycle_stage === "customer" || presetCompany?.lifecycle_stage === "former" ? "repeat" : "new" });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const set = k => e => setF(s => ({ ...s, [k]: e.target.value }));
+  // Picking a trade-show campaign fills source and source_detail so attribution survives on the deal row itself.
+  function pickCampaign(e) {
+    const id = e.target.value; const cp = campaigns.find(x => x.id === id);
+    setF(s => ({ ...s, primary_campaign_id: id, ...(cp && cp.kind === "trade_show" ? { source: "trade_show", source_detail: cp.name } : {}) }));
+  }
   async function save(e) {
     e.preventDefault(); if (!company || !f.name.trim() || busy) return; setBusy(true); setErr("");
     try {
-      const d = await createDeal({ company_id: company.id, name: f.name.trim(), amount_estimate: f.amount_estimate ? Number(f.amount_estimate) : null, expected_event_date: f.expected_event_date || null, event_type: f.event_type || null, next_action: f.next_action || null, next_action_due: f.next_action_due || null, source: f.source, source_detail: f.source_detail || null, opportunity_id: opportunity?.id || null });
+      const d = await createDeal({ company_id: company.id, name: f.name.trim(), amount_estimate: f.amount_estimate ? Number(f.amount_estimate) : null, expected_event_date: f.expected_event_date || null, event_type: f.event_type || null, next_action: f.next_action || null, next_action_due: f.next_action_due || null, source: f.source, source_detail: f.source_detail || null, opportunity_id: opportunity?.id || null, primary_campaign_id: f.primary_campaign_id || null, deal_type: f.deal_type });
       onDone(d);
     } catch (e2) { setErr(e2.message); }
     setBusy(false);
@@ -142,8 +163,10 @@ export function NewDealForm({ company: presetCompany = null, opportunity = null,
       <div><span style={label}>Estimate ($)</span><input style={inputStyle()} type="number" value={f.amount_estimate} onChange={set("amount_estimate")} /></div>
       <div><span style={label}>Expected event date</span><input style={inputStyle()} type="date" value={f.expected_event_date} onChange={set("expected_event_date")} /></div>
       <div><span style={label}>Event type</span><input style={inputStyle()} value={f.event_type} onChange={set("event_type")} /></div>
+      <div><span style={label}>Deal type</span><select style={inputStyle()} value={f.deal_type} onChange={set("deal_type")}>{DEAL_TYPES.map(k => <option key={k} value={k}>{DEAL_TYPE_LABEL[k]}</option>)}</select></div>
+      <div><span style={label}>Campaign</span><select style={inputStyle()} value={f.primary_campaign_id} onChange={pickCampaign}><option value="">None</option>{campaigns.map(cp => <option key={cp.id} value={cp.id}>{cp.name} ({CAMPAIGN_KIND_LABEL[cp.kind] || cp.kind})</option>)}</select></div>
       <div><span style={label}>Source · detail</span><div style={{ display: "flex", gap: 6 }}><select style={inputStyle({ width: 110 })} value={f.source} onChange={set("source")}>{["manual", "trade_show", "referral", "inbound", "scout", "win_back", "other"].map(k => <option key={k}>{k}</option>)}</select><input style={inputStyle()} value={f.source_detail} onChange={set("source_detail")} placeholder="which show / who" /></div></div>
-      <div style={{ gridColumn: "1 / 3" }}><span style={label}>Next action</span><input style={inputStyle()} value={f.next_action} onChange={set("next_action")} placeholder="e.g. Send intro email" /></div>
+      <div style={{ gridColumn: "1 / 4" }}><span style={label}>Next action</span><input style={inputStyle()} value={f.next_action} onChange={set("next_action")} placeholder="e.g. Send intro email" /></div>
       <div><span style={label}>Due</span><input style={inputStyle()} type="date" value={f.next_action_due} onChange={set("next_action_due")} /></div>
       {err && <div style={{ gridColumn: "1 / -1", ...pill("rust") }}>{err}</div>}
       <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8 }}>
@@ -163,17 +186,28 @@ function DealPanel({ deal, onClose, onChanged }) {
   const [lostNote, setLostNote] = useState("");
   const [err, setErr] = useState("");
   const [tlKey, setTlKey] = useState(0);
+  const [roles, setRoles] = useState([]);
+  const [addC, setAddC] = useState({ contact_id: "", role: "other" });
+  const campaigns = useCampaigns();
 
-  useEffect(() => { setD(deal); setF({ name: deal.name, owner: deal.owner || "", amount_estimate: deal.amount_estimate ?? "", expected_event_date: deal.expected_event_date || "", event_type: deal.event_type || "", next_action: deal.next_action || "", next_action_due: deal.next_action_due || "", source: deal.source || "", source_detail: deal.source_detail || "", notes: deal.notes || "", primary_contact_id: deal.primary_contact_id || "" }); }, [deal]);
-  useEffect(() => { Promise.resolve().then(async () => { try { setContacts((await db.select("contacts", { company_id: `eq.${deal.company_id}`, select: "id,name,email,title" })) || []); } catch { /* ignore */ } }); }, [deal.company_id]);
+  useEffect(() => { setD(deal); setF({ name: deal.name, owner: deal.owner || "", amount_estimate: deal.amount_estimate ?? "", expected_event_date: deal.expected_event_date || "", event_type: deal.event_type || "", next_action: deal.next_action || "", next_action_due: deal.next_action_due || "", source: deal.source || "", source_detail: deal.source_detail || "", notes: deal.notes || "", deal_type: deal.deal_type || "new", primary_campaign_id: deal.primary_campaign_id || "" }); }, [deal]);
+  useEffect(() => { Promise.resolve().then(async () => { try { setContacts((await db.select("contacts", { company_id: `eq.${deal.company_id}`, select: "id,name,email,title,lead_status,last_touch_at" })) || []); } catch { /* ignore */ } }); }, [deal.company_id]);
+  async function loadRoles() { try { setRoles((await dealContacts(deal.id)) || []); } catch (e) { setErr(e.message); } }
+  useEffect(() => { Promise.resolve().then(loadRoles); }, [deal.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = k => e => setF(s => ({ ...s, [k]: e.target.value }));
   async function save() {
     try {
-      const u = await updateDeal(d, { name: f.name.trim(), owner: f.owner || null, amount_estimate: f.amount_estimate === "" ? null : Number(f.amount_estimate), expected_event_date: f.expected_event_date || null, event_type: f.event_type || null, next_action: f.next_action || null, next_action_due: f.next_action_due || null, source: f.source || null, source_detail: f.source_detail || null, notes: f.notes || null, primary_contact_id: f.primary_contact_id || null });
-      setD({ ...d, ...u }); setEdit(false); onChanged();
+      const u = await updateDeal(d, { name: f.name.trim(), owner: f.owner || null, amount_estimate: f.amount_estimate === "" ? null : Number(f.amount_estimate), expected_event_date: f.expected_event_date || null, event_type: f.event_type || null, next_action: f.next_action || null, next_action_due: f.next_action_due || null, source: f.source || null, source_detail: f.source_detail || null, notes: f.notes || null, deal_type: f.deal_type, primary_campaign_id: f.primary_campaign_id || null });
+      setD({ ...d, ...u, campaigns: campaigns.find(c => c.id === u.primary_campaign_id) || null }); setEdit(false); onChanged();
     } catch (e) { setErr(e.message); }
   }
+  // Contact roles. The first contact added becomes primary; the database mirrors it to deals.primary_contact_id.
+  async function addRole(e) {
+    e.preventDefault(); if (!addC.contact_id) return;
+    try { await addDealContact(d.id, addC.contact_id, addC.role, roles.length === 0); setAddC({ contact_id: "", role: "other" }); await loadRoles(); onChanged(); } catch (e2) { setErr(e2.message); }
+  }
+  async function roleAction(fn) { try { await fn(); await loadRoles(); onChanged(); } catch (e) { setErr(e.message); } }
   async function move(to) {
     try { const u = await setStage(d, to, to === "lost" ? lostNote : null); setD({ ...d, ...u }); setTlKey(k => k + 1); onChanged(); } catch (e) { setErr(e.message); }
   }
@@ -189,10 +223,12 @@ function DealPanel({ deal, onClose, onChanged }) {
           {edit ? <input style={inputStyle({ fontSize: 16 })} value={f.name} onChange={set("name")} /> : <div style={{ ...TT.h3, color: TC.ink }}>{d.name}</div>}
           <div style={{ ...TT.body2, color: TC.sub, display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}><Building2 size={14} strokeWidth={1.5} /> {d.companies?.name}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-            <span style={pill(STAGE_TONE[d.stage])}>{STAGE_LABEL[d.stage]}</span>
+            <span style={pill(STAGE_TONE[d.stage])}>{STAGE_LABEL[d.stage]} · {d.probability ?? STAGE_PROBABILITY[d.stage]}%</span>
+            <span style={pill(d.deal_type === "repeat" ? "evergreen" : "outline")}>{DEAL_TYPE_LABEL[d.deal_type || "new"]}</span>
             {d.flex_project_id && <span style={pill("evergreen")}><Link2 size={11} strokeWidth={1.5} /> Flex {d.flex_project_id.slice(0, 8)}</span>}
-            {(d.source || d.source_detail) && <span style={pill("sand")}>{[d.source, d.source_detail].filter(Boolean).join(" · ")}</span>}
+            {d.campaigns?.name ? <span style={pill("iris")}>{d.campaigns.name}</span> : (d.source || d.source_detail) && <span style={pill("sand")}>{[d.source, d.source_detail].filter(Boolean).join(" · ")}</span>}
           </div>
+          <div style={{ ...TT.caption, color: TC.muted, marginTop: 6 }}>Last touch {d.last_touch_at ? `${ago(d.last_touch_at)} (${String(d.last_touch_at).slice(0, 10)})` : "never"}{d.amount_estimate != null ? ` · weighted ${money(weighted(d))}` : ""}</div>
         </div>
         {edit ? <><button onClick={save} style={btn("primary")}>Save</button><button onClick={() => setEdit(false)} style={btn("secondary")}>Cancel</button></> : <button onClick={() => setEdit(true)} style={btn("secondary")}>Edit</button>}
         <button onClick={onClose} title="Close" style={{ ...btn("tertiary"), padding: 6 }}><X size={16} strokeWidth={1.5} /></button>
@@ -221,9 +257,33 @@ function DealPanel({ deal, onClose, onChanged }) {
           <Field label="Event type" edit={edit} view={d.event_type || "—"}><input style={inputStyle()} value={f.event_type} onChange={set("event_type")} /></Field>
           <Field label="Next action" edit={edit} view={d.next_action || "—"}><input style={inputStyle()} value={f.next_action} onChange={set("next_action")} /></Field>
           <Field label="Due" edit={edit} view={d.next_action_due ? <span style={{ color: d.next_action_due < today() && OPEN_STAGES.includes(d.stage) ? TC.criticalInk : TC.ink }}>{d.next_action_due}</span> : "—"}><input style={inputStyle()} type="date" value={f.next_action_due} onChange={set("next_action_due")} /></Field>
-          <Field label="Primary contact" edit={edit} view={contacts.find(c => c.id === d.primary_contact_id)?.name || "—"}><select style={inputStyle()} value={f.primary_contact_id} onChange={set("primary_contact_id")}><option value="">—</option>{contacts.map(c => <option key={c.id} value={c.id}>{c.name || c.email}</option>)}</select></Field>
+          <Field label="Deal type" edit={edit} view={DEAL_TYPE_LABEL[d.deal_type || "new"]}><select style={inputStyle()} value={f.deal_type} onChange={set("deal_type")}>{DEAL_TYPES.map(k => <option key={k} value={k}>{DEAL_TYPE_LABEL[k]}</option>)}</select></Field>
+          <Field label="Campaign" edit={edit} view={d.campaigns?.name || "—"}><select style={inputStyle()} value={f.primary_campaign_id} onChange={set("primary_campaign_id")}><option value="">None</option>{campaigns.map(cp => <option key={cp.id} value={cp.id}>{cp.name}</option>)}</select></Field>
           <Field label="Source · detail" edit={edit} view={[d.source, d.source_detail].filter(Boolean).join(" · ") || "—"}><div style={{ display: "flex", gap: 6 }}><input style={inputStyle({ width: 100 })} value={f.source} onChange={set("source")} /><input style={inputStyle()} value={f.source_detail} onChange={set("source_detail")} /></div></Field>
           <div style={{ gridColumn: "1 / -1" }}><Field label="Notes" edit={edit} view={d.notes || "—"}><textarea style={inputStyle({ minHeight: 60 })} value={f.notes} onChange={set("notes")} /></Field></div>
+        </div>
+
+        <div>
+          <div style={label}>Contacts and roles</div>
+          {roles.length === 0 && <div style={{ ...TT.caption, color: TC.muted, marginBottom: 6 }}>Nobody on this deal yet. Add the people involved and who decides.</div>}
+          {roles.map(r => (
+            <div key={r.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${TC.lineSoft}` }}>
+              <button onClick={() => !r.is_primary && roleAction(() => setDealContactPrimary(r.id))} title={r.is_primary ? "Primary contact" : "Make primary"} style={{ ...btn("tertiary"), padding: 2, color: r.is_primary ? TC.ink : TC.faint }}><Star size={14} strokeWidth={1.5} fill={r.is_primary ? "currentColor" : "none"} /></button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ ...TT.body2Med, color: TC.ink }}>{r.contacts?.name || r.contacts?.email || "contact"}{r.contacts?.title ? <span style={{ color: TC.muted, fontWeight: 400 }}> · {r.contacts.title}</span> : null}</div>
+                <div style={{ ...TT.caption, color: TC.muted, display: "flex", gap: 6, alignItems: "center" }}><span style={pill(LEAD_STATUS_TONE[r.contacts?.lead_status] || "sand")}>{LEAD_STATUS_LABEL[r.contacts?.lead_status] || "New"}</span>{r.contacts?.last_touch_at ? `touched ${ago(r.contacts.last_touch_at)}` : "never touched"}</div>
+              </div>
+              <select value={r.role} onChange={e => roleAction(() => setDealContactRole(r.id, e.target.value))} style={inputStyle({ width: 140 })}>{DEAL_ROLES.map(k => <option key={k} value={k}>{DEAL_ROLE_LABEL[k]}</option>)}</select>
+              <button onClick={() => roleAction(() => removeDealContact(r.id))} title="Remove from deal" style={{ ...btn("tertiary"), padding: 4, color: TC.muted }}><Trash2 size={14} strokeWidth={1.5} /></button>
+            </div>
+          ))}
+          {contacts.filter(c => !roles.some(r => r.contact_id === c.id)).length > 0 ? (
+            <form onSubmit={addRole} style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <select value={addC.contact_id} onChange={e => setAddC(s => ({ ...s, contact_id: e.target.value }))} style={inputStyle()}><option value="">Add a contact…</option>{contacts.filter(c => !roles.some(r => r.contact_id === c.id)).map(c => <option key={c.id} value={c.id}>{c.name || c.email}</option>)}</select>
+              <select value={addC.role} onChange={e => setAddC(s => ({ ...s, role: e.target.value }))} style={inputStyle({ width: 140 })}>{DEAL_ROLES.map(k => <option key={k} value={k}>{DEAL_ROLE_LABEL[k]}</option>)}</select>
+              <button type="submit" disabled={!addC.contact_id} style={btn("secondary")}>Add</button>
+            </form>
+          ) : contacts.length === 0 && <div style={{ ...TT.caption, color: TC.muted, marginTop: 6 }}>This company has no contacts yet. Add one on its Relationships page.</div>}
         </div>
 
         <div>
