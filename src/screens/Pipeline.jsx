@@ -307,7 +307,7 @@ function DealPanel({ deal, onClose, onChanged }) {
         </div>
 
         <div><div style={label}>Tasks</div><TasksPanel companyId={d.company_id} dealId={d.id} contacts={contacts} onChanged={() => setTlKey(k => k + 1)} /></div>
-        <div><div style={label}>Activity</div><Timeline key={tlKey} dealId={d.id} companyId={d.company_id} contacts={contacts} /></div>
+        <div><div style={label}>Activity</div><Timeline key={tlKey} dealId={d.id} companyId={d.company_id} contacts={contacts} onLogged={onChanged} /></div>
       </div>
     </div>
   );

@@ -329,7 +329,7 @@ function CompanyPage({ id, onChanged, onNavigate }) {
       </Section>
 
       <Section title="Activity" note="Everything logged for this company. Drafts and Slack handoffs are labelled as such; only confirmed sends count as outreach.">
-        <Timeline key={timelineKey} companyId={id} contacts={contacts} />
+        <Timeline key={timelineKey} companyId={id} contacts={contacts} onLogged={() => { load(); onChanged(); }} />
       </Section>
 
       {/* Signals: research, not deals */}
