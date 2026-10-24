@@ -10,9 +10,10 @@ body {
   /* Redesign: light warm-gray ground. See src/tokens.js — these two values are the only
      place the palette is duplicated outside that module, because the body has to paint
      before React mounts. */
-  background: #E7E7E4;
+  background: #FAFAF8;
   color: #161613;
-  font-family: Inter, ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-family: 'Inter Variable', Inter, ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
 }
 

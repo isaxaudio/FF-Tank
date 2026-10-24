@@ -4,6 +4,7 @@ import { db } from "./lib/db.js";
 import { auth } from "./lib/auth.js";
 import Login from "./screens/Login.jsx";
 import Relationships from "./screens/Relationships.jsx";
+import { Home as IcHome, CalendarDays, Inbox, Building2, Target, BarChart3, Radar, Bot, PenLine, ListTodo, Contact, Brain as IcBrain, Globe, Server, Database, MessageSquare, Gauge, Settings as IcSettings, Bell as IcBell, Sparkles } from "lucide-react";
 const FONT = TF.sans;
 
 export class ErrorBoundary extends React.Component {
@@ -1088,22 +1089,23 @@ function LeadHandoffView({ db }) {
 // The legacy screens move under "More" rather than being deleted — cutting access is an
 // information-architecture decision that hasn't been made yet, and orphaning a working
 // screen is worse than one extra group.
+const NAV_ICONS = { home: IcHome, brief: CalendarDays, handoff: Inbox, relationships: Building2, targets: Target, flex: BarChart3, opportunities: Radar, actions: Bot, builder: PenLine, sales: ListTodo, crm: Contact, brain: IcBrain, publisher: Globe, openclaw: Server, memory: Database, chat: MessageSquare, usage: Gauge };
 const NAV_GROUPS = [
-  { label: "DAILY", items: [
+  { label: "Daily", items: [
     { id: "home", label: "Today" },
     { id: "brief", label: "This Week" },
     { id: "handoff", label: "Handoff", badge: "signals" },
   ] },
-  { label: "WEEKLY", items: [
+  { label: "Weekly", items: [
     { id: "relationships", label: "Relationships" },
     { id: "targets", label: "Target Accounts" },
     { id: "flex", label: "Flex Intel" },
     { id: "opportunities", label: "Signals" },
   ] },
-  { label: "SYSTEM", items: [
+  { label: "System", items: [
     { id: "actions", label: "Agents & Ops" },
   ] },
-  { label: "MORE", items: [
+  { label: "More", items: [
     { id: "builder", label: "Build Content" },
     { id: "sales", label: "Sales Queue" },
     { id: "crm", label: "CRM", badge: "drafts" },
@@ -9702,7 +9704,7 @@ Cite URLs.`;
           </div>
           <button onClick={() => setShowSettings(s => !s)} title="Settings"
             style={{ background: showSettings ? TC.ink : "transparent", border: `1px solid ${TC.lineStrong}`, borderRadius: 999, color: showSettings ? TC.onInk : TC.muted, fontSize: 13, padding: "4px 10px", cursor: "pointer" }}>
-            ⚙
+            <IcSettings size={16} strokeWidth={1.5} />
           </button>
           <div className="header-status-pill" style={{ padding: "4px 11px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 999, display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: TC.accentDeep }} />
@@ -9906,33 +9908,35 @@ Cite URLs.`;
       )}
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative", zIndex: 1 }}>
-        <div className="ff-sidebar" style={{ width: 230, flexShrink: 0, borderRight: `1px solid ${TC.line}`, padding: "18px 14px 14px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto", background: TC.bg, position: "relative", zIndex: 1 }}>
+        <div className="ff-sidebar" style={{ width: 220, flexShrink: 0, background: TC.card, borderRight: `1px solid ${TC.line}`, padding: "16px 12px 12px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto", background: TC.bg, position: "relative", zIndex: 1 }}>
 
           {/* Logo lockup */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 6px 18px" }}>
-            <div style={{ width: 34, height: 34, borderRadius: 11, background: TC.ink, color: TC.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>FF</div>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: TC.ink, color: TC.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>FF</div>
             <div style={{ lineHeight: 1.15 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 600, color: TC.ink }}>FF Tank</div>
-              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "1.6px", color: TC.faint }}>FATFISH</div>
+              <div style={{ fontSize: 15, fontWeight: 450, color: TC.ink }}>FF Tank</div>
+              <div style={{ fontSize: 12, fontWeight: 400, color: TC.muted }}>Fatfish</div>
             </div>
           </div>
 
           {NAV_GROUPS.map(group => (
             <div key={group.label} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "1.8px", color: TC.faint, padding: "0 10px 6px" }}>{group.label}</div>
+              <div style={{ fontSize: 12, fontWeight: 450, lineHeight: "18px", color: TC.muted, padding: "0 10px 4px" }}>{group.label}</div>
               {group.items.map(item => {
                 const on = activeId === item.id;
                 const badge = item.badge === "drafts" ? pendingDraftCount : item.badge === "signals" ? scoutSignalCount : null;
+                const Icon = NAV_ICONS[item.id];
                 return (
                   <div key={item.id} onClick={() => setActiveId(item.id)}
-                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 14, cursor: "pointer", marginBottom: 1,
-                      background: on ? TC.ink : "transparent", color: on ? TC.onInk : TC.sub,
-                      transition: "background 130ms ease" }}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 1,
+                      background: on ? TC.navSelected : "transparent", color: on ? TC.ink : TC.sub,
+                      transition: "background 120ms ease" }}
                     onMouseEnter={e => { if (!on) e.currentTarget.style.background = TC.navHover; }}
                     onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
-                    <span style={{ flex: 1, fontSize: 13.5, fontWeight: on ? 500 : 400 }}>{item.label}</span>
+                    {Icon ? <Icon size={16} strokeWidth={1.5} style={{ flexShrink: 0, color: on ? TC.ink : TC.sub }} /> : null}
+                    <span style={{ flex: 1, fontSize: 13, lineHeight: "20px", fontWeight: on ? 450 : 400 }}>{item.label}</span>
                     {badge ? (
-                      <span style={{ fontSize: 10.5, color: on ? "rgba(246,246,244,0.6)" : TC.faint }}>{badge > 999 ? `${(badge / 1000).toFixed(1)}k` : badge}</span>
+                      <span style={{ fontSize: 12, color: TC.muted }}>{badge > 999 ? `${(badge / 1000).toFixed(1)}k` : badge}</span>
                     ) : null}
                   </div>
                 );
@@ -9941,8 +9945,8 @@ Cite URLs.`;
           ))}
 
           {/* Live agent — the one bit of "alive" the dark theme used to carry */}
-          <div style={{ marginTop: "auto", background: TC.card, borderRadius: 16, padding: "11px 13px" }}>
-            <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "1.6px", color: TC.faint, marginBottom: 5 }}>LIVE AGENT</div>
+          <div style={{ marginTop: "auto", background: TC.bg, border: `1px solid ${TC.line}`, borderRadius: 12, padding: "10px 12px" }}>
+            <div style={{ fontSize: 12, fontWeight: 450, color: TC.muted, marginBottom: 4 }}>Live agent</div>
             <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
               <span className="ff-pulse" style={{ width: 7, height: 7, borderRadius: 999, background: TC.accent, flexShrink: 0 }} />
               <span style={{ fontSize: 11.5, color: TC.sub }}>Scout · daily 13:00 UTC</span>
@@ -9950,12 +9954,12 @@ Cite URLs.`;
           </div>
 
           {/* Spend — real information, restyled rather than dropped */}
-          <div style={{ marginTop: 8, background: TC.card, borderRadius: 16, padding: "11px 13px" }}>
+          <div style={{ marginTop: 8, background: TC.bg, border: `1px solid ${TC.line}`, borderRadius: 12, padding: "10px 12px" }}>
             <BudgetBar label="OPENAI · $60" spent={openaiSpent} cap={OPENAI_BUDGET} color={TC.muted} />
             <BudgetBar label="CLAUDE · $90" spent={claudeSpent} cap={CLAUDE_BUDGET} color={TC.ink} />
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${TC.line}`, display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "1.4px", color: TC.faint }}>REMAINING</span>
-              <span style={{ fontSize: 11.5, color: TC.ink, fontWeight: 500 }}>{formatUSD(TOTAL_BUDGET - totalSpent)}</span>
+              <span style={{ fontSize: 12, fontWeight: 450, color: TC.muted }}>Remaining</span>
+              <span style={{ fontSize: 12, color: TC.ink, fontWeight: 450 }}>{formatUSD(TOTAL_BUDGET - totalSpent)}</span>
             </div>
           </div>
         </div>

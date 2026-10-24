@@ -2,7 +2,8 @@
 // cross-system match review queue. Research signals (opportunities) are shown on the company page
 // but labelled as signals; they are not deals.
 import React, { useEffect, useMemo, useState } from "react";
-import { c as TC, t as TT, pill, btn, tile } from "../tokens.js";
+import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
+import { Search, Plus, Check, X, Building2, ExternalLink } from "lucide-react";
 import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
 
@@ -12,10 +13,10 @@ const quoteIn = names => "in.(" + names.map(n => '"' + String(n).replace(/"/g, '
 const KINDS = ["prospect", "client", "competitor", "partner", "venue", "other"];
 const TIERS = ["", "existing_client", "warm", "target_a", "target_b", "watchlist"];
 const MKT = ["unknown", "subscribed", "unsubscribed"];
-const input = { padding: "8px 10px", fontSize: 13, fontFamily: "inherit", color: TC.ink, background: TC.elevated, border: `1px solid ${TC.line}`, borderRadius: 10, outline: "none", width: "100%", boxSizing: "border-box" };
+const input = inputStyle();
 const label = { ...TT.label, marginBottom: 6, display: "block" };
-const th = { ...TT.tableHead, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${TC.line}` };
-const td = { fontSize: 13, color: TC.ink, padding: "9px 10px", borderBottom: `1px solid ${TC.lineSoft}`, verticalAlign: "top" };
+const th = { ...TT.tableHead, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${TC.line}`, background: TC.bg };
+const td = { fontSize: 13, lineHeight: "20px", color: TC.ink, padding: "10px 10px", borderBottom: `1px solid ${TC.lineSoft}`, verticalAlign: "top" };
 
 export default function Relationships() {
   const [companies, setCompanies] = useState([]);
@@ -61,19 +62,22 @@ export default function Relationships() {
       <div style={{ width: 380, flexShrink: 0, borderRight: `1px solid ${TC.line}`, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ padding: "18px 18px 10px" }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-            <div style={{ ...TT.leadTitle, fontSize: 22, color: TC.ink }}>Relationships</div>
-            <button onClick={() => setShowNew(s => !s)} style={{ ...btn("quiet"), padding: "6px 12px", fontSize: 12 }}>+ Company</button>
+            <div style={{ ...TT.h3, color: TC.ink }}>Relationships</div>
+            <button onClick={() => setShowNew(s => !s)} style={{ ...btn("primary"), padding: "4px 12px" }}><Plus size={16} strokeWidth={1.5} /> Company</button>
           </div>
           <div style={{ ...TT.meta, color: TC.muted, marginTop: 4 }}>{counts.all} companies · {counts.client} clients · {counts.prospect} prospects</div>
           {candidates.length > 0 && (
-            <button onClick={() => { setShowReview(s => !s); setSelectedId(null); }} style={{ ...pill("warn"), marginTop: 10, cursor: "pointer", border: "none" }}>
+            <button onClick={() => { setShowReview(s => !s); setSelectedId(null); }} style={{ ...pill("ember"), marginTop: 10, cursor: "pointer" }}>
               {candidates.length} matches to review
             </button>
           )}
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, domain, vertical" style={{ ...input, marginTop: 12 }} />
+          <div style={{ position: "relative", marginTop: 12 }}>
+            <Search size={16} strokeWidth={1.5} style={{ position: "absolute", left: 10, top: 9, color: TC.sub }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search companies" style={{ ...input, paddingLeft: 32 }} />
+          </div>
           <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
             {[["all", "All"], ["client", "Clients"], ["prospect", "Prospects"], ["competitor", "Competitors"]].map(([id, lbl]) => (
-              <button key={id} onClick={() => setKind(id)} style={{ ...pill(kind === id ? "ink" : "outline"), cursor: "pointer" }}>{lbl}{counts[id] != null ? ` ${counts[id]}` : ""}</button>
+              <button key={id} onClick={() => setKind(id)} style={{ ...pill(kind === id ? "ink" : "outline"), cursor: "pointer", padding: "3px 10px" }}>{lbl}{counts[id] != null ? ` ${counts[id]}` : ""}</button>
             ))}
           </div>
         </div>
@@ -83,13 +87,15 @@ export default function Relationships() {
           {err && <div style={{ margin: 18, ...pill("critical") }}>{err}</div>}
           {visible.slice(0, 400).map(co => (
             <div key={co.id} onClick={() => { setSelectedId(co.id); setShowReview(false); }}
-              style={{ padding: "10px 18px", cursor: "pointer", background: selectedId === co.id ? TC.card : "transparent", borderBottom: `1px solid ${TC.lineSoft}` }}>
+              style={{ padding: "10px 18px", cursor: "pointer", background: selectedId === co.id ? TC.selectedHover : "transparent", borderBottom: `1px solid ${TC.lineSoft}` }}
+              onMouseEnter={e => { if (selectedId !== co.id) e.currentTarget.style.background = TC.hover; }}
+              onMouseLeave={e => { if (selectedId !== co.id) e.currentTarget.style.background = "transparent"; }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                 <div style={{ ...TT.rowTitle, color: TC.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{co.name}</div>
                 {co.revenue > 0 && <div style={{ fontSize: 12.5, color: TC.sub, flexShrink: 0 }}>{money(co.revenue)}</div>}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 4, alignItems: "center" }}>
-                <span style={pill(co.kind === "client" ? "accent" : co.kind === "competitor" ? "critical" : "neutral")}>{co.kind}</span>
+                <span style={pill(co.kind === "client" ? "evergreen" : co.kind === "competitor" ? "rust" : co.kind === "prospect" ? "ocean" : "sand")}>{co.kind}</span>
                 {co.tier && <span style={pill("outline")}>{co.tier.replace("_", " ")}</span>}
                 {co.vertical && <span style={{ ...TT.meta, color: TC.muted }}>{co.vertical}</span>}
                 {co.lastEvent && <span style={{ ...TT.meta, color: TC.faint, marginLeft: "auto" }}>last {day(co.lastEvent)}</span>}
@@ -134,8 +140,8 @@ function NewCompanyForm({ onDone, onCancel }) {
       <div><span style={label}>Source detail (which show, who referred)</span><input style={input} value={f.source_detail} onChange={set("source_detail")} placeholder="e.g. Exhibitor Live 2026" /></div>
       {err && <div style={pill("critical")}>{err}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="submit" disabled={busy} style={{ ...btn("ink"), padding: "8px 16px", fontSize: 13 }}>{busy ? "Saving…" : "Create"}</button>
-        <button type="button" onClick={onCancel} style={{ ...btn("quiet"), padding: "8px 16px", fontSize: 13 }}>Cancel</button>
+        <button type="submit" disabled={busy} style={btn("primary")}>{busy ? "Saving…" : "Create company"}</button>
+        <button type="button" onClick={onCancel} style={btn("secondary")}>Cancel</button>
       </div>
     </form>
   );
@@ -179,17 +185,17 @@ function CompanyPage({ id, onChanged }) {
       <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {edit ? <input style={{ ...input, fontSize: 22, fontWeight: 500 }} value={form.name} onChange={set("name")} />
-            : <div style={{ ...TT.leadTitle, fontSize: 28, color: TC.ink }}>{co.name}</div>}
+            : <div style={{ display: "flex", alignItems: "center", gap: 10 }}><div style={{ width: 36, height: 36, borderRadius: 8, background: TC.bg, border: `1px solid ${TC.line}`, display: "flex", alignItems: "center", justifyContent: "center", color: TC.sub }}><Building2 size={18} strokeWidth={1.5} /></div><div style={{ ...TT.h2, color: TC.ink }}>{co.name}</div></div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={pill(co.kind === "client" ? "accent" : co.kind === "competitor" ? "critical" : "neutral")}>{co.kind}</span>
+            <span style={pill(co.kind === "client" ? "evergreen" : co.kind === "competitor" ? "rust" : co.kind === "prospect" ? "ocean" : "sand")}>{co.kind}</span>
             {co.tier && <span style={pill("outline")}>{co.tier.replace("_", " ")}</span>}
             {co.vertical && <span style={pill("outline")}>{co.vertical}</span>}
-            {co.domain && <a href={`https://${co.domain}`} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: TC.sub }}>{co.domain}</a>}
+            {co.domain && <a href={`https://${co.domain}`} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: TC.link, display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "none" }}>{co.domain} <ExternalLink size={12} strokeWidth={1.5} /></a>}
             {(co.source || co.source_detail) && <span style={{ ...TT.meta, color: TC.muted }}>source: {[co.source, co.source_detail].filter(Boolean).join(" · ")}</span>}
           </div>
         </div>
-        {edit ? <div style={{ display: "flex", gap: 8 }}><button onClick={save} style={{ ...btn("ink"), padding: "8px 16px", fontSize: 13 }}>Save</button><button onClick={() => setEdit(false)} style={{ ...btn("quiet"), padding: "8px 16px", fontSize: 13 }}>Cancel</button></div>
-          : <button onClick={() => setEdit(true)} style={{ ...btn("quiet"), padding: "8px 16px", fontSize: 13 }}>Edit</button>}
+        {edit ? <div style={{ display: "flex", gap: 8 }}><button onClick={save} style={btn("primary")}>Save</button><button onClick={() => setEdit(false)} style={btn("secondary")}>Cancel</button></div>
+          : <button onClick={() => setEdit(true)} style={btn("secondary")}>Edit</button>}
       </div>
 
       {edit && (
@@ -239,13 +245,13 @@ function CompanyPage({ id, onChanged }) {
       )}
 
       {/* Contacts */}
-      <Section title={`Contacts · ${contacts.length}`} action={<button onClick={() => setShowContact(s => !s)} style={{ ...btn("quiet"), padding: "6px 12px", fontSize: 12 }}>+ Contact</button>}>
+      <Section title={`Contacts · ${contacts.length}`} action={<button onClick={() => setShowContact(s => !s)} style={{ ...btn("secondary"), padding: "4px 10px" }}><Plus size={14} strokeWidth={1.5} /> Contact</button>}>
         {showContact && <NewContactForm companyId={id} onDone={() => { setShowContact(false); load(); }} onCancel={() => setShowContact(false)} />}
         {contacts.length === 0 && !showContact && <div style={{ fontSize: 13, color: TC.muted }}>No contacts linked yet.</div>}
         {contacts.length > 0 && (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr><th style={th}>Name</th><th style={th}>Title</th><th style={th}>Email</th><th style={th}>Marketing</th><th style={th}>Source</th></tr></thead>
-            <tbody>{contacts.map(p => <tr key={p.id}><td style={td}>{p.name || <span style={{ color: TC.muted }}>unnamed</span>}{p.linkedin && <a href={p.linkedin} target="_blank" rel="noreferrer" style={{ marginLeft: 6, fontSize: 11.5, color: TC.sub }}>in</a>}</td><td style={td}>{p.title || "—"}</td><td style={td}>{p.email || "—"}</td><td style={td}><span style={pill(p.marketing_status === "subscribed" ? "accent" : p.marketing_status === "unsubscribed" ? "critical" : "outline")}>{p.marketing_status || "unknown"}</span></td><td style={{ ...td, color: TC.muted }}>{[p.source, p.source_detail].filter(Boolean).join(" · ") || "—"}</td></tr>)}</tbody>
+            <tbody>{contacts.map(p => <tr key={p.id}><td style={td}>{p.name || <span style={{ color: TC.muted }}>unnamed</span>}{p.linkedin && <a href={p.linkedin} target="_blank" rel="noreferrer" style={{ marginLeft: 6, color: TC.link, verticalAlign: "middle" }}><span style={{ fontSize: 11, fontWeight: 550 }}>in</span></a>}</td><td style={td}>{p.title || "—"}</td><td style={td}>{p.email || "—"}</td><td style={td}><span style={pill(p.marketing_status === "subscribed" ? "evergreen" : p.marketing_status === "unsubscribed" ? "rust" : "outline")}>{p.marketing_status || "unknown"}</span></td><td style={{ ...td, color: TC.muted }}>{[p.source, p.source_detail].filter(Boolean).join(" · ") || "—"}</td></tr>)}</tbody>
           </table>
         )}
       </Section>
@@ -267,7 +273,7 @@ function CompanyPage({ id, onChanged }) {
         <Section title={`Outreach drafts · ${co.outreach_drafts.length}`} note="Drafts are not sent outreach. A send is logged separately.">
           {co.outreach_drafts.map(d => (
             <div key={d.id} style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: `1px solid ${TC.lineSoft}`, fontSize: 13.5, color: TC.ink }}>
-              <span style={pill(d.sent_at ? "accent" : "outline")}>{d.sent_at ? "sent" : d.status || "draft"}</span>
+              <span style={pill(d.sent_at ? "evergreen" : "outline")}>{d.sent_at ? "sent" : d.status || "draft"}</span>
               <span style={{ flex: 1 }}>{d.subject || "(no subject)"}{d.contact_name ? ` · ${d.contact_name}` : ""}</span>
               <span style={{ ...TT.meta, color: TC.muted }}>{day(d.created_at)}</span>
             </div>
@@ -313,8 +319,8 @@ function NewContactForm({ companyId, onDone, onCancel }) {
       <div><span style={label}>Source · detail</span><div style={{ display: "flex", gap: 6 }}><select style={{ ...input, width: 120 }} value={f.source} onChange={set("source")}>{["manual", "trade_show", "referral", "apollo", "inbound", "other"].map(k => <option key={k}>{k}</option>)}</select><input style={input} value={f.source_detail} onChange={set("source_detail")} placeholder="e.g. booth 212" /></div></div>
       {err && <div style={{ gridColumn: "1 / -1", ...pill("critical") }}>{err}</div>}
       <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8 }}>
-        <button type="submit" disabled={busy} style={{ ...btn("ink"), padding: "8px 16px", fontSize: 13 }}>{busy ? "Saving…" : "Add contact"}</button>
-        <button type="button" onClick={onCancel} style={{ ...btn("quiet"), padding: "8px 16px", fontSize: 13 }}>Cancel</button>
+        <button type="submit" disabled={busy} style={btn("primary")}>{busy ? "Saving…" : "Add contact"}</button>
+        <button type="button" onClick={onCancel} style={btn("secondary")}>Cancel</button>
       </div>
     </form>
   );
@@ -345,7 +351,7 @@ function ReviewQueue({ candidates, onChanged }) {
   }
   return (
     <div style={{ padding: "28px 36px", maxWidth: 900 }}>
-      <div style={{ ...TT.leadTitle, fontSize: 24, color: TC.ink }}>Match review</div>
+      <div style={{ ...TT.h2, color: TC.ink }}>Match review</div>
       <div style={{ fontSize: 13.5, color: TC.sub, marginTop: 6, lineHeight: 1.6 }}>Each row is a Flex client whose name matches a target account. Confirm links the Flex history to that company. Reject keeps them separate and gives the Flex client its own record. Nothing is merged automatically.</div>
       {err && <div style={{ ...pill("critical"), marginTop: 12 }}>{err}</div>}
       <div style={{ marginTop: 18 }}>
@@ -356,8 +362,8 @@ function ReviewQueue({ candidates, onChanged }) {
               <div style={{ fontSize: 13, color: TC.sub, marginTop: 2 }}>→ {cand.companies?.name} <span style={{ ...TT.meta, color: TC.faint }}>· {cand.match_type} · confidence {cand.confidence}</span></div>
               {cand.note && <div style={{ ...TT.meta, color: TC.muted, marginTop: 4 }}>{cand.note}</div>}
             </div>
-            <button disabled={busy === cand.id} onClick={() => decide(cand, true)} style={{ ...btn("ink"), padding: "8px 16px", fontSize: 13 }}>Confirm</button>
-            <button disabled={busy === cand.id} onClick={() => decide(cand, false)} style={{ ...btn("quiet"), padding: "8px 16px", fontSize: 13 }}>Reject</button>
+            <button disabled={busy === cand.id} onClick={() => decide(cand, true)} style={btn("primary")}><Check size={16} strokeWidth={1.5} /> Confirm</button>
+            <button disabled={busy === cand.id} onClick={() => decide(cand, false)} style={btn("secondary")}><X size={16} strokeWidth={1.5} /> Reject</button>
           </div>
         ))}
         {candidates.length === 0 && <div style={{ color: TC.muted, fontSize: 13 }}>Nothing pending.</div>}
