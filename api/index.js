@@ -1,4 +1,5 @@
 const { logActivity, companyIdFor, contactIdForEmail } = require('../lib/server/activity.cjs');
+const { requireAuth } = require('../lib/server/auth.cjs');
 const crypto = require('crypto');
 
 // ─── Anthropic shared headers ─────────────────────────────────────────────────
@@ -1976,8 +1977,13 @@ async function handleEnrichLead(req, res) {
 
 async function handleVpsProxy(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const { vpsUrl, agentSecret, job } = req.body || {};
-  if (!vpsUrl || !job) return res.status(400).json({ error: 'vpsUrl and job required' });
+  // Jobs cost money: a signed-in user (or the cron secret) is required, and the VPS address and
+  // secret come from the server environment so the browser never has to hold them.
+  if (!(await requireAuth(req, res))) return;
+  const job = req.body?.job;
+  const vpsUrl = process.env.VPS_URL || req.body?.vpsUrl;
+  const agentSecret = process.env.AGENT_SECRET || req.body?.agentSecret;
+  if (!vpsUrl || !job) return res.status(400).json({ error: 'job required (and VPS_URL must be configured)' });
   const allowed = ['scout', 'scan-targets', 'brief', 'deliver', 'chain', 'health', 'openclaw-status', 'lookalike', 'competitor', 'configure', 'report-job'];
   if (!allowed.includes(job)) return res.status(400).json({ error: `Unknown job: ${job}` });
   try {
@@ -1993,7 +1999,7 @@ async function handleVpsProxy(req, res) {
       method,
       headers: { 'Content-Type': 'application/json', ...(agentSecret ? { 'Authorization': `Bearer ${agentSecret}` } : {}) },
     };
-    if (method === 'POST') fetchOpts.body = JSON.stringify(req.body);
+    if (method === 'POST') { const { vpsUrl: _u, agentSecret: _s, ...payload } = req.body || {}; fetchOpts.body = JSON.stringify(payload); }
     const r = await fetch(url, fetchOpts);
     const data = await r.json();
     return res.status(r.status).json({ result: data });

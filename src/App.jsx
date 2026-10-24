@@ -8,6 +8,8 @@ import Today from "./screens/Today.jsx";
 import Prospecting from "./screens/Prospecting.jsx";
 import Pipeline from "./screens/Pipeline.jsx";
 import Reports from "./screens/Reports.jsx";
+import Automation from "./screens/Automation.jsx";
+import { inputStyle } from "./tokens.js";
 import { Kanban, PieChart, ChevronDown, ChevronRight, LogOut } from "lucide-react";
 import { logActivity } from "./lib/activities.js";
 import { Home as IcHome, CalendarDays, Inbox, Building2, Target, BarChart3, Radar, Bot, PenLine, ListTodo, Contact, Brain as IcBrain, Globe, Server, Database, MessageSquare, Gauge, Settings as IcSettings, Bell as IcBell, Sparkles } from "lucide-react";
@@ -1095,7 +1097,7 @@ function LeadHandoffView({ db }) {
 // The legacy screens move under "More" rather than being deleted — cutting access is an
 // information-architecture decision that hasn't been made yet, and orphaning a working
 // screen is worse than one extra group.
-const NAV_ICONS = { today: IcHome, prospecting: Radar, pipeline: Kanban, reports: PieChart, home: IcHome, brief: CalendarDays, handoff: Inbox, relationships: Building2, targets: Target, flex: BarChart3, opportunities: Radar, actions: Bot, builder: PenLine, sales: ListTodo, crm: Contact, brain: IcBrain, publisher: Globe, openclaw: Server, memory: Database, chat: MessageSquare, usage: Gauge };
+const NAV_ICONS = { automation: Bot, today: IcHome, prospecting: Radar, pipeline: Kanban, reports: PieChart, home: IcHome, brief: CalendarDays, handoff: Inbox, relationships: Building2, targets: Target, flex: BarChart3, opportunities: Radar, actions: Bot, builder: PenLine, sales: ListTodo, crm: Contact, brain: IcBrain, publisher: Globe, openclaw: Server, memory: Database, chat: MessageSquare, usage: Gauge };
 const NAV_GROUPS = [
   { label: null, items: [
     { id: "today", label: "Today" },
@@ -1105,21 +1107,16 @@ const NAV_GROUPS = [
     { id: "reports", label: "Reports" },
   ] },
   { label: "More", collapsible: true, items: [
-    { id: "actions", label: "Agents & Ops" },
+    { id: "automation", label: "Automation" },
     { id: "builder", label: "Build Content" },
     { id: "sales", label: "Sales Queue" },
-    { id: "crm", label: "CRM (legacy)", badge: "drafts" },
-    { id: "opportunities", label: "Signals (legacy)" },
-    { id: "home", label: "Today (legacy)" },
     { id: "brain", label: "Brain" },
     { id: "publisher", label: "Publisher" },
-    { id: "openclaw", label: "Runtime" },
     { id: "memory", label: "Memory" },
     { id: "chat", label: "Chat" },
-    { id: "usage", label: "Usage" },
   ] },
 ];
-const PAGE_TITLE = { today: "Today", relationships: "Relationships", prospecting: "Prospecting", pipeline: "Pipeline", reports: "Reports", home: "Today (legacy)", brief: "This Week", handoff: "Handoff", targets: "Target Accounts", flex: "Flex Intel", opportunities: "Signals (legacy)", actions: "Agents & Ops", builder: "Build Content", sales: "Sales Queue", crm: "CRM (legacy)", brain: "Brain", publisher: "Publisher", openclaw: "Runtime", memory: "Memory", chat: "Chat", usage: "Usage" };
+const PAGE_TITLE = { automation: "Automation", today: "Today", relationships: "Relationships", prospecting: "Prospecting", pipeline: "Pipeline", reports: "Reports", home: "Today (legacy)", brief: "This Week", handoff: "Handoff", targets: "Target Accounts", flex: "Flex Intel", opportunities: "Signals (legacy)", actions: "Agents & Ops", builder: "Build Content", sales: "Sales Queue", crm: "CRM (legacy)", brain: "Brain", publisher: "Publisher", openclaw: "Runtime", memory: "Memory", chat: "Chat", usage: "Usage" };
 
 // Defined at module scope on purpose — declaring these inside WeeklyBriefView would create new
 // component types on every render, remounting the subtree and dropping state.
@@ -9723,176 +9720,39 @@ Cite URLs.`;
       </div>
 
       {showSettings && (
-        <div className="settings-panel" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: "40px 20px" }} onClick={e => { if (e.target === e.currentTarget) setShowSettings(false); }}>
-        <div style={{ background: "rgba(4,14,34,0.55)", border: "1px solid #1E1E1E", borderRadius: 12, width: "100%", maxWidth: 860, padding: "28px 32px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-            <span style={{ fontSize: 11, color: "#F7C948", letterSpacing: "2px" }}>⚙ SETTINGS</span>
-            <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 18, fontFamily: "inherit" }}>×</button>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
-          {/* Monday.com */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px" }}>▦ MONDAY.COM</span>
-              <span style={{ fontSize: 9, color: mondayToken && mondayBoards.length > 0 ? "#34D399" : "#444" }}>{mondayToken && mondayBoards.length > 0 ? `✓ ${mondayBoards.length} board${mondayBoards.length !== 1 ? "s" : ""}` : "—"}</span>
+        <div className="settings-panel" onClick={() => setShowSettings(false)} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(28,28,24,0.32)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "48px 16px", overflowY: "auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 16, width: "100%", maxWidth: 860, padding: 24, boxShadow: "0 5px 12px rgba(0,0,0,0.12)" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontSize: 20, fontWeight: 450, color: TC.ink }}>Settings</div>
+              <button onClick={() => setShowSettings(false)} style={{ marginLeft: "auto", background: "transparent", border: `1px solid ${TC.lineStrong}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: TC.sub, fontFamily: "inherit" }}>✕</button>
             </div>
-            <input value={mondayToken} onChange={e => setMondayToken(e.target.value)} placeholder="Token" type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            {mondayBoards.length > 0 && (
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {mondayBoards.map((b, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 7px", background: "#111", border: "1px solid #1E1E1E", borderRadius: 4 }}>
-                    <span style={{ fontSize: 9, color: "#E8E4DC" }}>{b.nickname}</span>
-                    <button onClick={() => setMondayBoards(prev => prev.filter((_, idx) => idx !== i))} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12, padding: 0, fontFamily: "inherit" }}>×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 6 }}>
-              <input value={newBoardNickname} onChange={e => setNewBoardNickname(e.target.value)} placeholder="Nickname"
-                style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "5px 8px", fontFamily: "inherit", flex: 1, minWidth: 0 }} />
-              <input value={newBoardId} onChange={e => setNewBoardId(e.target.value)} placeholder="Board ID" onKeyDown={e => e.key === "Enter" && addMondayBoard()}
-                style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "5px 8px", fontFamily: "inherit", flex: 1, minWidth: 0 }} />
-              <button onClick={addMondayBoard} style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#F7C948", fontSize: 9, padding: "5px 10px", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>+ Add</button>
+            <div style={{ fontSize: 13, lineHeight: "20px", color: TC.sub, marginBottom: 18 }}>Keys entered here stay in this browser only. Server-side jobs use the keys configured on Vercel and the droplet, so most of these are optional.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
+              {[
+                { title: "Apollo", fields: [["Apollo API key", apolloKey, setApolloKey, "password"]] },
+                { title: "Tavily", fields: [["Tavily API key", tavilyKey, setTavilyKey, "password"]] },
+                { title: "Flex Rental Solutions", fields: [["X-Auth-Token", flexApiKey, setFlexApiKey, "password"]], note: "clearlamp.flexrentalsolutions.com" },
+                { title: "Gmail drafts", fields: [["OAuth refresh token", gmailRefreshToken, setGmailRefreshToken, "password"]], note: "Scope gmail.compose. Saves drafts, never sends." },
+                { title: "Brief delivery", fields: [["Email for the weekly brief", briefEmail, setBriefEmail, "email"], ["Slack webhook URL", slackWebhookUrl, setSlackWebhookUrl, "password"]] },
+                { title: "Google Analytics", fields: [["GA4 property id", gaPropertyId, setGaPropertyId, "text"], ["Service account JSON", gaServiceAccount, setGaServiceAccount, "password"]] },
+                { title: "Google Ads", fields: [["Developer token", googleAdsDevToken, setGoogleAdsDevToken, "password"], ["Customer id", googleAdsCustomerId, setGoogleAdsCustomerId, "text"], ["Manager id", googleAdsManagerId, setGoogleAdsManagerId, "text"], ["Refresh token", googleAdsRefreshToken, setGoogleAdsRefreshToken, "password"]] },
+                { title: "Webflow", fields: [["API key", webflowApiKey, setWebflowApiKey, "password"], ["Collection id", webflowCollectionId, setWebflowCollectionId, "text"]] },
+                { title: "SmugMug", fields: [["Key", smugmugKey, setSmugmugKey, "password"], ["Secret", smugmugSecret, setSmugmugSecret, "password"], ["Username", smugmugUsername, setSmugmugUsername, "text"]] },
+                { title: "Monday.com", fields: [["Token", mondayToken, setMondayToken, "password"]] },
+                { title: "OpenClaw droplet", fields: [["VPS URL", vpsUrl, setVpsUrl, "text"], ["Agent secret", agentSecret, setAgentSecret, "password"]], note: "Only needed if the server has no VPS_URL / AGENT_SECRET configured." },
+              ].map(g => (
+                <div key={g.title} style={{ background: TC.bg, border: `1px solid ${TC.line}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 13, fontWeight: 450, color: TC.ink }}>{g.title}</span><span style={{ marginLeft: "auto", fontSize: 11.5, color: g.fields.every(f => f[1]) ? TC.positiveInk : TC.faint }}>{g.fields.every(f => f[1]) ? "configured" : g.fields.some(f => f[1]) ? "partial" : "not set"}</span></div>
+                  {g.fields.map(([lbl, val, set, type]) => (
+                    <label key={lbl} style={{ fontSize: 12, color: TC.muted, display: "flex", flexDirection: "column", gap: 4 }}>{lbl}
+                      <input value={val || ""} onChange={e => set(e.target.value)} type={type === "password" ? "password" : "text"} placeholder={lbl} style={inputStyle()} />
+                    </label>
+                  ))}
+                  {g.note && <div style={{ fontSize: 11.5, color: TC.faint }}>{g.note}</div>}
+                </div>
+              ))}
             </div>
           </div>
-
-          {/* Apollo */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#4ECDC4", letterSpacing: "2px" }}>⚡ APOLLO</span>
-              <span style={{ fontSize: 9, color: apolloKey ? "#34D399" : "#444" }}>{apolloKey ? "✓ Connected" : "—"}</span>
-            </div>
-            <input value={apolloKey} onChange={e => setApolloKey(e.target.value)} placeholder="API Key" type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-          </div>
-
-          {/* Tavily */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#A78BFA", letterSpacing: "2px" }}>◎ TAVILY</span>
-              <span style={{ fontSize: 9, color: tavilyKey ? "#34D399" : "#444" }}>{tavilyKey ? "✓ Connected" : "—"}</span>
-            </div>
-            <input value={tavilyKey} onChange={e => setTavilyKey(e.target.value)} placeholder="tvly-..." type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-          </div>
-
-          {/* Google Analytics */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#A78BFA", letterSpacing: "2px" }}>◎ GOOGLE ANALYTICS</span>
-              <span style={{ fontSize: 9, color: gaPropertyId && gaServiceAccount ? "#34D399" : "#444" }}>{gaPropertyId && gaServiceAccount ? "✓ Connected" : "—"}</span>
-            </div>
-            <input value={gaPropertyId} onChange={e => setGaPropertyId(e.target.value)} placeholder="Property ID"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <textarea value={gaServiceAccount} onChange={e => setGaServiceAccount(e.target.value)} placeholder='Service Account JSON {"type":"service_account",...}' rows={3}
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 10, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box", resize: "vertical" }} />
-          </div>
-
-          {/* Google Ads */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#34D399", letterSpacing: "2px" }}>◎ GOOGLE ADS</span>
-              <span style={{ fontSize: 9, color: googleAdsDevToken && googleAdsCustomerId && googleAdsRefreshToken ? "#34D399" : "#444" }}>{googleAdsDevToken && googleAdsCustomerId && googleAdsRefreshToken ? "✓ Connected" : "—"}</span>
-            </div>
-            <input value={googleAdsDevToken} onChange={e => setGoogleAdsDevToken(e.target.value)} placeholder="Developer Token" type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <input value={googleAdsCustomerId} onChange={e => setGoogleAdsCustomerId(e.target.value)} placeholder="Customer ID (315-652-9899)"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <input value={googleAdsManagerId} onChange={e => setGoogleAdsManagerId(e.target.value)} placeholder="Manager ID (185-260-8925)"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <input value={googleAdsRefreshToken} onChange={e => setGoogleAdsRefreshToken(e.target.value)} placeholder="Refresh Token" type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-          </div>
-
-          {/* Webflow */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#34D399", letterSpacing: "2px" }}>◈ WEBFLOW</span>
-              <span style={{ fontSize: 9, color: webflowApiKey && webflowCollectionId ? "#34D399" : "#444" }}>{webflowApiKey && webflowCollectionId ? "✓ Connected" : "—"}</span>
-            </div>
-            <input value={webflowApiKey} onChange={e => setWebflowApiKey(e.target.value)} placeholder="API Key" type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <input value={webflowCollectionId} onChange={e => setWebflowCollectionId(e.target.value)} placeholder="Collection ID"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-          </div>
-
-          {/* Supabase */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#4ECDC4", letterSpacing: "2px" }}>◈ SUPABASE</span>
-              <span style={{ fontSize: 9, color: supabaseUrl && supabaseAnonKey ? "#34D399" : "#444" }}>{supabaseUrl && supabaseAnonKey ? "✓ Connected" : "—"}</span>
-            </div>
-            <input value={supabaseUrl} onChange={e => setSupabaseUrl(e.target.value)} placeholder="https://xxx.supabase.co"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <input value={supabaseAnonKey} onChange={e => setSupabaseAnonKey(e.target.value)} placeholder="Anon Key" type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-          </div>
-
-          {/* SmugMug */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px" }}>◈ SMUGMUG</span>
-              <span style={{ fontSize: 9, color: smugmugKey && smugmugSecret ? "#34D399" : "#444" }}>{smugmugKey && smugmugSecret ? "✓ Connected" : "—"}</span>
-            </div>
-            <input value={smugmugKey} onChange={e => setSmugmugKey(e.target.value)} placeholder="API Key"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <input value={smugmugSecret} onChange={e => setSmugmugSecret(e.target.value)} placeholder="API Secret" type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <input value={smugmugUsername} onChange={e => setSmugmugUsername(e.target.value)} placeholder="Username"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-          </div>
-
-          {/* Flex Rental Solutions */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#FB923C", letterSpacing: "2px" }}>◐ FLEX RENTAL</span>
-              <span style={{ fontSize: 9, color: flexApiKey ? "#34D399" : "#444" }}>{flexApiKey ? "✓ Connected" : "—"}</span>
-            </div>
-            <input value={flexApiKey} onChange={e => setFlexApiKey(e.target.value)} placeholder="X-Auth-Token" type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <div style={{ fontSize: 9, color: "#444" }}>clearlamp.flexrentalsolutions.com</div>
-          </div>
-
-          {/* Brief Delivery */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#F7C948", letterSpacing: "2px" }}>◉ BRIEF DELIVERY</span>
-              <span style={{ fontSize: 9, color: briefEmail || slackWebhookUrl ? "#34D399" : "#444" }}>{briefEmail || slackWebhookUrl ? "✓ Configured" : "—"}</span>
-            </div>
-            <input value={briefEmail} onChange={e => setBriefEmail(e.target.value)} placeholder="Email address for weekly brief"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <input value={slackWebhookUrl} onChange={e => setSlackWebhookUrl(e.target.value)} placeholder="Slack webhook URL (optional)"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <div style={{ fontSize: 9, color: "#444" }}>Email via Resend (RESEND_API_KEY required on server) · Auto-delivers on Monday cron</div>
-          </div>
-
-          {/* VPS Agent Runner */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#34D399", letterSpacing: "2px" }}>◎ VPS AGENT RUNNER</span>
-              <span style={{ fontSize: 9, color: vpsUrl ? "#34D399" : "#444" }}>{vpsUrl ? "✓ Connected" : "—"}</span>
-            </div>
-            <input value={vpsUrl} onChange={e => setVpsUrl(e.target.value)} placeholder="http://209.38.142.46:3001"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <input value={agentSecret} onChange={e => setAgentSecret(e.target.value)} placeholder="AGENT_SECRET" type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <div style={{ fontSize: 9, color: "#444" }}>DigitalOcean droplet · persistent agent execution · daily cron</div>
-          </div>
-
-          {/* Gmail */}
-          <div style={{ background: "rgba(4,14,34,0.62)", border: "1px solid #1A1A1A", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: "#4ECDC4", letterSpacing: "2px" }}>◎ GMAIL DRAFTS</span>
-              <span style={{ fontSize: 9, color: gmailRefreshToken ? "#34D399" : "#444" }}>{gmailRefreshToken ? "✓ Connected" : "—"}</span>
-            </div>
-            <input value={gmailRefreshToken} onChange={e => setGmailRefreshToken(e.target.value)} placeholder="Gmail OAuth refresh token" type="password"
-              style={{ background: "#111", border: "1px solid #1E1E1E", borderRadius: 5, color: "#E8E4DC", fontSize: 11, padding: "6px 10px", fontFamily: "inherit", width: "100%", boxSizing: "border-box" }} />
-            <div style={{ fontSize: 9, color: "#444" }}>Scope: gmail.compose · saves outreach drafts directly to Gmail</div>
-          </div>
-
-        </div>
-        </div>
         </div>
       )}
 
@@ -9991,6 +9851,8 @@ Cite URLs.`;
             <UsageView db={db} onNavigate={setActiveId} />
           ) : activeId === "sales" ? (
             <SalesView db={db} apolloKey={apolloKey} gmailRefreshToken={gmailRefreshToken} />
+          ) : activeId === "automation" ? (
+            <Automation />
           ) : activeId === "today" ? (
             <Today onNavigate={navTo} WeeklyBrief={WeeklyBriefView} db={db} />
           ) : activeId === "prospecting" ? (
@@ -10288,33 +10150,13 @@ Cite URLs.`;
       </div>
 
       {/* Mobile bottom tab bar — visible only on screens < 768px via CSS */}
-      <div className="ff-tab-bar" style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 56, background: "rgba(4,14,34,0.5)", borderTop: "1px solid #1A1A1A", zIndex: 50, alignItems: "center", justifyContent: "space-around", padding: "0 4px" }}>
-        <div onClick={() => setActiveId("home")} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 8px", borderRadius: 8, background: activeId === "home" ? "#FF6B2B15" : "transparent", cursor: "pointer", flex: 1 }}>
-          <span style={{ fontSize: 15, color: activeId === "home" ? "#FF6B2B" : "#555" }}>◉</span>
-          <span style={{ fontSize: 7, color: activeId === "home" ? "#FF6B2B" : "#555", letterSpacing: "0.5px" }}>Home</span>
-        </div>
-        {(() => {
-          const agentIds = ["builder", "prospector", "monday", "dossier"];
-          const isAgentActive = agentIds.includes(activeId);
-          return (
-            <div onClick={() => setActiveId(isAgentActive ? activeId : "builder")} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 8px", borderRadius: 8, background: isAgentActive ? "#FF6B2B15" : "transparent", cursor: "pointer", flex: 1 }}>
-              <span style={{ fontSize: 15, color: isAgentActive ? "#FF6B2B" : "#555" }}>✦</span>
-              <span style={{ fontSize: 7, color: isAgentActive ? "#FF6B2B" : "#555", letterSpacing: "0.5px" }}>Agents</span>
-            </div>
-          );
-        })()}
-        <div onClick={() => setActiveId("actions")} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 8px", borderRadius: 8, background: activeId === "actions" ? "#FB923C15" : "transparent", cursor: "pointer", flex: 1 }}>
-          <span style={{ fontSize: 15, color: activeId === "actions" ? "#FB923C" : "#555" }}>⚡</span>
-          <span style={{ fontSize: 7, color: activeId === "actions" ? "#FB923C" : "#555", letterSpacing: "0.5px" }}>Actions</span>
-        </div>
-        <div onClick={() => setActiveId("publisher")} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 8px", borderRadius: 8, background: activeId === "publisher" ? "#34D39915" : "transparent", cursor: "pointer", flex: 1 }}>
-          <span style={{ fontSize: 15, color: activeId === "publisher" ? "#34D399" : "#555" }}>◈</span>
-          <span style={{ fontSize: 7, color: activeId === "publisher" ? "#34D399" : "#555", letterSpacing: "0.5px" }}>Publish</span>
-        </div>
-        <div onClick={() => setShowSettings(s => !s)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 10px", borderRadius: 8, background: showSettings ? "#F7C94815" : "transparent", cursor: "pointer", flex: 1 }}>
-          <span style={{ fontSize: 15, color: showSettings ? "#F7C948" : "#555" }}>⚙</span>
-          <span style={{ fontSize: 7, color: showSettings ? "#F7C948" : "#555", letterSpacing: "0.5px" }}>Settings</span>
-        </div>
+      <div className="ff-tab-bar" style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 56, background: TC.card, borderTop: `1px solid ${TC.line}`, zIndex: 50, alignItems: "center", justifyContent: "space-around", padding: "0 4px" }}>
+        {NAV_GROUPS[0].items.map(item => { const Icon = NAV_ICONS[item.id]; const on = activeId === item.id; return (
+          <div key={item.id} onClick={() => navTo(item.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 10px", borderRadius: 8, cursor: "pointer", color: on ? TC.ink : TC.muted, background: on ? TC.navSelected : "transparent" }}>
+            {Icon ? <Icon size={18} strokeWidth={1.5} /> : null}
+            <span style={{ fontSize: 10, fontWeight: on ? 450 : 400 }}>{item.label}</span>
+          </div>
+        ); })}
       </div>
     </div>
   );
