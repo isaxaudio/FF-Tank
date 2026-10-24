@@ -89,3 +89,11 @@ Order of operations for phase 1 (so nothing breaks in production):
 1. Add `SUPABASE_SERVICE_ROLE_KEY` to Vercel env (needs Vercel token) and to the VPS `.env` (needs SSH to the droplet; key is on the MacBook). Deploy the service-key-first server code.
 2. Create the first auth user. Wire `src/lib/auth.js` + `db.js` into `App.jsx` with a login screen, set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in Vercel, deploy to a preview, sign in.
 3. Only then `node scripts/migrate.js up` to apply 001. Verify: anon request returns empty, signed-in UI works, VPS health and a job run succeed.
+
+## Phase 1 progress log
+
+- 2026-10-23: Vercel CLI linked on the Mac mini (token in `~/.config/ff-tank/vercel-token`, project `ff-tank`, team `isaac-7398s-projects`). `CRON_SECRET` generated and set on production, preview, development (local copy in `~/.config/ff-tank/secrets.env` and `.env.local`). `SUPABASE_ANON_KEY` extended to preview and development. `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` already existed on all environments.
+- First auth user created (`isaac@fatfishmedia.com`, temporary password in `~/ff-tank-login.txt` on the mini, change after first login).
+- Preview deployment https://ff-tank-pyefb6wwy-isaac-7398s-projects.vercel.app verified in Chrome: login screen, sign-in, Today, Target Accounts (373 rows) and Handoff (7,806 scanned) load with no console errors. Previews sit behind Vercel deployment protection (302 to Vercel login for anonymous callers), so curl checks of the API must run against production or with a bypass token.
+- Noted for cleanup: `VITE_ANTHROPIC_KEY` and `APP_ACCESS_KEY` exist in Vercel env. `VITE_ANTHROPIC_KEY` is shipped to the browser and should be removed once no client code reads it.
+- Still gating migration 001: service key on the droplet (`root@209.38.142.46`), then promote, then `node scripts/migrate.js up`.
