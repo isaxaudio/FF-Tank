@@ -9,6 +9,8 @@ import { auth } from "../lib/auth.js";
 import { logActivity } from "../lib/activities.js";
 import Timeline from "../components/Timeline.jsx";
 import TasksPanel from "../components/TasksPanel.jsx";
+import { NewDealForm } from "./Pipeline.jsx";
+import { STAGE_LABEL, STAGE_TONE } from "../lib/deals.js";
 
 const money = n => (n == null ? "—" : "$" + Math.round(Number(n)).toLocaleString());
 const day = d => (d ? String(d).slice(0, 10) : "—");
@@ -21,13 +23,13 @@ const label = { ...TT.label, marginBottom: 6, display: "block" };
 const th = { ...TT.tableHead, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${TC.line}`, background: TC.bg };
 const td = { fontSize: 13, lineHeight: "20px", color: TC.ink, padding: "10px 10px", borderBottom: `1px solid ${TC.lineSoft}`, verticalAlign: "top" };
 
-export default function Relationships() {
+export default function Relationships({ initialReview = false, onNavigate }) {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
-  const [showReview, setShowReview] = useState(false);
+  const [showReview, setShowReview] = useState(!!initialReview);
   const [candidates, setCandidates] = useState([]);
   const [showNew, setShowNew] = useState(false);
   const [err, setErr] = useState("");
@@ -112,7 +114,7 @@ export default function Relationships() {
       {/* right: detail or review */}
       <div style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
         {showReview ? <ReviewQueue candidates={candidates} onChanged={loadList} />
-          : selectedId ? <CompanyPage key={selectedId} id={selectedId} onChanged={loadList} />
+          : selectedId ? <CompanyPage key={selectedId} id={selectedId} onChanged={loadList} onNavigate={onNavigate} />
           : <div style={{ padding: 48, color: TC.muted, fontSize: 14 }}>Pick a company on the left, or review pending matches.</div>}
       </div>
     </div>
@@ -151,16 +153,17 @@ function NewCompanyForm({ onDone, onCancel }) {
   );
 }
 
-function CompanyPage({ id, onChanged }) {
+function CompanyPage({ id, onChanged, onNavigate }) {
   const [co, setCo] = useState(null); const [projects, setProjects] = useState([]); const [err, setErr] = useState("");
   const [edit, setEdit] = useState(false); const [form, setForm] = useState({});
   const [showContact, setShowContact] = useState(false);
   const [timelineKey, setTimelineKey] = useState(0);
+  const [showDeal, setShowDeal] = useState(false);
 
   async function load() {
     setErr("");
     try {
-      const rows = await db.select("companies", { select: "*,flex_clients(*),target_accounts(id,name,tier,vertical,status,source,website,why_fit,relationship_notes,contact_name,contact_title,contact_email,contact_linkedin,last_scanned_at),contacts(*),opportunities(id,title,signal,signal_type,status,overall_score,created_at,url,source),outreach_drafts(id,subject,status,created_at,contact_name,sent_at)", id: `eq.${id}` });
+      const rows = await db.select("companies", { select: "*,flex_clients(*),target_accounts(id,name,tier,vertical,status,source,website,why_fit,relationship_notes,contact_name,contact_title,contact_email,contact_linkedin,last_scanned_at),contacts(*),opportunities(id,title,signal,signal_type,status,overall_score,created_at,url,source),outreach_drafts(id,subject,status,created_at,contact_name,sent_at),deals(id,name,stage,amount_estimate,next_action_due)", id: `eq.${id}` });
       const row = rows?.[0]; setCo(row || null);
       setForm({ name: row?.name || "", domain: row?.domain || "", kind: row?.kind || "prospect", tier: row?.tier || "", vertical: row?.vertical || "", source: row?.source || "", source_detail: row?.source_detail || "", notes: row?.notes || "" });
       const names = (row?.flex_clients || []).map(f => f.name).filter(Boolean);
@@ -259,6 +262,19 @@ function CompanyPage({ id, onChanged }) {
             <tbody>{contacts.map(p => <tr key={p.id}><td style={td}>{p.name || <span style={{ color: TC.muted }}>unnamed</span>}{p.linkedin && <a href={p.linkedin} target="_blank" rel="noreferrer" style={{ marginLeft: 6, color: TC.link, verticalAlign: "middle" }}><span style={{ fontSize: 11, fontWeight: 550 }}>in</span></a>}</td><td style={td}>{p.title || "—"}</td><td style={td}>{p.email || "—"}</td><td style={td}><span style={pill(p.marketing_status === "subscribed" ? "evergreen" : p.marketing_status === "unsubscribed" ? "rust" : "outline")}>{p.marketing_status || "unknown"}</span></td><td style={{ ...td, color: TC.muted }}>{[p.source, p.source_detail].filter(Boolean).join(" · ") || "—"}</td></tr>)}</tbody>
           </table>
         )}
+      </Section>
+
+      <Section title={`Deals · ${(co.deals || []).length}`} action={<button onClick={() => setShowDeal(s => !s)} style={{ ...btn("secondary"), padding: "4px 10px" }}><Plus size={14} strokeWidth={1.5} /> Deal</button>}>
+        {showDeal && <NewDealForm company={co} onDone={d => { setShowDeal(false); load(); onNavigate?.("pipeline", { dealId: d.id }); }} onCancel={() => setShowDeal(false)} />}
+        {(co.deals || []).length === 0 && !showDeal && <div style={{ fontSize: 13, color: TC.muted }}>No deals. Promote a signal or add one.</div>}
+        {(co.deals || []).map(d => (
+          <div key={d.id} onClick={() => onNavigate?.("pipeline", { dealId: d.id })} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${TC.lineSoft}`, cursor: "pointer" }}>
+            <span style={pill(STAGE_TONE[d.stage])}>{STAGE_LABEL[d.stage]}</span>
+            <span style={{ ...TT.body2Med, color: TC.ink, flex: 1 }}>{d.name}</span>
+            {d.next_action_due && <span style={{ ...TT.caption, color: TC.muted }}>next {d.next_action_due}</span>}
+            <span style={{ ...TT.body2, color: TC.ink }}>{d.amount_estimate != null ? money(d.amount_estimate) : "—"}</span>
+          </div>
+        ))}
       </Section>
 
       <Section title="Tasks">

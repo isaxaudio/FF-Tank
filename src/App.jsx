@@ -4,6 +4,11 @@ import { db } from "./lib/db.js";
 import { auth } from "./lib/auth.js";
 import Login from "./screens/Login.jsx";
 import Relationships from "./screens/Relationships.jsx";
+import Today from "./screens/Today.jsx";
+import Prospecting from "./screens/Prospecting.jsx";
+import Pipeline from "./screens/Pipeline.jsx";
+import Reports from "./screens/Reports.jsx";
+import { Kanban, PieChart, ChevronDown, ChevronRight, LogOut } from "lucide-react";
 import { logActivity } from "./lib/activities.js";
 import { Home as IcHome, CalendarDays, Inbox, Building2, Target, BarChart3, Radar, Bot, PenLine, ListTodo, Contact, Brain as IcBrain, Globe, Server, Database, MessageSquare, Gauge, Settings as IcSettings, Bell as IcBell, Sparkles } from "lucide-react";
 const FONT = TF.sans;
@@ -1090,26 +1095,22 @@ function LeadHandoffView({ db }) {
 // The legacy screens move under "More" rather than being deleted — cutting access is an
 // information-architecture decision that hasn't been made yet, and orphaning a working
 // screen is worse than one extra group.
-const NAV_ICONS = { home: IcHome, brief: CalendarDays, handoff: Inbox, relationships: Building2, targets: Target, flex: BarChart3, opportunities: Radar, actions: Bot, builder: PenLine, sales: ListTodo, crm: Contact, brain: IcBrain, publisher: Globe, openclaw: Server, memory: Database, chat: MessageSquare, usage: Gauge };
+const NAV_ICONS = { today: IcHome, prospecting: Radar, pipeline: Kanban, reports: PieChart, home: IcHome, brief: CalendarDays, handoff: Inbox, relationships: Building2, targets: Target, flex: BarChart3, opportunities: Radar, actions: Bot, builder: PenLine, sales: ListTodo, crm: Contact, brain: IcBrain, publisher: Globe, openclaw: Server, memory: Database, chat: MessageSquare, usage: Gauge };
 const NAV_GROUPS = [
-  { label: "Daily", items: [
-    { id: "home", label: "Today" },
-    { id: "brief", label: "This Week" },
-    { id: "handoff", label: "Handoff", badge: "signals" },
-  ] },
-  { label: "Weekly", items: [
+  { label: null, items: [
+    { id: "today", label: "Today" },
     { id: "relationships", label: "Relationships" },
-    { id: "targets", label: "Target Accounts" },
-    { id: "flex", label: "Flex Intel" },
-    { id: "opportunities", label: "Signals" },
+    { id: "prospecting", label: "Prospecting", badge: "signals" },
+    { id: "pipeline", label: "Pipeline" },
+    { id: "reports", label: "Reports" },
   ] },
-  { label: "System", items: [
+  { label: "More", collapsible: true, items: [
     { id: "actions", label: "Agents & Ops" },
-  ] },
-  { label: "More", items: [
     { id: "builder", label: "Build Content" },
     { id: "sales", label: "Sales Queue" },
-    { id: "crm", label: "CRM", badge: "drafts" },
+    { id: "crm", label: "CRM (legacy)", badge: "drafts" },
+    { id: "opportunities", label: "Signals (legacy)" },
+    { id: "home", label: "Today (legacy)" },
     { id: "brain", label: "Brain" },
     { id: "publisher", label: "Publisher" },
     { id: "openclaw", label: "Runtime" },
@@ -1118,6 +1119,7 @@ const NAV_GROUPS = [
     { id: "usage", label: "Usage" },
   ] },
 ];
+const PAGE_TITLE = { today: "Today", relationships: "Relationships", prospecting: "Prospecting", pipeline: "Pipeline", reports: "Reports", home: "Today (legacy)", brief: "This Week", handoff: "Handoff", targets: "Target Accounts", flex: "Flex Intel", opportunities: "Signals (legacy)", actions: "Agents & Ops", builder: "Build Content", sales: "Sales Queue", crm: "CRM (legacy)", brain: "Brain", publisher: "Publisher", openclaw: "Runtime", memory: "Memory", chat: "Chat", usage: "Usage" };
 
 // Defined at module scope on purpose — declaring these inside WeeklyBriefView would create new
 // component types on every render, remounting the subtree and dropping state.
@@ -8612,7 +8614,10 @@ function HomeView({ fetchGAMetrics, fetchGoogleAdsData, hasGoogleAdsCredentials,
 
 function FFTank({ onSignOut }) {
   const [agents, setAgents] = useState(AGENTS);
-  const [activeId, setActiveId] = useState("home");
+  const [activeId, setActiveId] = useState("today");
+  const [navParams, setNavParams] = useState({});
+  const [moreOpen, setMoreOpen] = useState(false);
+  const navTo = (id, params = {}) => { setNavParams(params); setActiveId(id); };
   const [messages, setMessages] = useState({});
   const [prompt, setPrompt] = useState("");
   const [running, setRunning] = useState(false);
@@ -9592,19 +9597,18 @@ Cite URLs.`;
         }
       `}</style>
 
-      <div style={{ padding: "14px 24px", borderBottom: `1px solid ${TC.line}`, background: TC.bg, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", rowGap: 8, flexShrink: 0, position: "relative", zIndex: 10 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-          <span onClick={() => setActiveId("home")} style={{ fontSize: 16, fontWeight: 600, color: TC.ink, letterSpacing: "-0.3px", flexShrink: 0, cursor: "pointer" }}>FF Tank</span>
-          <span className="header-tagline" style={{ fontSize: 10, fontWeight: 600, color: TC.faint, letterSpacing: "2px" }}>SALES · MARKETING · AI</span>
+      <div style={{ padding: "0 24px", height: 52, borderBottom: `1px solid ${TC.line}`, background: TC.card, display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <span style={{ fontSize: 15, fontWeight: 450, color: TC.ink }}>{PAGE_TITLE[activeId] || "FF Tank"}</span>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", rowGap: 6 }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           {/* Notification bell */}
           <div style={{ position: "relative" }}>
             <button onClick={() => { setNotifOpen(o => !o); if (!notifOpen && unreadCount > 0) markAllRead(); }} title="Notifications"
-              style={{ background: notifOpen ? "#141414" : "none", border: "1px solid #1A1A1A", borderRadius: 6, color: totalBadge > 0 ? "#F7C948" : "#999", fontSize: 13, padding: "3px 9px", cursor: "pointer", position: "relative" }}>
-              🔔
+              style={{ background: notifOpen ? TC.pressed : "transparent", border: `1px solid ${TC.lineStrong}`, borderRadius: 8, color: TC.sub, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", position: "relative" }}>
+              <IcBell size={16} strokeWidth={1.5} />
               {totalBadge > 0 && (
-                <span style={{ position: "absolute", top: -4, right: -4, background: recentFailures.length > 0 ? "#FF6B6B" : "#F7C948", color: "#000", fontSize: 8, fontWeight: 700, borderRadius: "50%", width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}>
+                <span style={{ position: "absolute", top: -4, right: -4, background: recentFailures.length > 0 ? TC.critical : TC.accent, color: recentFailures.length > 0 ? "#fff" : TC.onAccent, fontSize: 8, fontWeight: 700, borderRadius: "50%", width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}>
                   {totalBadge > 9 ? "9+" : totalBadge}
                 </span>
               )}
@@ -9705,33 +9709,16 @@ Cite URLs.`;
             )}
           </div>
           <button onClick={() => setShowSettings(s => !s)} title="Settings"
-            style={{ background: showSettings ? TC.ink : "transparent", border: `1px solid ${TC.lineStrong}`, borderRadius: 999, color: showSettings ? TC.onInk : TC.muted, fontSize: 13, padding: "4px 10px", cursor: "pointer" }}>
+            style={{ background: showSettings ? TC.pressed : "transparent", border: `1px solid ${TC.lineStrong}`, borderRadius: 8, color: TC.sub, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <IcSettings size={16} strokeWidth={1.5} />
           </button>
-          <div className="header-status-pill" style={{ padding: "4px 11px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 999, display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: TC.accentDeep }} />
-            <span style={{ fontSize: 11, color: TC.sub }}>Brain</span>
-          </div>
           {auth.user() && (
-            <button onClick={onSignOut} title={auth.user().email} style={{ padding: "3px 10px", fontSize: 11, fontFamily: FONT, color: TC.sub, background: "transparent", border: `1px solid ${TC.line}`, borderRadius: 999, cursor: "pointer" }}>
-              Sign out
-            </button>
-          )}
-          <div className="header-status-pill" style={{ padding: "3px 10px", background: supabaseUrl && supabaseAnonKey ? "#4ECDC408" : "transparent", border: `1px solid ${supabaseUrl && supabaseAnonKey ? "#4ECDC428" : "#1A1A1A"}`, borderRadius: 20, display: "flex", alignItems: "center", gap: 5 }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: supabaseUrl && supabaseAnonKey ? "#4ECDC4" : "#333" }} />
-            <span style={{ fontSize: 11, color: supabaseUrl && supabaseAnonKey ? TC.sub : TC.fainter }}>DB</span>
-          </div>
-          <div className="header-claude-pill" style={{ padding: "4px 11px", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 999, display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: TC.warn }} />
-            <span style={{ fontSize: 9, color: "#888" }}>Claude</span>
-            <span style={{ fontSize: 9, color: "#FF6B2B" }}>{formatUSD(claudeSpent)}<span style={{ color: "#999" }}>/$90</span></span>
-          </div>
-          <div className="header-budget-bar" style={{ borderLeft: "1px solid #141414", paddingLeft: 14 }}>
-            <div style={{ fontSize: 10, color: totalColor }}>{formatUSD(totalSpent)} <span style={{ color: "#999" }}>/ $150</span></div>
-            <div style={{ width: 110, height: 2, background: "#141414", borderRadius: 1, marginTop: 3 }}>
-              <div style={{ width: `${totalPct}%`, height: "100%", background: totalColor, borderRadius: 1, transition: "width 0.5s" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 8, marginLeft: 4, borderLeft: `1px solid ${TC.line}` }}>
+              <div title={auth.user().email} style={{ width: 28, height: 28, borderRadius: 999, background: TC.ink, color: TC.onInk, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 450 }}>{(auth.user().email || "?")[0].toUpperCase()}</div>
+              <span style={{ fontSize: 13, color: TC.sub, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{auth.user().email}</span>
+              <button onClick={onSignOut} title="Sign out" style={{ background: "transparent", border: "none", color: TC.muted, cursor: "pointer", padding: 4, display: "flex" }}><LogOut size={16} strokeWidth={1.5} /></button>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -9922,14 +9909,20 @@ Cite URLs.`;
           </div>
 
           {NAV_GROUPS.map(group => (
-            <div key={group.label} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 450, lineHeight: "18px", color: TC.muted, padding: "0 10px 4px" }}>{group.label}</div>
-              {group.items.map(item => {
+            <div key={group.label || "primary"} style={{ marginBottom: 14 }}>
+              {group.collapsible ? (
+                <div onClick={() => setMoreOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 450, lineHeight: "18px", color: TC.muted, padding: "0 10px 4px", cursor: "pointer", userSelect: "none" }}>
+                  {moreOpen ? <ChevronDown size={14} strokeWidth={1.5} /> : <ChevronRight size={14} strokeWidth={1.5} />} {group.label}
+                </div>
+              ) : group.label ? (
+                <div style={{ fontSize: 12, fontWeight: 450, lineHeight: "18px", color: TC.muted, padding: "0 10px 4px" }}>{group.label}</div>
+              ) : null}
+              {(group.collapsible && !moreOpen && !group.items.some(i => i.id === activeId) ? [] : group.items).map(item => {
                 const on = activeId === item.id;
                 const badge = item.badge === "drafts" ? pendingDraftCount : item.badge === "signals" ? scoutSignalCount : null;
                 const Icon = NAV_ICONS[item.id];
                 return (
-                  <div key={item.id} onClick={() => setActiveId(item.id)}
+                  <div key={item.id} onClick={() => navTo(item.id)}
                     style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 1,
                       background: on ? TC.navSelected : "transparent", color: on ? TC.ink : TC.sub,
                       transition: "background 120ms ease" }}
@@ -9998,8 +9991,16 @@ Cite URLs.`;
             <UsageView db={db} onNavigate={setActiveId} />
           ) : activeId === "sales" ? (
             <SalesView db={db} apolloKey={apolloKey} gmailRefreshToken={gmailRefreshToken} />
+          ) : activeId === "today" ? (
+            <Today onNavigate={navTo} WeeklyBrief={WeeklyBriefView} db={db} />
+          ) : activeId === "prospecting" ? (
+            <Prospecting key={navParams.tab || "handoff"} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView, Targets: TargetAccountsView }} db={db} onNavigate={navTo} />
+          ) : activeId === "pipeline" ? (
+            <Pipeline key={navParams.dealId || "all"} initialDealId={navParams.dealId || null} />
+          ) : activeId === "reports" ? (
+            <Reports views={{ Flex: FlexView }} db={db} legacyProps={{ flexApiKey, apolloKey }} onNavigate={navTo} />
           ) : activeId === "relationships" ? (
-            <Relationships />
+            <Relationships key={navParams.review ? "review" : "list"} initialReview={!!navParams.review} onNavigate={navTo} />
           ) : activeId === "crm" ? (
             <CRMView db={db} apolloKey={apolloKey} gmailRefreshToken={gmailRefreshToken} />
           ) : activeId === "memory" ? (
