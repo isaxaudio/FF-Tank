@@ -91,6 +91,28 @@ export async function flexCandidatesFor(deal) {
   }).filter(p => p.days_from_expected == null || p.days_from_expected <= 120).sort((a, b) => (a.days_from_expected ?? 9e9) - (b.days_from_expected ?? 9e9)).slice(0, 12);
 }
 
+// Next-activity state for a deal, as Pipedrive shows it: the earliest open task or the next action
+// due, in four states. overdue (red), today (green), none (yellow: nothing is scheduled), future (grey).
+const todayStr = () => new Date().toISOString().slice(0, 10);
+export function nextActivity(deal, tasks = []) {
+  const t = todayStr();
+  const dated = tasks.filter(x => x.due_date).sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const firstTask = dated[0] || tasks[0] || null;
+  let date = null, label = null;
+  if (firstTask && (!deal.next_action_due || !dated[0] || dated[0].due_date <= deal.next_action_due)) { date = firstTask.due_date || null; label = firstTask.title; }
+  else if (deal.next_action_due || deal.next_action) { date = deal.next_action_due || null; label = deal.next_action || null; }
+  if (!date) return { state: "none", date: null, label };
+  return { state: date < t ? "overdue" : date === t ? "today" : "future", date, label };
+}
+export const NEXT_TONE = { overdue: "rust", today: "evergreen", none: "ember", future: "outline" };
+export const NEXT_LABEL = { overdue: "Overdue", today: "Due today", none: "Nothing scheduled", future: "Scheduled" };
+const NEXT_ORDER = { overdue: 0, today: 1, none: 2, future: 3 };
+// Sort so overdue deals float up, then today, then deals with nothing scheduled, then by date.
+export function byNextActivity(a, b) {
+  const na = a._next || { state: "none" }, nb = b._next || { state: "none" };
+  return (NEXT_ORDER[na.state] - NEXT_ORDER[nb.state]) || String(na.date || "").localeCompare(String(nb.date || "")) || Number(b.amount_estimate || 0) - Number(a.amount_estimate || 0);
+}
+
 export function listDeals(filters = {}) {
   return db.selectAll("deals", { select: "*,companies(id,name,domain,kind,tier,lifecycle_stage),contacts(id,name,email),campaigns(id,name,kind)", order: "updated_at.desc", ...filters });
 }

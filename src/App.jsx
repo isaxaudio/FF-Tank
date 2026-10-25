@@ -4,14 +4,15 @@ import { db } from "./lib/db.js";
 import { auth } from "./lib/auth.js";
 import { logActivity } from "./lib/activities.js";
 import Login from "./screens/Login.jsx";
-import Relationships from "./screens/Relationships.jsx";
+import People from "./screens/People.jsx";
+import Companies from "./screens/Companies.jsx";
 import Today from "./screens/Today.jsx";
 import Prospecting from "./screens/Prospecting.jsx";
-import Pipeline from "./screens/Pipeline.jsx";
+import Deals from "./screens/Deals.jsx";
 import Reports from "./screens/Reports.jsx";
 import Automation from "./screens/Automation.jsx";
 import { inputStyle, btn } from "./tokens.js";
-import { Home as IcHome, Building2, Radar, Bot, Settings as IcSettings, Kanban, PieChart, LogOut } from "lucide-react";
+import { Home as IcHome, Building2, Users, Send, Bot, Settings as IcSettings, Kanban, PieChart, LogOut } from "lucide-react";
 const FONT = TF.sans;
 
 export class ErrorBoundary extends React.Component {
@@ -756,272 +757,6 @@ function WeeklyBriefView({ db, onNavigate }) {
   );
 }
 
-// Target Accounts — the named-account list the Scout can't discover on its own.
-// Corporate internal events never surface as RFPs or public listings, so this market has to be
-// targeted deliberately rather than found. Reads target_accounts; extra contacts live in
-// metadata.contacts because the table only has one contact_name/contact_title pair.
-// Target Accounts — the named-account list the Scout can't discover on its own.
-// Corporate internal events never surface as RFPs or public listings, so this market has to be
-// targeted deliberately. Reads target_accounts; extra contacts live in metadata.contacts because
-// the table only has one contact_name/contact_title pair.
-const TA_VERTICALS = {
-  fintech:     { label: "Fintech",        color: "#34D399", why: "Same profile as LoanPro ($171k) and Socure ($113k) — both opened small and grew to six figures within a year." },
-  saas:        { label: "Vertical SaaS",  color: "#A78BFA", why: "Mid-market SaaS staffs a field/event marketer rather than an events department — no entrenched AV incumbent." },
-  directsales: { label: "Direct sales",   color: "#FB923C", why: "Largest event budgets in Utah. These staff VP-level global events where tech staffs event marketers. Modere is a dormant client here." },
-  health:      { label: "Health/medtech", color: "#4ECDC4", why: "Recurring conference and exhibit calendar." },
-  enterprise:  { label: "Enterprise",     color: "#8A8578", why: "Likely held by Webb or Cornerstone on the flagship. Approach on second-tier events — kickoff, roadshow, partner day." },
-  edu:         { label: "Higher ed",      color: "#F7C948", why: "Adjacent to the WGU and Juan Diego strength." },
-  other:       { label: "Other",          color: "#8A8578", why: "Large regional employers with a standing internal event calendar." },
-};
-// Drives the default sort. This is a prospecting page, so the accounts to go after lead —
-// existing clients sort below them as context, not as the thing you open the page to work on.
-// (Dormant-client win-back lives in Flex Intel, which has the revenue history to rank it.)
-const TA_TIERS = {
-  target_a:        { label: "target A",  color: "#34D399", rank: 0 },
-  target_b:        { label: "target B",  color: "#A78BFA", rank: 1 },
-  warm:            { label: "warm",      color: "#F7C948", rank: 2 },
-  existing_client: { label: "client",    color: "#FB923C", rank: 3 },
-  watchlist:       { label: "watchlist", color: "#626873", rank: 4 },
-};
-const TA_PAGE = 60;
-
-function TargetAccountsView({ db }) {
-  const [rows, setRows] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [q, setQ] = React.useState("");
-  const [vert, setVert] = React.useState("");
-  const [tier, setTier] = React.useState("");
-  const [onlyContact, setOnlyContact] = React.useState(false);
-  const [onlyScanning, setOnlyScanning] = React.useState(false);
-  const [sort, setSort] = React.useState("priority");
-  const [shown, setShown] = React.useState(TA_PAGE);
-  const [busy, setBusy] = React.useState({});
-  const [toast, setToast] = React.useState(null);
-
-  async function load() {
-    setLoading(true);
-    try { setRows(await db.selectAll("target_accounts", { order: "created_at.desc" }) || []); }
-    catch (e) { console.error("target accounts load failed:", e); setRows([]); }
-    setLoading(false);
-  }
-  React.useEffect(() => { load(); }, []);
-
-  // cron-scout scans `target_accounts?status=eq.active` — `is_monitored` is decorative and nothing
-  // reads it, so the toggle drives `status`. Otherwise the badge claims a scan that never runs.
-  const isMonitored = a => a.status === "active";
-
-  async function toggleMonitor(a) {
-    setBusy(p => ({ ...p, [a.id]: true }));
-    const next = isMonitored(a) ? "target" : "active";
-    try {
-      await db.update("target_accounts", a.id, { status: next, is_monitored: next === "active" });
-      setRows(rs => rs.map(r => r.id === a.id ? { ...r, status: next, is_monitored: next === "active" } : r));
-      setToast({ ok: true, msg: `${a.name} ${next === "active" ? "added to" : "removed from"} the Scout scan list` });
-    } catch (e) { setToast({ ok: false, msg: e.message }); }
-    finally { setBusy(p => ({ ...p, [a.id]: false })); setTimeout(() => setToast(null), 3500); }
-  }
-
-  const contactsOf = a => {
-    const extra = a.metadata && Array.isArray(a.metadata.contacts) ? a.metadata.contacts : null;
-    if (extra && extra.length) return extra;
-    return a.contact_name ? [{ name: a.contact_name, title: a.contact_title }] : [];
-  };
-  const liSearch = (person, company) =>
-    "https://www.linkedin.com/search/results/people/?keywords=" + encodeURIComponent(`${person} ${company}`);
-
-  // The table carries duplicate rows for some companies (Real Salt Lake x4, Podium x3…). Collapse
-  // by name and keep the richest record so the list doesn't show the same account repeatedly.
-  const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const merged = React.useMemo(() => {
-    const by = new Map();
-    rows.forEach(r => {
-      const k = norm(r.name || r.company_name);
-      if (!k) return;
-      const prev = by.get(k);
-      const score = contactsOf(r).length * 10 + (isMonitored(r) ? 5 : 0) + (r.tier ? 2 : 0) + (r.why_fit ? 1 : 0);
-      if (!prev || score > prev._score) by.set(k, { ...r, _score: score, _dupes: (prev ? prev._dupes + 1 : 0) });
-      else by.set(k, { ...prev, _dupes: prev._dupes + 1 });
-    });
-    return [...by.values()];
-  }, [rows]);
-
-  const vCounts = {}, tCounts = {};
-  merged.forEach(r => {
-    if (r.vertical) vCounts[r.vertical] = (vCounts[r.vertical] || 0) + 1;
-    if (r.tier) tCounts[r.tier] = (tCounts[r.tier] || 0) + 1;
-  });
-
-  const ql = q.trim().toLowerCase();
-  const filtered = merged.filter(r => {
-    if (vert && r.vertical !== vert) return false;
-    if (tier && r.tier !== tier) return false;
-    if (onlyContact && !contactsOf(r).length) return false;
-    if (onlyScanning && !isMonitored(r)) return false;
-    if (!ql) return true;
-    const hay = [r.name, r.city, r.vertical, ...contactsOf(r).map(c => `${c.name} ${c.title}`)].join(" ").toLowerCase();
-    return hay.indexOf(ql) > -1;
-  });
-
-  const list = React.useMemo(() => {
-    const arr = filtered.slice();
-    const rank = r => (TA_TIERS[r.tier] ? TA_TIERS[r.tier].rank : 9);
-    if (sort === "name") arr.sort((a, b) => String(a.name).localeCompare(String(b.name)));
-    else if (sort === "contacts") arr.sort((a, b) => contactsOf(b).length - contactsOf(a).length || String(a.name).localeCompare(String(b.name)));
-    else arr.sort((a, b) =>
-      rank(a) - rank(b) ||
-      (contactsOf(b).length ? 1 : 0) - (contactsOf(a).length ? 1 : 0) ||
-      contactsOf(b).length - contactsOf(a).length ||
-      String(a.name).localeCompare(String(b.name)));
-    return arr;
-  }, [filtered, sort]);
-
-  React.useEffect(() => { setShown(TA_PAGE); }, [q, vert, tier, onlyContact, onlyScanning, sort]);
-
-  const scanning = merged.filter(isMonitored).length;
-  const withContact = merged.filter(r => contactsOf(r).length).length;
-  const clients = merged.filter(r => r.existing_relationship || r.tier === "existing_client").length;
-  const dupes = rows.length - merged.length;
-
-  const chip = (active, color, label, onClick, key) => (
-    <button key={key} onClick={onClick}
-      style={{ fontSize: 9, letterSpacing: "0.5px", padding: "4px 11px", borderRadius: 999, cursor: "pointer",
-        fontFamily: "inherit", textTransform: "uppercase",
-        border: `1px solid ${active ? color + "70" : TC.line}`,
-        background: active ? color + "14" : "transparent", color: active ? color : TC.faint }}>
-      {label}
-    </button>
-  );
-
-  return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "12px 20px", borderBottom: "1px solid #111", flexShrink: 0, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, fontWeight: 700, color: TC.accentDeep }}>Target Accounts</div>
-          <div style={{ fontSize: 9, color: TC.faint }}>
-            {loading ? "loading…" : `${merged.length} accounts · ${withContact} reachable · ${scanning} on the Scout scan list`}
-          </div>
-        </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          {[{ n: tCounts.target_a || 0, l: "tier A", c: TC.accentDeep },
-            { n: tCounts.target_b || 0, l: "tier B", c: TC.ink },
-            { n: clients, l: "clients", c: TC.warnInk },
-            { n: scanning, l: "scanning", c: TC.warnInk }].map(s => (
-            <div key={s.l} style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: s.c, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{loading ? "—" : s.n}</div>
-              <div style={{ fontSize: 8, color: TC.faint, letterSpacing: "1px", textTransform: "uppercase", marginTop: 2 }}>{s.l}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Sticky control bar — filtering is the main job on this page, so it stays reachable */}
-      <div style={{ padding: "10px 20px", borderBottom: "1px solid #111", flexShrink: 0, background: TC.card }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search company, person, title, city…"
-            style={{ flex: 1, minWidth: 190, fontSize: 11, padding: "6px 11px", background: TC.card, color: TC.ink, border: "1px solid #1A1A1A", borderRadius: 6, fontFamily: "inherit" }} />
-          <select value={sort} onChange={e => setSort(e.target.value)}
-            style={{ fontSize: 10, padding: "6px 9px", background: TC.card, color: TC.sub, border: "1px solid #1A1A1A", borderRadius: 6, fontFamily: "inherit" }}>
-            <option value="priority">sort: priority</option>
-            <option value="contacts">sort: most contacts</option>
-            <option value="name">sort: name</option>
-          </select>
-          {chip(onlyContact, TC.accentDeep, "has contact", () => setOnlyContact(v => !v), "f-c")}
-          {chip(onlyScanning, TC.warnInk, "scanning", () => setOnlyScanning(v => !v), "f-s")}
-          <span style={{ fontSize: 9, color: TC.faint, whiteSpace: "nowrap" }}>{list.length} shown</span>
-        </div>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
-          {chip(!vert, TC.ink, `all ${merged.length}`, () => setVert(""), "v-all")}
-          {Object.keys(TA_VERTICALS).filter(v => vCounts[v]).map(v =>
-            chip(vert === v, TA_VERTICALS[v].color, `${TA_VERTICALS[v].label} ${vCounts[v]}`, () => setVert(vert === v ? "" : v), "v-" + v))}
-        </div>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {chip(!tier, TC.ink, "any tier", () => setTier(""), "t-all")}
-          {Object.keys(TA_TIERS).filter(t => tCounts[t]).map(t =>
-            chip(tier === t, TA_TIERS[t].color, `${TA_TIERS[t].label} ${tCounts[t]}`, () => setTier(tier === t ? "" : t), "t-" + t))}
-        </div>
-      </div>
-
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 70px" }}>
-        {toast && (
-          <div style={{ position: "fixed", top: 66, right: 26, zIndex: 60, fontSize: 10, padding: "8px 14px", borderRadius: 7,
-            background: toast.ok ? "#34D39912" : "#FF6B6B12", border: `1px solid ${toast.ok ? "#34D39940" : "#FF6B6B40"}`,
-            color: toast.ok ? TC.accentDeep : TC.criticalInk }}>{toast.msg}</div>
-        )}
-
-        {/* Rationale belongs to the vertical, not to each card — one line, only when relevant */}
-        {vert && TA_VERTICALS[vert] && (
-          <div style={{ fontSize: 10.5, color: TC.muted, borderLeft: `2px solid ${TA_VERTICALS[vert].color}60`, paddingLeft: 10, marginBottom: 14, lineHeight: 1.7 }}>
-            {TA_VERTICALS[vert].why}
-          </div>
-        )}
-        {!vert && (
-          <div style={{ fontSize: 10.5, color: TC.muted, borderLeft: "2px solid #34D39960", paddingLeft: 10, marginBottom: 14, lineHeight: 1.7 }}>
-            The Scout can&apos;t find corporate internal events — no RFP, no public listing — so these are worked by name.
-            <span style={{ color: TC.faint }}> Entry pattern: LoanPro opened at $36k → $99,573 a year later; Socure at $1,733 → $96,538 ten days later. Lead with the kickoff, not the flagship.</span>
-          </div>
-        )}
-
-        {loading && <div style={{ fontSize: 10, color: TC.faint }}>loading accounts…</div>}
-        {!loading && !list.length && <div style={{ fontSize: 10, color: TC.faint, padding: "26px 0", textAlign: "center" }}>Nothing matches that filter.</div>}
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8 }}>
-          {list.slice(0, shown).map(a => {
-            const v = TA_VERTICALS[a.vertical] || TA_VERTICALS.other;
-            const t = TA_TIERS[a.tier];
-            const people = contactsOf(a);
-            const isClient = a.existing_relationship || a.tier === "existing_client";
-            return (
-              <div key={a.id} style={{ background: TC.card, border: "1px solid #1A1A1A",
-                borderLeft: isClient ? "3px solid #FB923C" : t ? `3px solid ${t.color}45` : "1px solid #1A1A1A",
-                borderRadius: 9, padding: "11px 13px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: TC.ink }}>{a.name}</span>
-                  <span style={{ fontSize: 9, color: TC.faint, whiteSpace: "nowrap" }}>{a.city || ""}</span>
-                </div>
-                <div style={{ display: "flex", gap: 4, margin: "6px 0 8px", flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: 8.5, letterSpacing: "0.7px", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, border: `1px solid ${v.color}50`, color: v.color }}>{v.label}</span>
-                  {t && <span style={{ fontSize: 8.5, letterSpacing: "0.7px", textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, border: `1px solid ${t.color}50`, color: t.color }}>{t.label}</span>}
-                  {isMonitored(a) && <span style={{ fontSize: 8.5, color: TC.warnInk }}>◉ scanning</span>}
-                </div>
-                {people.length ? people.slice(0, 4).map((p, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "2px 0", fontSize: 10.5 }}>
-                    <a href={liSearch(p.name, a.name)} target="_blank" rel="noopener noreferrer"
-                      style={{ color: TC.sub, whiteSpace: "nowrap", textDecoration: "none", borderBottom: "1px dotted #333" }}
-                      title={`Find ${p.name} on LinkedIn`}>{p.name}</a>
-                    <span style={{ color: TC.faint, textAlign: "right", fontSize: 10 }}>{p.title}</span>
-                  </div>
-                )) : <div style={{ fontSize: 10, color: TC.fainter }}>no named contact — enrich to reach</div>}
-                {isClient && a.relationship_notes && (
-                  <div style={{ fontSize: 9.5, color: TC.warnInk, marginTop: 7 }}>◆ {a.relationship_notes}</div>
-                )}
-                <button onClick={() => toggleMonitor(a)} disabled={!!busy[a.id]}
-                  style={{ marginTop: 9, fontSize: 9, padding: "3px 9px", borderRadius: 5, cursor: busy[a.id] ? "wait" : "pointer", fontFamily: "inherit",
-                    border: `1px solid ${isMonitored(a) ? "#34D39940" : TC.line}`,
-                    background: isMonitored(a) ? "#34D39910" : "transparent", color: isMonitored(a) ? TC.accentDeep : TC.faint }}>
-                  {isMonitored(a) ? "✓ scanning" : "+ add to scan list"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-
-        {list.length > shown && (
-          <div style={{ textAlign: "center", marginTop: 16 }}>
-            <button onClick={() => setShown(s => s + TA_PAGE)}
-              style={{ fontSize: 10, padding: "7px 18px", borderRadius: 6, border: "1px solid #1A1A1A", background: "transparent", color: TC.muted, cursor: "pointer", fontFamily: "inherit" }}>
-              Show {Math.min(TA_PAGE, list.length - shown)} more · {list.length - shown} remaining
-            </button>
-          </div>
-        )}
-        {dupes > 0 && (
-          <div style={{ fontSize: 9, color: TC.fainter, marginTop: 18, textAlign: "center" }}>
-            {dupes} duplicate row{dupes === 1 ? "" : "s"} collapsed by name
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
   const [activeTab, setActiveTab] = useState("overview");
@@ -1650,12 +1385,15 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
 // ── App shell ─────────────────────────────────────────────────────────────────
 const NAV = [
   { id: "today", label: "Today", icon: IcHome },
-  { id: "relationships", label: "Relationships", icon: Building2 },
-  { id: "prospecting", label: "Prospecting", icon: Radar },
-  { id: "pipeline", label: "Pipeline", icon: Kanban },
+  { id: "people", label: "People", icon: Users },
+  { id: "companies", label: "Companies", icon: Building2 },
+  { id: "deals", label: "Deals", icon: Kanban },
+  { id: "outreach", label: "Outreach", icon: Send },
   { id: "reports", label: "Reports", icon: PieChart },
 ];
-const PAGE_TITLE = { today: "Today", relationships: "Relationships", prospecting: "Prospecting", pipeline: "Pipeline", reports: "Reports", automation: "Automation" };
+const PAGE_TITLE = { today: "Today", people: "People", companies: "Companies", deals: "Deals", outreach: "Outreach", reports: "Reports", automation: "Automation" };
+// Old screen ids still used by the legacy brief and Flex views map onto the current nav.
+const NAV_ALIAS = { relationships: ["companies"], pipeline: ["deals"], prospecting: ["outreach"], handoff: ["outreach", { tab: "handoff" }], scout: ["outreach", { tab: "signals" }], prospector: ["outreach", { tab: "signals" }], brief: ["today"], builder: ["today"], publisher: ["today"] };
 const SETTINGS_FIELDS = [
   { key: "apolloKey", title: "Apollo", label: "Apollo API key", type: "password" },
   { key: "tavilyKey", title: "Tavily", label: "Tavily API key", type: "password" },
@@ -1669,7 +1407,11 @@ function FFTank({ onSignOut }) {
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState(() => Object.fromEntries(SETTINGS_FIELDS.map(f => [f.key, localStorage.getItem(f.key) || ""])));
   const [scoutSignalCount, setScoutSignalCount] = useState(0);
-  const navTo = (id, params = {}) => { setNavParams(params); setActiveId(id); };
+  const navTo = (id, params = {}) => {
+    const alias = NAV_ALIAS[id];
+    if (alias) { id = alias[0]; params = { ...(alias[1] || {}), ...params }; }
+    setNavParams(params); setActiveId(id);
+  };
   const setSetting = (key, value) => { setSettings(s => ({ ...s, [key]: value })); localStorage.setItem(key, value); };
   const { apolloKey, tavilyKey, flexApiKey, gmailRefreshToken } = settings;
 
@@ -1690,6 +1432,15 @@ function FFTank({ onSignOut }) {
           table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         }
         .ff-pulse { animation: ffpulse 2s ease-in-out infinite; }
+        .ff-inline:hover { background: ${TC.hover}; }
+        .ff-inline:hover .ff-inline-pen { opacity: 1 !important; }
+        .ff-row:hover td { background: ${TC.hover} !important; }
+        .ff-name:hover { text-decoration: underline; }
+        .ff-card:hover { border-color: ${TC.lineStrong} !important; }
+        @media (max-width: 760px) {
+          .ff-record { grid-template-columns: 1fr !important; padding: 12px 16px 72px !important; }
+          .ff-preview { display: none !important; }
+        }
         @keyframes ffpulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }
       `}</style>
 
@@ -1763,12 +1514,14 @@ function FFTank({ onSignOut }) {
         <div className="ff-right-col" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {activeId === "today" ? (
             <Today onNavigate={navTo} WeeklyBrief={WeeklyBriefView} db={db} />
-          ) : activeId === "relationships" ? (
-            <Relationships key={navParams.review ? "review" : navParams.companyId || "list"} initialReview={!!navParams.review} initialCompanyId={navParams.companyId || null} onNavigate={navTo} />
-          ) : activeId === "prospecting" ? (
-            <Prospecting key={navParams.tab || "handoff"} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView, Targets: TargetAccountsView }} db={db} onNavigate={navTo} />
-          ) : activeId === "pipeline" ? (
-            <Pipeline key={navParams.dealId || "all"} initialDealId={navParams.dealId || null} />
+          ) : activeId === "people" ? (
+            <People key={navParams.contactId || "list"} initialContactId={navParams.contactId || null} onNavigate={navTo} />
+          ) : activeId === "companies" ? (
+            <Companies key={navParams.review ? "review" : navParams.companyId || "list"} initialReview={!!navParams.review} initialCompanyId={navParams.companyId || null} onNavigate={navTo} />
+          ) : activeId === "outreach" ? (
+            <Prospecting key={navParams.tab || "handoff"} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView }} db={db} onNavigate={navTo} />
+          ) : activeId === "deals" ? (
+            <Deals key={navParams.dealId || "all"} initialDealId={navParams.dealId || null} onNavigate={navTo} />
           ) : activeId === "reports" ? (
             <Reports views={{ Flex: FlexView }} db={db} legacyProps={{ flexApiKey, apolloKey }} onNavigate={navTo} />
           ) : activeId === "automation" ? (

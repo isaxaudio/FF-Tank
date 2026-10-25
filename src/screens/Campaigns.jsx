@@ -160,7 +160,7 @@ function CampaignPanel({ campaign: c, onClose, onChanged, onNavigate }) {
           {members.slice(0, 200).map(m => (
             <div key={m.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${TC.lineSoft}` }}>
               <Building2 size={14} strokeWidth={1.5} style={{ color: TC.sub, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0, cursor: m.companies ? "pointer" : "default" }} onClick={() => m.companies && onNavigate?.("relationships", { companyId: m.companies.id })}>
+              <div style={{ flex: 1, minWidth: 0, cursor: m.companies ? "pointer" : "default" }} onClick={() => m.companies && onNavigate?.("companies", { companyId: m.companies.id })}>
                 <div style={{ ...TT.body2Med, color: TC.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.contacts?.name ? `${m.contacts.name} · ` : ""}{m.companies?.name || "—"}</div>
                 <div style={{ ...TT.caption, color: TC.muted, display: "flex", gap: 6, alignItems: "center" }}>
                   {m.companies?.lifecycle_stage && <span style={pill(LIFECYCLE_TONE[m.companies.lifecycle_stage])}>{LIFECYCLE_LABEL[m.companies.lifecycle_stage]}</span>}

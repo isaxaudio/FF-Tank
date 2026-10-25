@@ -74,8 +74,8 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
             <Kpi label="Overdue tasks" value={overdue.length} tone={overdue.length ? "rust" : "sand"} />
             <Kpi label="Due today" value={dueToday.length} tone={dueToday.length ? "ember" : "sand"} />
-            <Kpi label="Deals needing action" value={deals.length} tone={deals.length ? "ocean" : "sand"} onClick={() => onNavigate("pipeline")} />
-            <Kpi label="Decisions waiting" value={counts.reviews + counts.bookings} tone={counts.reviews + counts.bookings ? "iris" : "sand"} onClick={() => onNavigate("relationships")} />
+            <Kpi label="Deals needing action" value={deals.length} tone={deals.length ? "ocean" : "sand"} onClick={() => onNavigate("deals")} />
+            <Kpi label="Decisions waiting" value={counts.reviews + counts.bookings} tone={counts.reviews + counts.bookings ? "iris" : "sand"} onClick={() => onNavigate("companies")} />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 16, marginTop: 16 }}>
@@ -99,10 +99,10 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb }) {
                 ))}
               </Panel>
 
-              <Panel title="Deals needing action" note={deals.length ? `${deals.length} due or overdue` : ""} action={<button onClick={() => onNavigate("pipeline")} style={{ ...btn("tertiary"), padding: "2px 8px", fontSize: 12 }}>Pipeline <ArrowRight size={12} /></button>}>
-                {!loading && deals.length === 0 && <Empty>No deal has a next action due. Set one on each open deal in Pipeline.</Empty>}
+              <Panel title="Deals needing action" note={deals.length ? `${deals.length} due or overdue` : ""} action={<button onClick={() => onNavigate("deals")} style={{ ...btn("tertiary"), padding: "2px 8px", fontSize: 12 }}>Deals <ArrowRight size={12} /></button>}>
+                {!loading && deals.length === 0 && <Empty>No deal has a next action due. Set one on each open deal in Deals.</Empty>}
                 {deals.map(d => (
-                  <div key={d.id} onClick={() => onNavigate("pipeline", { dealId: d.id })} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${TC.lineSoft}`, cursor: "pointer" }}>
+                  <div key={d.id} onClick={() => onNavigate("deals", { dealId: d.id })} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${TC.lineSoft}`, cursor: "pointer" }}>
                     <span style={pill(STAGE_TONE[d.stage])}>{STAGE_LABEL[d.stage]}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ ...TT.body2Med, color: TC.ink }}>{d.name} <span style={{ color: TC.muted, fontWeight: 400 }}>· {d.companies?.name}</span></div>
@@ -117,9 +117,9 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb }) {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <Panel title="Decisions waiting">
-                <Decision icon={Inbox} n={counts.handoff} label="send-worthy leads scoring 8+ in the handoff queue" cta="Work the queue" onClick={() => onNavigate("prospecting", { tab: "handoff" })} />
-                <Decision icon={GitMerge} n={counts.reviews} label="company matches to confirm or reject" cta="Review" onClick={() => onNavigate("relationships", { review: true })} />
-                <Decision icon={Link2} n={counts.bookings} label="Flex booking candidates to link" cta="Open pipeline" onClick={() => onNavigate("pipeline")} />
+                <Decision icon={Inbox} n={counts.handoff} label="send-worthy leads scoring 8+ in the handoff queue" cta="Work the queue" onClick={() => onNavigate("outreach", { tab: "handoff" })} />
+                <Decision icon={GitMerge} n={counts.reviews} label="company matches to confirm or reject" cta="Review" onClick={() => onNavigate("companies", { review: true })} />
+                <Decision icon={Link2} n={counts.bookings} label="Flex booking candidates to link" cta="Open deals" onClick={() => onNavigate("deals")} />
               </Panel>
             </div>
           </div>

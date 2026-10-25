@@ -1,24 +1,24 @@
-// src/screens/Prospecting.jsx — research, kept apart from the pipeline. Three tabs:
-// Handoff (the existing one-lead-at-a-time queue), Signals (a light table over `opportunities`
-// with promote-to-deal), Target Accounts (the existing screen). Promote is the only path from a
+// src/screens/Prospecting.jsx — the Outreach area: research kept apart from the pipeline. Tabs:
+// Handoff (the one-lead-at-a-time queue), Signals (a light table over `opportunities` with
+// promote-to-deal), Campaigns. Target accounts live in Companies as a view. Promote is the only path from a
 // signal to a deal, and it is a person's click.
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { c as TC, t as TT, pill, btn, inputStyle } from "../tokens.js";
 import { Search, Play, ArrowUpRight, ExternalLink } from "lucide-react";
 import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
-import { NewDealForm } from "./Pipeline.jsx";
+import { NewDealForm } from "./Deals.jsx";
 import Campaigns from "./Campaigns.jsx";
 
-const TABS = [["handoff", "Handoff"], ["signals", "Signals"], ["targets", "Target Accounts"], ["campaigns", "Campaigns"]];
+const TABS = [["handoff", "Handoff"], ["signals", "Signals"], ["campaigns", "Campaigns"]];
 
 export default function Prospecting({ initialTab = "handoff", views = {}, db: legacyDb, legacyProps = {}, onNavigate }) {
   const [tab, setTab] = useState(initialTab);
-  const Handoff = views.Handoff, Targets = views.Targets;
+  const Handoff = views.Handoff;
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, background: TC.bg }}>
       <div style={{ padding: "14px 24px 0", display: "flex", alignItems: "center", gap: 16, borderBottom: `1px solid ${TC.line}`, background: TC.card }}>
-        <div style={{ ...TT.h4, color: TC.ink, paddingBottom: 12 }}>Prospecting</div>
+        <div style={{ ...TT.h4, color: TC.ink, paddingBottom: 12 }}>Outreach</div>
         <div style={{ display: "flex", gap: 2 }}>
           {TABS.map(([id, l]) => (
             <button key={id} onClick={() => setTab(id)} style={{ background: "none", border: "none", borderBottom: `2px solid ${tab === id ? TC.ink : "transparent"}`, padding: "6px 10px 12px", fontSize: 13, fontWeight: tab === id ? 450 : 400, color: tab === id ? TC.ink : TC.sub, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
@@ -27,7 +27,6 @@ export default function Prospecting({ initialTab = "handoff", views = {}, db: le
       </div>
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {tab === "handoff" && Handoff && <Handoff db={legacyDb} />}
-        {tab === "targets" && Targets && <Targets db={legacyDb} />}
         {tab === "signals" && <SignalsTable onNavigate={onNavigate} legacyProps={legacyProps} />}
         {tab === "campaigns" && <Campaigns onNavigate={onNavigate} />}
       </div>
