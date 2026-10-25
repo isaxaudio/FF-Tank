@@ -309,6 +309,7 @@ function DealPage({ id, onBack, onChanged, onNavigate }) {
   const [roles, setRoles] = useState([]);
   const [addC, setAddC] = useState({ contact_id: "", role: "other" });
   const [tasks, setTasks] = useState([]);
+  const [tlKey, setTlKey] = useState(0);
   const [err, setErr] = useState("");
   const campaigns = useCampaigns();
 
@@ -329,7 +330,7 @@ function DealPage({ id, onBack, onChanged, onNavigate }) {
     } catch (e) { setErr(e.message); }
   }
   useEffect(() => { Promise.resolve().then(load); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
-  function changed() { load(); onChanged?.(); }
+  function changed() { load(); setTlKey(k => k + 1); onChanged?.(); }
 
   async function patch(fields) { await updateDeal(d, fields); changed(); }
   async function move(to, note) { try { await setStage(d, to, note || null); changed(); } catch (e) { setErr(e.message); } }
@@ -419,7 +420,7 @@ function DealPage({ id, onBack, onChanged, onNavigate }) {
           )}
         </Card>
       </>}>
-      <Timeline dealId={d.id} companyId={d.company_id} contacts={contacts} onLogged={changed} />
+      <Timeline dealId={d.id} companyId={d.company_id} contacts={contacts} refreshKey={tlKey} onLogged={() => { load(); onChanged?.(); }} />
     </RecordLayout>
   );
 }

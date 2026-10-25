@@ -23,7 +23,8 @@ const when = ts => {
 };
 const firstLine = s => (s || "").split("\n")[0];
 
-export default function Timeline({ companyId, contactId, dealId, contacts = [], onLogged }) {
+// refreshKey: bump it when the page itself wrote an activity (a stage change, a Flex link) so History reloads.
+export default function Timeline({ companyId, contactId, dealId, contacts = [], onLogged, refreshKey = 0 }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [chip, setChip] = useState("all");
@@ -39,7 +40,7 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
     try { setItems((await listActivities(filters, 200)) || []); setNow(Date.now()); } catch (e) { setErr(e.message); }
     setLoading(false);
   }
-  useEffect(() => { Promise.resolve().then(load); }, [companyId, contactId, dealId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { Promise.resolve().then(load); }, [companyId, contactId, dealId, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function logged() { load(); setTasksKey(k => k + 1); onLogged?.(); }
 
