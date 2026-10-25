@@ -13,6 +13,7 @@ import { listCampaigns } from "../lib/campaigns.js";
 import { openTasksByDeal } from "../lib/tasks.js";
 import { bulkPatch } from "../lib/bulk.js";
 import { usePersonalViews, thisMonth, thisYear } from "../lib/views.js";
+import { setRecord, clearRecord, baseActions } from "../lib/record.js";
 import { ListTable, ViewTabs, BulkBar, barBtn, Toast, PreviewPane, usePreview, useSelection, Facet } from "../components/ListTable.jsx";
 import { RecordLayout, RecordHeader, Card, Prop, Empty } from "../components/RecordPage.jsx";
 import InlineField from "../components/InlineField.jsx";
@@ -63,11 +64,11 @@ function matches(d, s) {
   return true;
 }
 
-export default function Deals({ initialDealId = null, onNavigate }) {
+export default function Deals({ initialDealId = null, initialNew = false, onNavigate }) {
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(initialDealId);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useState(!!initialNew);
   const [view, setView] = useState(() => { try { return localStorage.getItem("ff:deals:view") || "board"; } catch { return "board"; } });
   const [state, setState] = useState({ ...DEFAULT });
   const [toast, setToast] = useState(null);
@@ -341,6 +342,14 @@ function DealPage({ id, onBack, onChanged, onNavigate }) {
   async function roleAction(fn) { try { await fn(); changed(); } catch (e) { setErr(e.message); } }
   async function loadCands() { try { setCands(await flexCandidatesFor(d)); } catch (e) { setErr(e.message); } }
   async function link(p) { try { await linkFlexBooking(d, p); setCands(null); changed(); } catch (e) { setErr(e.message); } }
+  // Publish this record: the base actions, stage moves (Booked only once Flex is linked; Lost needs a reason on the bar), and links.
+  useEffect(() => {
+    if (!d) return;
+    const primary = roles.find(r => r.is_primary)?.contacts || null;
+    const moves = STAGES.filter(s => s !== d.stage && s !== "lost" && !(s === "booked" && !d.flex_project_id)).map(s => ({ id: `stage-${s}`, label: `Move to ${STAGE_LABEL[s]}`, run: () => move(s) }));
+    setRecord({ id: d.id, type: "deal", title: d.name, actions: [...baseActions({ email: primary?.email || contacts.find(c => c.email)?.email || null }), ...moves, { id: "company", label: `Open ${d.companies?.name || "company"}`, run: () => onNavigate?.("companies", { companyId: d.company_id }) }, ...(d.flex_project_id ? [] : [{ id: "flex", label: "Find the booking in Flex", run: loadCands }])] });
+    return () => clearRecord(d.id);
+  }, [d, roles, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (err && !d) return <div style={{ padding: 32 }}><span style={pill("rust")}>{err}</span></div>;
   if (!d) return <div style={{ padding: 32, color: TC.muted }}>Loading…</div>;

@@ -13,6 +13,7 @@ import { LIFECYCLE, LIFECYCLE_LABEL, LIFECYCLE_TONE, LEAD_STATUS_LABEL, LEAD_STA
 import { membershipsForCompany, listCampaigns } from "../lib/campaigns.js";
 import { bulkPatch, bulkAddToCampaign } from "../lib/bulk.js";
 import { usePersonalViews } from "../lib/views.js";
+import { setRecord, clearRecord, baseActions, fireAction, onAction } from "../lib/record.js";
 import { ListTable, ViewTabs, BulkBar, barBtn, barSelect, Toast, PreviewPane, usePreview, useSelection, Facet } from "../components/ListTable.jsx";
 import { RecordLayout, RecordHeader, Card, Prop, Empty } from "../components/RecordPage.jsx";
 import InlineField from "../components/InlineField.jsx";
@@ -56,14 +57,14 @@ function matches(r, s) {
   return true;
 }
 
-export default function Companies({ initialReview = false, initialCompanyId = null, onNavigate }) {
+export default function Companies({ initialReview = false, initialCompanyId = null, initialNew = false, onNavigate }) {
   const [rows, setRows] = useState([]);
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [state, setState] = useState({ ...DEFAULT, review: !!initialReview });
   const [openId, setOpenId] = useState(initialCompanyId);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useState(!!initialNew);
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
   const [campaigns, setCampaigns] = useState([]);
@@ -225,6 +226,14 @@ function CompanyPage({ id, onBack, onChanged, onNavigate }) {
     } catch (e) { setErr(e.message); }
   }
   useEffect(() => { Promise.resolve().then(load); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Publish this record for the command bar, the keys and the right-click menu; answer its own actions.
+  useEffect(() => {
+    if (!co) return;
+    const firstEmail = (co.contacts || []).find(x => x.email && !x.merged_into_id)?.email || null;
+    setRecord({ id, type: "company", title: co.name, actions: [...baseActions({ email: firstEmail }), { id: "new-contact", label: "Add a contact", run: () => fireAction("new-contact") }, { id: "new-deal", label: "Add a deal", run: () => fireAction("new-deal") }] });
+    return () => clearRecord(id);
+  }, [co]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => onAction(({ action }) => { if (action === "new-contact") setShowContact(true); if (action === "new-deal") setShowDeal(true); }), []);
 
   async function patch(fields) {
     await db.update("companies", id, { ...fields, updated_at: new Date().toISOString() });

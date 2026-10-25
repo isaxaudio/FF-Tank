@@ -6,8 +6,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { c as TC, t as TT, pill, btn, inputStyle } from "../tokens.js";
 import { X, ChevronUp, ChevronDown, ArrowUpRight, Plus, Check } from "lucide-react";
 import { sameState } from "../lib/views.js";
-
-const inField = el => !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+import { inField } from "../lib/record.js";
+import { useContextMenu } from "./ContextMenu.jsx";
 
 // Selection over the visible rows. Shift-click selects the range from the last click; Cmd/Ctrl-A
 // selects every visible row when focus is not in a field.
@@ -40,12 +40,20 @@ export function useSelection(rows, rowKey = "id") {
 export function ListTable({ rows, columns, rowKey = "id", sel, activeId, onRow, onOpen, loading, empty, maxRows = 600 }) {
   const shown = rows.slice(0, maxRows);
   const nameIdx = Math.max(0, columns.findIndex(c => c.name));
+  const [menu, openMenu] = useContextMenu();
+  // Right-click on a row: the same things a click, the name and the checkbox do, with their keys.
+  const rowMenu = (e, r) => openMenu(e, [
+    { label: "Open record", keys: "↩", run: () => onOpen?.(r), disabled: !onOpen },
+    { label: "Preview", keys: "click", run: () => onRow?.(r), disabled: !onRow },
+    { label: sel?.selected.has(r[rowKey]) ? "Deselect" : "Select", keys: "⇧ range · ⌘A all", run: () => sel?.toggle(r[rowKey]), disabled: !sel },
+  ], columns[nameIdx]?.render ? undefined : r[columns[nameIdx]?.key]);
   const nameLeft = 36;
   const th = { ...TT.tableHead, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${TC.line}`, background: TC.card, position: "sticky", top: 0, zIndex: 2, whiteSpace: "nowrap" };
   const td = { fontSize: 13, lineHeight: "20px", color: TC.ink, padding: "8px 10px", borderBottom: `1px solid ${TC.lineSoft}`, verticalAlign: "middle", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
   const bg = r => (sel?.selected.has(r[rowKey]) ? TC.selected : activeId === r[rowKey] ? TC.selectedHover : TC.card);
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: TC.card, border: `1px solid ${TC.line}`, borderRadius: 12 }}>
+      {menu}
       <table style={{ width: "100%", minWidth: columns.reduce((s, c) => s + (c.width || 140), 36), borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
         <colgroup><col style={{ width: 36 }} />{columns.map(c => <col key={c.key} style={{ width: c.width || 140 }} />)}</colgroup>
         <thead>
@@ -60,7 +68,7 @@ export function ListTable({ rows, columns, rowKey = "id", sel, activeId, onRow, 
           {shown.map(r => {
             const id = r[rowKey];
             return (
-              <tr key={id} onClick={() => onRow?.(r)} className="ff-row" style={{ cursor: onRow ? "pointer" : "default", background: bg(r) }}>
+              <tr key={id} onClick={() => onRow?.(r)} onContextMenu={e => rowMenu(e, r)} className="ff-row" style={{ cursor: onRow ? "pointer" : "default", background: bg(r) }}>
                 <td style={{ ...td, position: "sticky", left: 0, zIndex: 1, background: "inherit", padding: "8px 0 8px 10px" }} onClick={e => e.stopPropagation()}>
                   {sel && <input type="checkbox" checked={sel.selected.has(id)} onChange={() => {}} onMouseDown={e => e.shiftKey && e.preventDefault()} onClick={e => { e.stopPropagation(); sel.toggle(id, e.shiftKey); }} style={{ margin: 0, cursor: "pointer" }} />}
                 </td>

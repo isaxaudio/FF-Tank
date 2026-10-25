@@ -12,6 +12,7 @@ import { STAGE_LABEL, STAGE_TONE } from "../lib/deals.js";
 import { listCampaigns } from "../lib/campaigns.js";
 import { bulkPatch, bulkAddToCampaign } from "../lib/bulk.js";
 import { usePersonalViews, within } from "../lib/views.js";
+import { setRecord, clearRecord, baseActions } from "../lib/record.js";
 import { ListTable, ViewTabs, BulkBar, barBtn, barSelect, Toast, PreviewPane, usePreview, useSelection, Facet } from "../components/ListTable.jsx";
 import { RecordLayout, RecordHeader, Card, Prop, Empty } from "../components/RecordPage.jsx";
 import InlineField from "../components/InlineField.jsx";
@@ -52,13 +53,13 @@ function useCampaignOptions() {
   return rows;
 }
 
-export default function People({ initialContactId = null, onNavigate }) {
+export default function People({ initialContactId = null, initialNew = false, onNavigate }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [state, setState] = useState({ ...DEFAULT });
   const [openId, setOpenId] = useState(initialContactId);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useState(!!initialNew);
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
   const personal = usePersonalViews("people");
@@ -174,6 +175,12 @@ function ContactPage({ id, onBack, onNavigate, onChanged }) {
     } catch (e) { setErr(e.message); }
   }
   useEffect(() => { Promise.resolve().then(load); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Publish this record for the command bar, the n / t / c keys and the right-click menu.
+  useEffect(() => {
+    if (!p) return;
+    setRecord({ id, type: "contact", title: p.name || "Unnamed", actions: [...baseActions({ email: p.email }), ...(p.companies ? [{ id: "company", label: `Open ${p.companies.name}`, run: () => onNavigate?.("companies", { companyId: p.companies.id }) }] : [])] });
+    return () => clearRecord(id);
+  }, [p]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function patch(fields) {
     await db.update("contacts", id, { ...fields, updated_at: new Date().toISOString() });

@@ -4,10 +4,16 @@
 import React from "react";
 import { c as TC, t as TT, tile, btn } from "../tokens.js";
 import { ArrowLeft } from "lucide-react";
+import { useRecord } from "../lib/record.js";
+import { useContextMenu } from "./ContextMenu.jsx";
 
+// Right-click anywhere on a record page (outside links and fields) shows the record's actions with their keys.
 export function RecordLayout({ header, left, children, maxWidth = 1280 }) {
+  const record = useRecord();
+  const [menu, openMenu] = useContextMenu();
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: TC.bg, minHeight: 0 }}>
+    <div onContextMenu={e => record && openMenu(e, record.actions || [], record.title)} style={{ flex: 1, overflowY: "auto", background: TC.bg, minHeight: 0 }}>
+      {menu}
       <div style={{ padding: "18px 28px 0", maxWidth }}>{header}</div>
       <div className="ff-record" style={{ display: "grid", gridTemplateColumns: "350px minmax(0, 1fr)", gap: 20, padding: "16px 28px 48px", maxWidth, alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>{left}</div>

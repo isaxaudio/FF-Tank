@@ -148,7 +148,7 @@ try {
 
   // ---- Today, Outreach, Reports
   await nav('Today'); await waitText('Deals needing action');
-  check('Today: no links to the retired Pipeline/Relationships screens', !(await has('Pipeline')) && !(await has('Relationships')) && await has('Deals needing action'));
+  check('Today: no links to the retired Pipeline/Relationships screens', !(await has('Pipeline')) && !(await has('Relationships')) && await has('Deals needing attention'));
   await nav('Outreach'); await sleep(800); check('Outreach: Handoff, Signals, Campaigns tabs; no Target Accounts tab', await has('Handoff') && await has('Signals') && await has('Campaigns') && !(await has('Target Accounts')));
   await nav('Reports'); await sleep(800); check('Reports renders', await has('Funnel') || await has('Conversion'));
   await shot('today'); await nav('Today');

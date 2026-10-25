@@ -5,6 +5,7 @@ import { c as TC, t as TT, pill, btn, inputStyle } from "../tokens.js";
 import { Plus, Check, CalendarDays } from "lucide-react";
 import { createTask, completeTask, today } from "../lib/tasks.js";
 import { db } from "../lib/db.js";
+import { onAction } from "../lib/record.js";
 
 export default function TasksPanel({ companyId, contactId, dealId, contacts = [], onChanged, showNextStep = true }) {
   const [tasks, setTasks] = useState([]);
@@ -18,6 +19,8 @@ export default function TasksPanel({ companyId, contactId, dealId, contacts = []
     try { setTasks((await db.select("tasks", { ...filters, kind: "eq.crm", select: "*,contacts(name)", order: "completed_at.asc.nullsfirst,due_date.asc.nullslast" })) || []); } catch (e) { setErr(e.message); }
   }
   useEffect(() => { Promise.resolve().then(load); }, [companyId, contactId, dealId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The t key, the command bar and the right-click menu open the add form here.
+  useEffect(() => onAction(({ action }) => { if (action === "task") setAdding(true); }), []);
 
   async function add(e) {
     e.preventDefault(); if (!f.title.trim() || busy) return; setBusy(true); setErr("");

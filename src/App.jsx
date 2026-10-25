@@ -11,8 +11,9 @@ import Prospecting from "./screens/Prospecting.jsx";
 import Deals from "./screens/Deals.jsx";
 import Reports from "./screens/Reports.jsx";
 import Automation from "./screens/Automation.jsx";
+import CommandBar from "./components/CommandBar.jsx";
 import { inputStyle, btn } from "./tokens.js";
-import { Home as IcHome, Building2, Users, Send, Bot, Settings as IcSettings, Kanban, PieChart, LogOut } from "lucide-react";
+import { Home as IcHome, Building2, Users, Send, Bot, Settings as IcSettings, Kanban, PieChart, LogOut, Search as IcSearch } from "lucide-react";
 const FONT = TF.sans;
 
 export class ErrorBoundary extends React.Component {
@@ -1407,6 +1408,8 @@ function FFTank({ onSignOut }) {
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState(() => Object.fromEntries(SETTINGS_FIELDS.map(f => [f.key, localStorage.getItem(f.key) || ""])));
   const [scoutSignalCount, setScoutSignalCount] = useState(0);
+  const [searchSignal, setSearchSignal] = useState(0);
+  const openSearch = () => setSearchSignal(s => s + 1);
   const navTo = (id, params = {}) => {
     const alias = NAV_ALIAS[id];
     if (alias) { id = alias[0]; params = { ...(alias[1] || {}), ...params }; }
@@ -1440,6 +1443,8 @@ function FFTank({ onSignOut }) {
         @media (max-width: 760px) {
           .ff-record { grid-template-columns: 1fr !important; padding: 12px 16px 72px !important; }
           .ff-preview { display: none !important; }
+          .ff-search { min-width: 0 !important; }
+          .ff-search span { display: none; }
         }
         @keyframes ffpulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }
       `}</style>
@@ -1447,6 +1452,10 @@ function FFTank({ onSignOut }) {
       <div style={{ padding: "0 24px", height: 52, borderBottom: `1px solid ${TC.line}`, background: TC.card, display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
         <span style={{ fontSize: 15, fontWeight: 450, color: TC.ink }}>{PAGE_TITLE[activeId] || "FF Tank"}</span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={openSearch} title="Search people, companies and deals (⌘K or /)" className="ff-search"
+            style={{ display: "flex", alignItems: "center", gap: 8, height: 32, padding: "0 10px", minWidth: 240, background: TC.bg, border: `1px solid ${TC.lineStrong}`, borderRadius: 8, color: TC.muted, fontSize: 13, fontFamily: "inherit", cursor: "text" }}>
+            <IcSearch size={14} strokeWidth={1.5} /><span style={{ flex: 1, textAlign: "left" }}>Search or jump to…</span><span style={{ fontSize: 11, color: TC.faint, border: `1px solid ${TC.lineStrong}`, borderRadius: 4, padding: "0 5px" }}>⌘K</span>
+          </button>
           <button onClick={() => setShowSettings(s => !s)} title="Settings"
             style={{ background: showSettings ? TC.pressed : "transparent", border: `1px solid ${TC.lineStrong}`, borderRadius: 8, color: TC.sub, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <IcSettings size={16} strokeWidth={1.5} />
@@ -1513,15 +1522,15 @@ function FFTank({ onSignOut }) {
 
         <div className="ff-right-col" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {activeId === "today" ? (
-            <Today onNavigate={navTo} WeeklyBrief={WeeklyBriefView} db={db} />
+            <Today onNavigate={navTo} WeeklyBrief={WeeklyBriefView} db={db} onSearch={openSearch} />
           ) : activeId === "people" ? (
-            <People key={navParams.contactId || "list"} initialContactId={navParams.contactId || null} onNavigate={navTo} />
+            <People key={navParams.contactId || (navParams.new ? "new" : "list")} initialContactId={navParams.contactId || null} initialNew={!!navParams.new} onNavigate={navTo} />
           ) : activeId === "companies" ? (
-            <Companies key={navParams.review ? "review" : navParams.companyId || "list"} initialReview={!!navParams.review} initialCompanyId={navParams.companyId || null} onNavigate={navTo} />
+            <Companies key={navParams.review ? "review" : navParams.companyId || (navParams.new ? "new" : "list")} initialReview={!!navParams.review} initialCompanyId={navParams.companyId || null} initialNew={!!navParams.new} onNavigate={navTo} />
           ) : activeId === "outreach" ? (
             <Prospecting key={navParams.tab || "handoff"} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView }} db={db} onNavigate={navTo} />
           ) : activeId === "deals" ? (
-            <Deals key={navParams.dealId || "all"} initialDealId={navParams.dealId || null} onNavigate={navTo} />
+            <Deals key={navParams.dealId || (navParams.new ? "new" : "all")} initialDealId={navParams.dealId || null} initialNew={!!navParams.new} onNavigate={navTo} />
           ) : activeId === "reports" ? (
             <Reports views={{ Flex: FlexView }} db={db} legacyProps={{ flexApiKey, apolloKey }} onNavigate={navTo} />
           ) : activeId === "automation" ? (
@@ -1529,6 +1538,8 @@ function FFTank({ onSignOut }) {
           ) : null}
         </div>
       </div>
+
+      <CommandBar navTo={navTo} activeId={activeId} openSignal={searchSignal} />
 
       <div className="ff-tab-bar" style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 56, background: TC.card, borderTop: `1px solid ${TC.line}`, zIndex: 50, alignItems: "center", justifyContent: "space-around", padding: "0 4px" }}>
         {NAV.map(item => { const Icon = item.icon; const on = activeId === item.id; return (
