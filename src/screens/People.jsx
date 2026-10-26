@@ -12,7 +12,8 @@ import { STAGE_LABEL, STAGE_TONE } from "../lib/deals.js";
 import { listCampaigns } from "../lib/campaigns.js";
 import { bulkPatch, bulkAddToCampaign } from "../lib/bulk.js";
 import { usePersonalViews, within } from "../lib/views.js";
-import { setRecord, clearRecord, baseActions } from "../lib/record.js";
+import { setRecord, clearRecord, baseActions, fireAction } from "../lib/record.js";
+import { listSequences, enrollMany, liveEnrollmentFor, enrollmentHistory, pauseEnrollment, resumeEnrollment, exitEnrollment, ENROLL_LABEL, ENROLL_TONE, windowLabel } from "../lib/sequences.js";
 import { ListTable, ViewTabs, BulkBar, barBtn, barSelect, Toast, PreviewPane, usePreview, useSelection, Facet } from "../components/ListTable.jsx";
 import { RecordLayout, RecordHeader, Card, Prop, Empty } from "../components/RecordPage.jsx";
 import InlineField from "../components/InlineField.jsx";
@@ -52,6 +53,11 @@ function useCampaignOptions() {
   useEffect(() => { Promise.resolve().then(async () => { try { setRows(await listCampaigns({ status: "in.(planned,active)" })); } catch { setRows([]); } }); }, []);
   return rows;
 }
+function useSequenceOptions() {
+  const [rows, setRows] = useState([]);
+  useEffect(() => { Promise.resolve().then(async () => { try { setRows((await listSequences()).filter(s => s.status === "active" && s.sequence_steps.length > 0)); } catch { setRows([]); } }); }, []);
+  return rows;
+}
 
 export default function People({ initialContactId = null, initialNew = false, onNavigate }) {
   const [rows, setRows] = useState([]);
@@ -64,6 +70,7 @@ export default function People({ initialContactId = null, initialNew = false, on
   const [busy, setBusy] = useState(false);
   const personal = usePersonalViews("people");
   const campaigns = useCampaignOptions();
+  const sequences = useSequenceOptions();
 
   async function load() {
     setLoading(true); setErr("");
@@ -89,6 +96,18 @@ export default function People({ initialContactId = null, initialNew = false, on
   const addTo = async cid => {
     const cp = campaigns.find(c => c.id === cid); if (!cp) return;
     await act(`Added to ${cp.name}`, async () => { const r = await bulkAddToCampaign(cid, sel.selectedRows, "contact_id"); setToast(null); return r.undo; });
+  };
+  // Enroll the selection in a sequence; people without an address, unsubscribed, or already in one are skipped and named.
+  const enrollIn = async sid => {
+    const sq = sequences.find(s => s.id === sid); if (!sq) return;
+    setBusy(true);
+    try {
+      const r = await enrollMany({ ...sq, steps: sq.sequence_steps }, sel.selectedRows);
+      await load(); sel.clear();
+      const why = r.skipped.length ? ` Skipped ${r.skipped.length}: ${r.skipped.slice(0, 3).map(x => `${x.contact.name || "unnamed"} (${x.reason.replace(/\.$/, "").toLowerCase()})`).join(", ")}${r.skipped.length > 3 ? "…" : ""}.` : "";
+      setToast({ msg: `${r.enrolled.length} enrolled in ${sq.name}.${why}`, undo: r.enrolled.length ? async () => { await r.undo(); await load(); } : null });
+    } catch (e) { setToast({ msg: `Failed: ${e.message}` }); }
+    setBusy(false);
   };
 
   if (openId) return <ContactPage key={openId} id={openId} onBack={() => setOpenId(null)} onNavigate={onNavigate} onChanged={load} />;
@@ -150,6 +169,7 @@ export default function People({ initialContactId = null, initialNew = false, on
         <select style={barSelect} value="" onChange={e => e.target.value && act(`${n} set to ${LEAD_STATUS_LABEL[e.target.value]}`, () => bulkPatch("contacts", sel.selectedRows, { lead_status: e.target.value }))}><option value="">Lead status…</option>{LEAD_STATUS.map(k => <option key={k} value={k}>{LEAD_STATUS_LABEL[k]}</option>)}</select>
         <button style={barBtn} title="Subscribing needs consent per person, so only unsubscribe is offered in bulk" onClick={() => act(`${n} marked unsubscribed`, () => bulkPatch("contacts", sel.selectedRows, { marketing_status: "unsubscribed" }))}>Mark unsubscribed</button>
         {campaigns.length > 0 && <select style={barSelect} value="" onChange={e => addTo(e.target.value)}><option value="">Add to campaign…</option>{campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
+        {sequences.length > 0 && <select data-bulk-enroll style={barSelect} value="" onChange={e => e.target.value && enrollIn(e.target.value)} title="Each person gets their own thread; unsubscribed or already-enrolled people are skipped"><option value="">Enroll in sequence…</option>{sequences.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
       </BulkBar>
       <Toast toast={toast} onDone={() => setToast(null)} />
     </div>
@@ -160,27 +180,34 @@ function ContactPage({ id, onBack, onNavigate, onChanged }) {
   const [p, setP] = useState(null);
   const [deals, setDeals] = useState([]);
   const [memberships, setMemberships] = useState([]);
+  const [enrollment, setEnrollment] = useState(null);   // the live sequence enrollment, if any
+  const [pastEnrollments, setPastEnrollments] = useState([]);
   const [moving, setMoving] = useState(false);
   const [err, setErr] = useState("");
 
   async function load() {
     setErr("");
     try {
-      const [rows, dc, mems] = await Promise.all([
+      const [rows, dc, mems, live, hist] = await Promise.all([
         db.select("contacts", { id: `eq.${id}`, select: "*,companies(id,name,lifecycle_stage,domain)" }),
         db.select("deal_contacts", { contact_id: `eq.${id}`, select: "id,role,is_primary,deals(id,name,stage,probability,amount_estimate,next_action_due,last_touch_at)" }),
         db.select("campaign_members", { contact_id: `eq.${id}`, select: "id,status,responded,added_at,campaigns(id,name,kind)", order: "added_at.desc" }),
+        liveEnrollmentFor(id).catch(() => null),
+        enrollmentHistory(id).catch(() => []),
       ]);
-      setP(rows?.[0] || null); setDeals(dc || []); setMemberships(mems || []);
+      setP(rows?.[0] || null); setDeals(dc || []); setMemberships(mems || []); setEnrollment(live); setPastEnrollments((hist || []).filter(e => !["active", "paused"].includes(e.status)));
     } catch (e) { setErr(e.message); }
   }
   useEffect(() => { Promise.resolve().then(load); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Publish this record for the command bar, the n / t / c keys and the right-click menu.
+  // Publish this record for the command bar, the n / t / c / s keys and the right-click menu.
   useEffect(() => {
     if (!p) return;
-    setRecord({ id, type: "contact", title: p.name || "Unnamed", actions: [...baseActions({ email: p.email }), ...(p.companies ? [{ id: "company", label: `Open ${p.companies.name}`, run: () => onNavigate?.("companies", { companyId: p.companies.id }) }] : [])] });
+    const canEnroll = !!p.email && p.marketing_status !== "unsubscribed" && !enrollment;
+    const enrollAction = { id: "enroll", label: enrollment ? `In sequence: ${enrollment.sequences?.name || ""}` : !p.email ? "Enroll in a sequence (no email)" : p.marketing_status === "unsubscribed" ? "Enroll in a sequence (unsubscribed)" : "Enroll in a sequence", keys: "s", disabled: !canEnroll, hint: canEnroll ? "Pick a sequence and preview the first email" : "", run: () => { if (canEnroll) fireAction("enroll", { contactId: id }); } };
+    setRecord({ id, type: "contact", title: p.name || "Unnamed", actions: [...baseActions({ email: p.email }), enrollAction, ...(p.companies ? [{ id: "company", label: `Open ${p.companies.name}`, run: () => onNavigate?.("companies", { companyId: p.companies.id }) }] : [])] });
     return () => clearRecord(id);
-  }, [p]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [p, enrollment]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function enrollmentAction(fn) { try { await fn(); await load(); } catch (e) { setErr(e.message); } }
 
   async function patch(fields) {
     await db.update("contacts", id, { ...fields, updated_at: new Date().toISOString() });
@@ -233,6 +260,39 @@ function ContactPage({ id, onBack, onNavigate, onChanged }) {
               <span style={{ ...TT.caption, color: TC.muted }}>{DEAL_ROLE_LABEL[x.role] || x.role}{x.is_primary ? " · primary" : ""}</span>
             </div>
           ))}
+        </Card>
+        <Card title="Sequence" note={enrollment ? ENROLL_LABEL[enrollment.status] : ""} action={!enrollment && p.email && p.marketing_status !== "unsubscribed" ? <button data-enroll-button onClick={() => fireAction("enroll", { contactId: id })} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }}>Enroll <span style={{ color: TC.faint }}>s</span></button> : null}>
+          {enrollment ? (
+            <div data-enrollment-card>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span style={pill(ENROLL_TONE[enrollment.status] || "sand")}>{ENROLL_LABEL[enrollment.status]}</span>
+                <span onClick={() => onNavigate?.("outreach", { tab: "sequences", sequenceId: enrollment.sequence_id })} style={{ ...TT.body2Med, color: TC.link, cursor: "pointer", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{enrollment.sequences?.name}</span>
+              </div>
+              <div style={{ ...TT.caption, color: TC.muted, marginTop: 4 }}>
+                Step {enrollment.current_step} done · {enrollment.status === "active" ? `next ${enrollment.next_step_at ? new Date(enrollment.next_step_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "soon"}` : "paused"} · {windowLabel(enrollment.sequences || {})}
+                {enrollment.deals && <span> · deal <span onClick={() => onNavigate?.("deals", { dealId: enrollment.deals.id })} style={{ color: TC.link, cursor: "pointer" }}>{enrollment.deals.name}</span></span>}
+              </div>
+              {enrollment.last_error && <div style={{ ...pill("rust"), marginTop: 6 }}>Last try failed: {enrollment.last_error}</div>}
+              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                {enrollment.status === "active" && <button onClick={() => enrollmentAction(() => pauseEnrollment(enrollment))} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }}>Pause</button>}
+                {enrollment.status === "paused" && <button onClick={() => enrollmentAction(() => resumeEnrollment(enrollment))} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }}>Resume</button>}
+                <button data-exit-sequence onClick={() => enrollmentAction(() => exitEnrollment(enrollment))} style={{ ...btn("tertiary"), padding: "2px 10px", fontSize: 12, color: TC.sub }}>Exit sequence</button>
+              </div>
+            </div>
+          ) : (
+            <Empty>{!p.email ? "Needs an email address first." : p.marketing_status === "unsubscribed" ? "Unsubscribed, so no sequence can be sent." : "Not in a sequence. Press s to pick one and preview the first email."}</Empty>
+          )}
+          {pastEnrollments.length > 0 && (
+            <div style={{ marginTop: 8, borderTop: `1px solid ${TC.lineSoft}`, paddingTop: 6 }}>
+              {pastEnrollments.slice(0, 4).map(e => (
+                <div key={e.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 0" }}>
+                  <span style={pill(ENROLL_TONE[e.status] || "sand")}>{ENROLL_LABEL[e.status] || e.status}</span>
+                  <span style={{ ...TT.caption, color: TC.sub, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.sequences?.name}{e.end_reason ? ` · ${e.end_reason}` : ""}</span>
+                  <span style={{ ...TT.caption, color: TC.muted }}>{ago(e.ended_at || e.enrolled_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
         <Card title={`Campaigns · ${memberships.length}`}>
           {memberships.length === 0 && <Empty>Not in any campaign.</Empty>}

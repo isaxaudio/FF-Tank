@@ -4,19 +4,20 @@
 // labels so nobody reads them as sent outreach.
 import React, { useEffect, useMemo, useState } from "react";
 import { c as TC, t as TT, pill, inputStyle, btn } from "../tokens.js";
-import { StickyNote, Phone, Users, Mail, MailCheck, MessageSquare, Radar, ThumbsUp, GitBranch, ListTodo, CheckSquare, CalendarCheck, Building2, UserPlus, ArrowUpRight, Merge, ArrowDownLeft, Clock } from "lucide-react";
+import { StickyNote, Phone, Users, Mail, MailCheck, MessageSquare, Radar, ThumbsUp, GitBranch, ListTodo, CheckSquare, CalendarCheck, Building2, UserPlus, ArrowUpRight, Merge, ArrowDownLeft, Clock, ListOrdered, LogOut } from "lucide-react";
 import { listActivities, ACTIVITY_LABEL } from "../lib/activities.js";
 import { OUTCOME_LABEL } from "../lib/status.js";
 import { listMessages, markReplied } from "../lib/email.js";
 import { onAction } from "../lib/record.js";
 import Composer from "./Composer.jsx";
 import EmailComposer from "./EmailComposer.jsx";
+import EnrollDialog from "./EnrollDialog.jsx";
 import TasksPanel from "./TasksPanel.jsx";
 import { Card } from "./RecordPage.jsx";
 
-const ICON = { note: StickyNote, call: Phone, meeting: Users, email_draft: Mail, email_sent: MailCheck, email_reply: MailCheck, slack_handoff: MessageSquare, signal: Radar, feedback: ThumbsUp, stage_change: GitBranch, task_created: ListTodo, task_done: CheckSquare, flex_booking: CalendarCheck, company_created: Building2, contact_created: UserPlus, promoted: ArrowUpRight, merged: Merge };
-const TONE = { email_sent: "evergreen", email_reply: "evergreen", flex_booking: "evergreen", slack_handoff: "ocean", email_draft: "sand", signal: "iris", feedback: "pebble", stage_change: "ocean", task_done: "evergreen", promoted: "ocean" };
-const CHIPS = [["all", "All", null], ["note", "Notes", ["note"]], ["call", "Calls", ["call"]], ["meeting", "Meetings", ["meeting"]], ["email", "Email", ["email_draft", "email_sent", "email_reply"]], ["task", "Tasks", ["task_created", "task_done"]], ["other", "Other", ["slack_handoff", "signal", "feedback", "stage_change", "flex_booking", "company_created", "contact_created", "promoted", "merged"]]];
+const ICON = { note: StickyNote, call: Phone, meeting: Users, email_draft: Mail, email_sent: MailCheck, email_reply: MailCheck, slack_handoff: MessageSquare, signal: Radar, feedback: ThumbsUp, stage_change: GitBranch, task_created: ListTodo, task_done: CheckSquare, flex_booking: CalendarCheck, company_created: Building2, contact_created: UserPlus, promoted: ArrowUpRight, merged: Merge, sequence_enrolled: ListOrdered, sequence_exited: LogOut };
+const TONE = { email_sent: "evergreen", email_reply: "evergreen", flex_booking: "evergreen", slack_handoff: "ocean", email_draft: "sand", signal: "iris", feedback: "pebble", stage_change: "ocean", task_done: "evergreen", promoted: "ocean", sequence_enrolled: "iris", sequence_exited: "pebble" };
+const CHIPS = [["all", "All", null], ["note", "Notes", ["note"]], ["call", "Calls", ["call"]], ["meeting", "Meetings", ["meeting"]], ["email", "Email", ["email_draft", "email_sent", "email_reply"]], ["task", "Tasks", ["task_created", "task_done"]], ["sequence", "Sequences", ["sequence_enrolled", "sequence_exited"]], ["other", "Other", ["slack_handoff", "signal", "feedback", "stage_change", "flex_booking", "company_created", "contact_created", "promoted", "merged"]]];
 
 const when = ts => {
   const d = new Date(ts), diff = Date.now() - d.getTime();
@@ -36,6 +37,7 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
   const [err, setErr] = useState("");
   const [messages, setMessages] = useState({}); // email_messages by id: the only source of Sent / Replied
   const [email, setEmail] = useState(null);     // { to } while the Gmail composer is open
+  const [enroll, setEnroll] = useState(null);   // { contactId } while the sequence picker is open
   const [toast, setToast] = useState("");
   // "Now" is fixed when the activities load, so the split between scheduled and past is stable across renders.
   const [now, setNow] = useState(() => Date.now());
@@ -53,8 +55,9 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
 
   function logged() { load(); setTasksKey(k => k + 1); onLogged?.(); }
   // c, the command bar and the right-click menu open the Gmail composer here.
-  useEffect(() => onAction(({ action, email: to }) => { if (action === "email") setEmail({ to: to || null }); }), []);
+  useEffect(() => onAction(({ action, email: to, contactId: cid }) => { if (action === "email") setEmail({ to: to || null }); if (action === "enroll") setEnroll({ contactId: cid || contactId || null }); }), [contactId]);
   function sent(r) { setToast(r.kind === "sent" ? "Sent through Gmail and logged." : "Draft saved in Gmail. It is logged as a draft, not as sent."); setTimeout(() => setToast(""), 4000); logged(); }
+  function enrolled(en) { setToast(`Enrolled in ${en?.sequences?.name || "the sequence"}. Step 1 goes out on the next run inside the send window.`); setTimeout(() => setToast(""), 5000); logged(); }
 
   const upcoming = useMemo(() => items.filter(a => a.due_at && new Date(a.due_at).getTime() > now).sort((a, b) => new Date(a.due_at) - new Date(b.due_at)), [items, now]);
   const past = useMemo(() => {
@@ -67,6 +70,7 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
   return (
     <>
       <EmailComposer open={!!email} onClose={() => setEmail(null)} contacts={contacts} contactId={contactId} companyId={companyId} dealId={dealId} toEmail={email?.to || null} onSent={sent} />
+      <EnrollDialog open={!!enroll} onClose={() => setEnroll(null)} contacts={contacts} contactId={enroll?.contactId || contactId} companyId={companyId} dealId={dealId} onEnrolled={enrolled} />
       {toast && <div data-toast style={{ ...pill("evergreen"), display: "block", padding: "6px 12px" }}>{toast}</div>}
       <Composer companyId={companyId} contactId={contactId} dealId={dealId} contacts={contacts} onLogged={logged} />
 
@@ -130,7 +134,7 @@ function Entry({ a, open, onToggle, upcoming = false, msg = null, onReplied }) {
         {open && (
           <div style={{ marginTop: 4 }}>
             {a.body && a.body !== headline && <div style={{ ...TT.body2, color: TC.sub, whiteSpace: "pre-wrap" }}>{a.body}</div>}
-            <div style={{ ...TT.caption, color: TC.faint, marginTop: 4 }}>{a.actor || "system"} · {a.source || "ui"} · {new Date(a.occurred_at).toLocaleString()}{a.tasks?.title ? ` · task: ${a.tasks.title}` : ""}{msg?.to_email ? ` · to ${msg.to_email}` : ""}</div>
+            <div style={{ ...TT.caption, color: TC.faint, marginTop: 4 }}>{a.actor || "system"} · {a.source || "ui"} · {new Date(a.occurred_at).toLocaleString()}{a.tasks?.title ? ` · task: ${a.tasks.title}` : ""}{msg?.to_email ? ` · to ${msg.to_email}` : ""}{a.metadata?.sequence ? ` · sequence "${a.metadata.sequence}", step ${a.metadata.step}` : ""}</div>
             {a.type === "email_sent" && msg && msg.status === "sent" && !msg.replied_at && (
               <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
                 <input value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="They replied — what did they say?" style={inputStyle({ width: 280 })} onKeyDown={e => { if (e.key === "Enter") reply(e); }} />

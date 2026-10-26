@@ -8,6 +8,7 @@ import People from "./screens/People.jsx";
 import Companies from "./screens/Companies.jsx";
 import Today from "./screens/Today.jsx";
 import Prospecting from "./screens/Prospecting.jsx";
+import { tickIfDue as tickSequences, registerGmail } from "./lib/sequences.js";
 import Deals from "./screens/Deals.jsx";
 import Reports from "./screens/Reports.jsx";
 import Automation from "./screens/Automation.jsx";
@@ -1529,7 +1530,7 @@ function FFTank({ onSignOut }) {
           ) : activeId === "companies" ? (
             <Companies key={navParams.review ? "review" : navParams.companyId || (navParams.new ? "new" : "list")} initialReview={!!navParams.review} initialCompanyId={navParams.companyId || null} initialNew={!!navParams.new} onNavigate={navTo} />
           ) : activeId === "outreach" ? (
-            <Prospecting key={navParams.tab || "handoff"} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView }} db={db} onNavigate={navTo} />
+            <Prospecting key={navParams.tab || "handoff"} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView }} db={db} legacyProps={{ sequenceId: navParams.sequenceId || null }} onNavigate={navTo} />
           ) : activeId === "deals" ? (
             <Deals key={navParams.dealId || (navParams.new ? "new" : "all")} initialDealId={navParams.dealId || null} initialNew={!!navParams.new} onNavigate={navTo} />
           ) : activeId === "reports" ? (
@@ -1559,7 +1560,13 @@ export default function App() {
     if (!session) return;
     auth.token();
     const t = setInterval(() => auth.token(), 10 * 60 * 1000);
-    return () => clearInterval(t);
+    // Sequences: this browser's Gmail token is registered for the scheduler, and an open tab ticks the
+    // scheduler at most every 15 minutes so steps go out even when no cron is running.
+    try { const tok = localStorage.getItem("gmailRefreshToken"), acct = localStorage.getItem("gmailAccount"); if (tok && acct) registerGmail({ email: acct, refreshToken: tok }).catch(() => {}); } catch { /* ignore */ }
+    const tick = () => tickSequences();
+    const t0 = setTimeout(tick, 4000);
+    const t2 = setInterval(tick, 5 * 60 * 1000);
+    return () => { clearInterval(t); clearTimeout(t0); clearInterval(t2); };
   }, [session]);
   if (auth.configured() && !session) return <Login onSignedIn={() => setSession(auth.session())} />;
   return <FFTank onSignOut={async () => { await auth.signOut(); setSession(null); }} />;

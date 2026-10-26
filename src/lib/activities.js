@@ -3,12 +3,13 @@
 import { db } from "./db.js";
 import { auth } from "./auth.js";
 
-export const ACTIVITY_TYPES = ["note", "call", "meeting", "email_draft", "email_sent", "email_reply", "slack_handoff", "signal", "feedback", "stage_change", "task_created", "task_done", "flex_booking", "company_created", "contact_created", "promoted", "merged"];
+export const ACTIVITY_TYPES = ["note", "call", "meeting", "email_draft", "email_sent", "email_reply", "slack_handoff", "signal", "feedback", "stage_change", "task_created", "task_done", "flex_booking", "company_created", "contact_created", "promoted", "merged", "sequence_enrolled", "sequence_exited"];
 
 export const ACTIVITY_LABEL = {
   note: "Note", call: "Call", meeting: "Meeting", email_draft: "Email drafted (not sent)", email_sent: "Email sent", email_reply: "Reply received",
   slack_handoff: "Handed to sales in Slack", signal: "Signal", feedback: "Lead feedback", stage_change: "Stage changed", task_created: "Task created",
   task_done: "Task completed", flex_booking: "Flex booking", company_created: "Company created", contact_created: "Contact added", promoted: "Promoted to deal", merged: "Records merged",
+  sequence_enrolled: "Enrolled in sequence", sequence_exited: "Left sequence",
 };
 
 // Logged-from-the-UI activities carry the signed-in user's email as actor and source 'ui'.

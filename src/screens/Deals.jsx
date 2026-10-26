@@ -13,7 +13,7 @@ import { listCampaigns } from "../lib/campaigns.js";
 import { openTasksByDeal } from "../lib/tasks.js";
 import { bulkPatch } from "../lib/bulk.js";
 import { usePersonalViews, thisMonth, thisYear } from "../lib/views.js";
-import { setRecord, clearRecord, baseActions } from "../lib/record.js";
+import { setRecord, clearRecord, baseActions, fireAction } from "../lib/record.js";
 import { ListTable, ViewTabs, BulkBar, barBtn, Toast, PreviewPane, usePreview, useSelection, Facet } from "../components/ListTable.jsx";
 import { RecordLayout, RecordHeader, Card, Prop, Empty } from "../components/RecordPage.jsx";
 import InlineField from "../components/InlineField.jsx";
@@ -347,7 +347,9 @@ function DealPage({ id, onBack, onChanged, onNavigate }) {
     if (!d) return;
     const primary = roles.find(r => r.is_primary)?.contacts || null;
     const moves = STAGES.filter(s => s !== d.stage && s !== "lost" && !(s === "booked" && !d.flex_project_id)).map(s => ({ id: `stage-${s}`, label: `Move to ${STAGE_LABEL[s]}`, run: () => move(s) }));
-    setRecord({ id: d.id, type: "deal", title: d.name, actions: [...baseActions({ email: primary?.email || contacts.find(c => c.email)?.email || null }), ...moves, { id: "company", label: `Open ${d.companies?.name || "company"}`, run: () => onNavigate?.("companies", { companyId: d.company_id }) }, ...(d.flex_project_id ? [] : [{ id: "flex", label: "Find the booking in Flex", run: loadCands }])] });
+    const enrollee = (primary?.email ? primary : null) || contacts.find(c => c.email) || null;
+    const enrollAction = { id: "enroll", label: enrollee ? `Enroll ${enrollee.name || "contact"} in a sequence` : "Enroll in a sequence (no contact with an email)", keys: "s", disabled: !enrollee, hint: enrollee ? "Stops if this deal books or is lost" : "", run: () => { if (enrollee) fireAction("enroll", { contactId: enrollee.id }); } };
+    setRecord({ id: d.id, type: "deal", title: d.name, actions: [...baseActions({ email: primary?.email || contacts.find(c => c.email)?.email || null }), enrollAction, ...moves, { id: "company", label: `Open ${d.companies?.name || "company"}`, run: () => onNavigate?.("companies", { companyId: d.company_id }) }, ...(d.flex_project_id ? [] : [{ id: "flex", label: "Find the booking in Flex", run: loadCands }])] });
     return () => clearRecord(d.id);
   }, [d, roles, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
 

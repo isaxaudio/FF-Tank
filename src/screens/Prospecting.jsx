@@ -10,8 +10,9 @@ import { auth } from "../lib/auth.js";
 import { NewDealForm } from "./Deals.jsx";
 import Campaigns from "./Campaigns.jsx";
 import Templates from "./Templates.jsx";
+import Sequences from "./Sequences.jsx";
 
-const TABS = [["handoff", "Handoff"], ["signals", "Signals"], ["campaigns", "Campaigns"], ["templates", "Templates"]];
+const TABS = [["handoff", "Handoff"], ["signals", "Signals"], ["sequences", "Sequences"], ["campaigns", "Campaigns"], ["templates", "Templates"]];
 
 export default function Prospecting({ initialTab = "handoff", views = {}, db: legacyDb, legacyProps = {}, onNavigate }) {
   const [tab, setTab] = useState(initialTab);
@@ -29,6 +30,7 @@ export default function Prospecting({ initialTab = "handoff", views = {}, db: le
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {tab === "handoff" && Handoff && <Handoff db={legacyDb} />}
         {tab === "signals" && <SignalsTable onNavigate={onNavigate} legacyProps={legacyProps} />}
+        {tab === "sequences" && <Sequences onNavigate={onNavigate} initialId={legacyProps.sequenceId || null} />}
         {tab === "campaigns" && <Campaigns onNavigate={onNavigate} />}
         {tab === "templates" && <Templates />}
       </div>

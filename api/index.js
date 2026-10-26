@@ -1,6 +1,7 @@
 const { logActivity, companyIdFor, contactIdForEmail } = require('../lib/server/activity.cjs');
 const { requireAuth } = require('../lib/server/auth.cjs');
 const gmail = require('../lib/server/gmail.cjs');
+const sequences = require('../lib/server/sequences.cjs');
 
 // ─── Anthropic shared headers ─────────────────────────────────────────────────
 // ANTHROPIC_HEADERS: base headers for all direct Anthropic API calls.
@@ -118,6 +119,9 @@ module.exports = async (req, res) => {
       case 'gmail-draft':    return await handleGmailDraft(req, res);
       case 'gmail-send':     return await handleGmailSend(req, res);
       case 'gmail-auth':     return await handleGmailAuth(req, res);
+      case 'gmail-register': return await handleGmailRegister(req, res);
+      case 'gmail-accounts': return await handleGmailAccounts(req, res);
+      case 'sequence-run':   return await handleSequenceRun(req, res);
       case 'send-lead':      return await handleSendLead(req, res);
       case 'enrich-lead':    return await handleEnrichLead(req, res);
       case 'vps':            return await handleVpsProxy(req, res);
@@ -1217,6 +1221,8 @@ async function handleGmailAuth(req, res) {
   if (!td.refresh_token) return res.status(400).send(pageStart + `<h2>Gmail not connected</h2><p>Google returned no refresh token (${esc(td.error_description || td.error || 'no detail')}). Remove FF Tank under myaccount.google.com → Security → Third-party access, then connect again.</p><p><a href="/">Back to FF Tank</a></p>`);
   let email = '';
   try { const u = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${td.access_token}` } }).then(r => r.json()); email = u.email || ''; } catch { /* optional */ }
+  // The scheduler sends sequences without a browser, so the token is also kept server-side (gmail_accounts, service key only).
+  if (email) await gmail.registerAccount({ email, refreshToken: td.refresh_token, by: 'oauth' }).catch(() => null);
   res.setHeader('Set-Cookie', 'gmail_oauth_state=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(pageStart + `<h2>Gmail connected${email ? ' as ' + esc(email) : ''}</h2><p>The token is saved in this browser's FF Tank settings. Taking you back…</p>
@@ -1236,6 +1242,32 @@ async function handleGmailSend(req, res) {
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message, code: e.code || null, messageId: e.messageId || null });
   }
+}
+
+// A signed-in browser that holds a Gmail token registers it for the scheduler (idempotent upsert).
+async function handleGmailRegister(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireAuth(req, res))) return;
+  const { email, refreshToken } = req.body || {};
+  if (!email || !refreshToken) return res.status(400).json({ error: 'email and refreshToken required' });
+  const row = await gmail.registerAccount({ email, refreshToken, by: req.auth?.user?.email || 'ui' });
+  return res.json({ ok: !!row, email: row?.email || null });
+}
+// Which Gmail accounts the scheduler can send from (addresses only, never tokens).
+async function handleGmailAccounts(req, res) {
+  if (!(await requireAuth(req, res))) return;
+  return res.json({ accounts: await gmail.listAccounts() });
+}
+// One scheduler tick. Called by a cron with CRON_SECRET or by a signed-in user (the app ticks every 15 minutes
+// while open, and the Sequences tab has Run now). ?dry=1 reports what would send without sending.
+async function handleSequenceRun(req, res) {
+  if (!(await requireAuth(req, res))) return;
+  try {
+    const dryRun = req.query.dry === '1' || req.body?.dryRun === true;
+    const out = await sequences.run({ dryRun });
+    out.via = req.auth?.via || null;
+    return res.json(out);
+  } catch (e) { return res.status(500).json({ error: e.message }); }
 }
 
 function truncate(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }

@@ -13,4 +13,8 @@ export default defineConfig({
       '/api/cron-scout': { target: 'http://localhost:3000', changeOrigin: true },
     },
   },
+  // `vite preview --host 127.0.0.1` (the headless verification runs) sends /api to `vercel dev --listen 3001`.
+  preview: {
+    proxy: { '/api': { target: 'http://127.0.0.1:3001', changeOrigin: true } },
+  },
 })
