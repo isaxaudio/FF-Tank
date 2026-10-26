@@ -29,6 +29,10 @@
       "destination": "/api/index?service=gmail-auth"
     },
     {
+      "source": "/u/:token",
+      "destination": "/api/index?service=unsubscribe&t=:token"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

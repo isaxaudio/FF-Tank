@@ -5,7 +5,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
 import { Plus, Archive, ArchiveRestore } from "lucide-react";
-import { listTemplates, createTemplate, updateTemplate, archiveTemplate, TOKENS, SAMPLE, render, senderNames } from "../lib/email.js";
+import { listTemplates, createTemplate, updateTemplate, archiveTemplate, TOKENS, CAMPAIGN_TOKENS, SAMPLE, render, senderNames, previewHtml } from "../lib/email.js";
 import { ago } from "../lib/status.js";
 
 const KIND = { one_to_one: "One-to-one", sequence: "Sequence step", campaign: "Campaign" };
@@ -72,10 +72,13 @@ function Editor({ template, onDone, onCancel }) {
   const [kind, setKind] = useState(template?.kind || "one_to_one");
   const [subject, setSubject] = useState(template?.subject || "");
   const [body, setBody] = useState(template?.body || "");
+  const [format, setFormat] = useState(template?.format || "text");
+  const [preheader, setPreheader] = useState(template?.preheader || "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const bodyRef = useRef(null);
   const sample = { ...SAMPLE, ...senderNames() };
+  const tokens = kind === "campaign" ? CAMPAIGN_TOKENS : TOKENS;
 
   function insert(token) {
     const el = bodyRef.current; const tag = `{{${token}}}`;
@@ -87,7 +90,7 @@ function Editor({ template, onDone, onCancel }) {
   async function save(e) {
     e.preventDefault(); if (!name.trim() || busy) return; setBusy(true); setErr("");
     try {
-      if (template) await updateTemplate(template.id, { name: name.trim(), kind, subject, body }); else await createTemplate({ name, kind, subject, body });
+      if (template) await updateTemplate(template.id, { name: name.trim(), kind, subject, body, format, preheader: preheader || null }); else await createTemplate({ name, kind, subject, body, format, preheader: preheader || null });
       onDone?.();
     } catch (e2) { setErr(e2.message); }
     setBusy(false);
@@ -98,17 +101,26 @@ function Editor({ template, onDone, onCancel }) {
       <div><span style={label}>Name</span><input value={name} onChange={e => setName(e.target.value)} placeholder="Intro after a show" style={inputStyle()} autoFocus /></div>
       <div><span style={label}>Kind</span><select value={kind} onChange={e => setKind(e.target.value)} style={inputStyle()}>{Object.entries(KIND).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
       <div><span style={label}>Subject</span><input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Good to meet you at {{event}}" style={inputStyle()} /></div>
-      <div>
-        <span style={label}>Body</span>
-        <textarea ref={bodyRef} value={body} onChange={e => setBody(e.target.value)} rows={10} style={inputStyle({ resize: "vertical", minHeight: 160, fontFamily: "inherit" })} />
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
-          {TOKENS.map(([k, d]) => <button key={k} type="button" onClick={() => insert(k)} title={d} style={{ ...pill("outline"), cursor: "pointer" }}>{`{{${k}}}`}</button>)}
+      {kind === "campaign" && (
+        <div style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 10 }}>
+          <div><span style={label}>Format</span><select data-template-format value={format} onChange={e => setFormat(e.target.value)} style={inputStyle()}><option value="text">Plain text</option><option value="html">HTML (newsletter)</option></select></div>
+          <div><span style={label}>Preheader</span><input value={preheader} onChange={e => setPreheader(e.target.value)} placeholder="The line inbox previews show after the subject" style={inputStyle()} /></div>
         </div>
+      )}
+      <div>
+        <span style={label}>{format === "html" ? "HTML" : "Body"}</span>
+        <textarea ref={bodyRef} value={body} onChange={e => setBody(e.target.value)} rows={format === "html" ? 16 : 10} spellCheck={format !== "html"} placeholder={format === "html" ? "Paste the newsletter's HTML. Tokens like {{first_name}} work inside it; {{unsubscribe_url}} goes in the footer link." : ""} style={inputStyle({ resize: "vertical", minHeight: 160, fontFamily: format === "html" ? "ui-monospace, SFMono-Regular, Menlo, monospace" : "inherit", fontSize: format === "html" ? 12 : undefined })} />
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+          {tokens.map(([k, d]) => <button key={k} type="button" onClick={() => insert(k)} title={d} style={{ ...pill("outline"), cursor: "pointer" }}>{`{{${k}}}`}</button>)}
+        </div>
+        {kind === "campaign" && !/\{\{\s*unsubscribe_url\s*\}\}/i.test(body) && <div style={{ ...TT.caption, color: TC.muted, marginTop: 4 }}>No {"{{unsubscribe_url}}"} in the body: a plain unsubscribe line is added at the bottom of every send.</div>}
       </div>
       <div style={tile({ padding: 12, background: TC.bg })}>
         <div style={{ ...TT.caption, color: TC.muted, marginBottom: 4 }}>Preview with sample values</div>
         <div style={{ ...TT.body2, color: TC.ink, fontWeight: 450 }}>{render(subject, sample) || "(no subject)"}</div>
-        <div style={{ ...TT.body2, color: TC.sub, whiteSpace: "pre-wrap", marginTop: 4 }}>{render(body, sample)}</div>
+        {format === "html"
+          ? <iframe data-template-preview title="Preview" sandbox="" srcDoc={previewHtml(body, "html", sample)} style={{ width: "100%", height: 360, border: `1px solid ${TC.line}`, borderRadius: 8, background: "#fff", marginTop: 6 }} />
+          : <div style={{ ...TT.body2, color: TC.sub, whiteSpace: "pre-wrap", marginTop: 4 }}>{render(body, sample)}</div>}
       </div>
       {err && <div style={pill("rust")}>{err}</div>}
       <div style={{ display: "flex", gap: 8 }}>

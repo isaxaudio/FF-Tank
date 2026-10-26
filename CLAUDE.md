@@ -201,6 +201,10 @@ WEBFLOW_SITE_ID
 GOOGLE_ADS_CLIENT_ID
 GOOGLE_ADS_CLIENT_SECRET
 SETUP_SECRET          -- guards agent-setup endpoint
+CRON_SECRET           -- scheduled runs (sequence tick, crons)
+RESEND_API_KEY        -- campaigns (bulk email); without it sends stop at "Resend is not configured"
+RESEND_FROM           -- default sender, e.g. "Fatfish <news@fatfishmedia.com>" on a verified domain
+RESEND_WEBHOOK_SECRET -- svix signing secret for /api/index?service=resend-webhook
 ```
 
 ## localStorage keys (user credentials, set via Settings panel)

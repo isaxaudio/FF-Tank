@@ -38,9 +38,17 @@ export function unresolved(text) { return [...new Set([...String(text || "").mat
 export function listTemplates({ archived = false, kind = null } = {}) {
   return db.select("email_templates", { select: "*", order: "name.asc", archived_at: archived ? "not.is.null" : "is.null", ...(kind ? { kind: `eq.${kind}` } : {}) });
 }
-export async function createTemplate({ name, subject = "", body = "", kind = "one_to_one" }) {
-  const rows = await db.insert("email_templates", { name: name.trim(), subject, body, kind, owner: me(), created_by: me() });
+export async function createTemplate({ name, subject = "", body = "", kind = "one_to_one", format = "text", preheader = null }) {
+  const rows = await db.insert("email_templates", { name: name.trim(), subject, body, kind, format, preheader, owner: me(), created_by: me() });
   return rows?.[0] || null;
+}
+// Campaign emails also know {{unsubscribe_url}}; the server adds a link when a template has none.
+export const CAMPAIGN_TOKENS = [...TOKENS, ["unsubscribe_url", "One-click unsubscribe link (added automatically if missing)"]];
+// A template body as a recipient would see it: HTML rendered in an iframe, text in a pre block.
+export function previewHtml(body, format, ctx) {
+  const rendered = render(body, { ...ctx, unsubscribe_url: "#unsubscribe" });
+  if (format === "html") return rendered;
+  return `<pre style="font:14px/1.5 -apple-system,system-ui,sans-serif;white-space:pre-wrap;margin:0;color:#1c1c18">${rendered.replace(/[&<>]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]))}</pre>`;
 }
 export function updateTemplate(id, patch) { return db.update("email_templates", id, { ...patch, updated_at: new Date().toISOString() }); }
 export function archiveTemplate(id, archived = true) { return updateTemplate(id, { archived_at: archived ? new Date().toISOString() : null }); }

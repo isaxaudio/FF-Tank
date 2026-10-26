@@ -49,3 +49,34 @@ export function membersOf(campaign_id) {
 export function membershipsForCompany(company_id) {
   return db.select("campaign_members", { company_id: `eq.${company_id}`, select: "id,status,responded,added_at,contact_id,campaigns(id,name,kind,status,starts_on)", order: "added_at.desc" });
 }
+
+// ---- the email send on a campaign (step 7): segment, template, test, schedule, send, results ----
+export const SEND_STATUS_LABEL = { draft: "Draft", scheduled: "Scheduled", sending: "Sending", sent: "Sent", failed: "Failed" };
+export const SEND_STATUS_TONE = { draft: "sand", scheduled: "ocean", sending: "ember", sent: "evergreen", failed: "rust" };
+export const RECIPIENT_TONE = { queued: "sand", sent: "ocean", delivered: "evergreen", opened: "evergreen", clicked: "evergreen", bounced: "rust", complained: "rust", unsubscribed: "pebble", failed: "rust" };
+export const EMPTY_SEGMENT = { lifecycle: [], lead_status: [], source: [], company_kind: [], owner: "", in_campaign: "", added_days: "" };
+
+async function api(service, payload, query = "") {
+  const r = await fetch(`/api/index?service=${service}${query}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await auth.token()}` }, body: JSON.stringify(payload || {}) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { const err = new Error(d.error || `${service} failed (${r.status})`); err.status = r.status; err.code = d.code; err.summary = d.summary; throw err; }
+  return d;
+}
+// Strip empty filters so the stored segment is only what was chosen.
+export function cleanSegment(s) {
+  const out = {};
+  for (const k of ["lifecycle", "lead_status", "source", "company_kind"]) if (s[k]?.length) out[k] = s[k];
+  if (s.owner) out.owner = s.owner;
+  if (s.in_campaign) out.in_campaign = s.in_campaign;
+  if (s.added_days) out.added_days = Number(s.added_days);
+  return out;
+}
+export function audienceFor(segment) { return api("campaign-audience", { segment: cleanSegment(segment) }); }
+export function sendTest(campaignId, addresses) { return api("campaign-send", { campaignId, test: addresses }); }
+export function sendNow(campaignId) { return api("campaign-send", { campaignId }); }
+export function dryRunSend(campaignId) { return api("campaign-send", { campaignId }, "&dry=1"); }
+export function scheduleCampaign(id, at) { return updateCampaign(id, { send_status: "scheduled", scheduled_at: at, send_error: null }); }
+export function unschedule(id) { return updateCampaign(id, { send_status: "draft", scheduled_at: null }); }
+export function listSends(campaignId, limit = 500) {
+  return db.select("campaign_sends", { campaign_id: `eq.${campaignId}`, select: "*,contacts(id,name,companies(name))", order: "created_at.desc", limit });
+}

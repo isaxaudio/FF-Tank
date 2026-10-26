@@ -2,6 +2,7 @@ const { logActivity, companyIdFor, contactIdForEmail } = require('../lib/server/
 const { requireAuth } = require('../lib/server/auth.cjs');
 const gmail = require('../lib/server/gmail.cjs');
 const sequences = require('../lib/server/sequences.cjs');
+const campaigns = require('../lib/server/campaigns.cjs');
 
 // ─── Anthropic shared headers ─────────────────────────────────────────────────
 // ANTHROPIC_HEADERS: base headers for all direct Anthropic API calls.
@@ -122,6 +123,10 @@ module.exports = async (req, res) => {
       case 'gmail-register': return await handleGmailRegister(req, res);
       case 'gmail-accounts': return await handleGmailAccounts(req, res);
       case 'sequence-run':   return await handleSequenceRun(req, res);
+      case 'campaign-send':     return await handleCampaignSend(req, res);
+      case 'campaign-audience': return await handleCampaignAudience(req, res);
+      case 'resend-webhook':    return await handleResendWebhook(req, res);
+      case 'unsubscribe':       return await handleUnsubscribe(req, res);
       case 'send-lead':      return await handleSendLead(req, res);
       case 'enrich-lead':    return await handleEnrichLead(req, res);
       case 'vps':            return await handleVpsProxy(req, res);
@@ -1266,8 +1271,58 @@ async function handleSequenceRun(req, res) {
     const dryRun = req.query.dry === '1' || req.body?.dryRun === true;
     const out = await sequences.run({ dryRun });
     out.via = req.auth?.via || null;
+    // Scheduled campaigns ride the same tick.
+    if (!dryRun) out.campaigns = await campaigns.runDue({ baseUrl: publicBase(req) }).catch(e => ({ error: e.message }));
     return res.json(out);
   } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+
+const publicBase = req => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
+
+// Send a campaign (or a test to given addresses) through Resend. ?dry=1 returns the audience size and a sample.
+async function handleCampaignSend(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireAuth(req, res))) return;
+  const { campaignId, test } = req.body || {};
+  if (!campaignId) return res.status(400).json({ error: 'campaignId required' });
+  const testList = Array.isArray(test) ? test.map(s => String(s).trim()).filter(s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)).slice(0, 5) : null;
+  if (Array.isArray(test) && !testList.length) return res.status(400).json({ error: 'Give one to five test addresses' });
+  try {
+    const out = await campaigns.sendCampaign({ campaignId, baseUrl: publicBase(req), test: testList, actor: req.auth?.user?.email || 'ui', dryRun: req.query.dry === '1' });
+    return res.json({ ok: true, ...out });
+  } catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code || null, summary: e.summary || null }); }
+}
+// Who a segment reaches right now (count and a sample), for the campaign editor.
+async function handleCampaignAudience(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireAuth(req, res))) return;
+  try {
+    const rows = await campaigns.segmentContacts(req.body?.segment || {});
+    return res.json({ count: rows.length, sample: rows.slice(0, 8).map(r => ({ id: r.id, name: r.name, email: r.email, company: r.companies?.name || null })) });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+// Resend → FF Tank. Signed by Svix; the body is re-serialised from the parsed JSON (Vercel gives no raw body).
+async function handleResendWebhook(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const secret = process.env.RESEND_WEBHOOK_SECRET;
+  if (!secret) return res.status(500).json({ error: 'RESEND_WEBHOOK_SECRET not set' });
+  const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+  const ok = campaigns.verifySignature({ secret, id: req.headers['svix-id'], timestamp: req.headers['svix-timestamp'], signature: req.headers['svix-signature'], body });
+  if (!ok) return res.status(400).json({ error: 'Bad signature' });
+  try { return res.json(await campaigns.applyEvent(typeof req.body === 'string' ? JSON.parse(req.body) : req.body)); }
+  catch (e) { return res.status(500).json({ error: e.message }); }
+}
+// /u/<token>: GET shows a one-button page; POST (the button, or List-Unsubscribe-Post one-click) unsubscribes.
+async function handleUnsubscribe(req, res) {
+  const token = String(req.query.t || '');
+  const page = (title, text) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatfish · ${title}</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:480px;margin:64px auto;padding:0 20px;color:#1c1c18;line-height:1.5"><h2 style="font-weight:600">${title}</h2><p>${text}</p>`;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  if (req.method === 'GET') {
+    return res.send(page('Unsubscribe', 'Stop receiving marketing email from Fatfish? Your project emails and replies are not affected.') + `<form method="post" action="/u/${encodeURIComponent(token)}"><button type="submit" style="font:inherit;padding:10px 18px;border-radius:8px;border:1px solid #1c1c18;background:#EBF212;cursor:pointer">Unsubscribe me</button></form>`);
+  }
+  const c = await campaigns.unsubscribeByToken(token, { source: 'link', campaignId: req.query.c || null }).catch(() => null);
+  if (!c) return res.status(404).send(page('Link not recognised', 'This unsubscribe link is not valid. Reply to the email and we will take you off by hand.'));
+  return res.send(page('You are unsubscribed', `${c.email} will not get marketing email from Fatfish again.`));
 }
 
 function truncate(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
