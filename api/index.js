@@ -117,6 +117,7 @@ module.exports = async (req, res) => {
       case 'lookalike-engine':  return await handleLookalikeEngine(req, res);
       case 'gmail-draft':    return await handleGmailDraft(req, res);
       case 'gmail-send':     return await handleGmailSend(req, res);
+      case 'gmail-auth':     return await handleGmailAuth(req, res);
       case 'send-lead':      return await handleSendLead(req, res);
       case 'enrich-lead':    return await handleEnrichLead(req, res);
       case 'vps':            return await handleVpsProxy(req, res);
@@ -1186,6 +1187,40 @@ async function handleGmailDraft(req, res) {
       subject: subject || '(no subject)', body: `Gmail draft saved for ${to}`, actor: req.auth?.user?.email || 'ui', source: 'gmail-draft', external_id: String(draftData.id), metadata: { to } });
   }
   return res.json({ ok: true, draftId: draftData.id });
+}
+
+// Connect Gmail: /oauth/gmail (rewritten to this service) sends the browser to Google's consent
+// screen for the compose scope (drafts and send) and the account email; the callback exchanges the
+// code with the server's Google client and hands the refresh token to the browser, which stores it
+// in Settings (localStorage) and returns to the app. The server keeps nothing.
+const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/userinfo.email';
+async function handleGmailAuth(req, res) {
+  const cId = process.env.GOOGLE_ADS_CLIENT_ID, cSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
+  if (!cId || !cSecret) return res.status(500).send('Missing Google client credentials on the server');
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const redirectUri = `https://${host}/oauth/gmail`;
+  const cookies = Object.fromEntries((req.headers.cookie || '').split(';').map(c => c.trim().split('=')).filter(a => a.length === 2));
+  const esc = s => String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const pageStart = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FF Tank · Gmail</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:520px;margin:48px auto;padding:0 20px;color:#1c1c18;line-height:1.5">';
+  const { code, error, state } = req.query || {};
+  if (error) return res.status(400).send(pageStart + `<h2>Gmail not connected</h2><p>Google said: ${esc(error)}.</p><p><a href="/">Back to FF Tank</a></p>`);
+  if (!code) {
+    const nonce = require('crypto').randomBytes(16).toString('hex');
+    res.setHeader('Set-Cookie', `gmail_oauth_state=${nonce}; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax`);
+    const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({ client_id: cId, redirect_uri: redirectUri, response_type: 'code', scope: GMAIL_SCOPES, access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true', state: nonce });
+    res.statusCode = 302; res.setHeader('Location', url); return res.end();
+  }
+  if (!state || state !== cookies.gmail_oauth_state) return res.status(400).send(pageStart + '<h2>Gmail not connected</h2><p>The sign-in did not start from FF Tank (state mismatch). Open Settings → Gmail → Connect Gmail and try again.</p>');
+  const tr = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ code, client_id: cId, client_secret: cSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }) });
+  const td = await tr.json().catch(() => ({}));
+  if (!td.refresh_token) return res.status(400).send(pageStart + `<h2>Gmail not connected</h2><p>Google returned no refresh token (${esc(td.error_description || td.error || 'no detail')}). Remove FF Tank under myaccount.google.com → Security → Third-party access, then connect again.</p><p><a href="/">Back to FF Tank</a></p>`);
+  let email = '';
+  try { const u = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${td.access_token}` } }).then(r => r.json()); email = u.email || ''; } catch { /* optional */ }
+  res.setHeader('Set-Cookie', 'gmail_oauth_state=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.send(pageStart + `<h2>Gmail connected${email ? ' as ' + esc(email) : ''}</h2><p>The token is saved in this browser's FF Tank settings. Taking you back…</p>
+<script>try{localStorage.setItem('gmailRefreshToken',${JSON.stringify(td.refresh_token)});localStorage.setItem('gmailAccount',${JSON.stringify(email)});}catch(e){document.body.insertAdjacentHTML('beforeend','<p>Could not save in this browser: '+e.message+'</p>');}setTimeout(function(){location.replace('/');},1200);</script>`);
 }
 
 // One-to-one send through the signed-in user's Gmail. Records the attempt in email_messages and

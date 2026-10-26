@@ -1399,7 +1399,7 @@ const SETTINGS_FIELDS = [
   { key: "apolloKey", title: "Apollo", label: "Apollo API key", type: "password" },
   { key: "tavilyKey", title: "Tavily", label: "Tavily API key", type: "password" },
   { key: "flexApiKey", title: "Flex Rental Solutions", label: "X-Auth-Token", type: "password", note: "clearlamp.flexrentalsolutions.com" },
-  { key: "gmailRefreshToken", title: "Gmail", label: "OAuth refresh token", type: "password", note: "Sends one-to-one email and saves drafts through your Gmail. The token needs the gmail.send (or gmail.compose) scope." },
+  { key: "gmailRefreshToken", title: "Gmail", label: "OAuth refresh token", type: "password", connect: { href: "/oauth/gmail", label: "Connect Gmail" }, note: "Sends one-to-one email and saves drafts through your Gmail. Connect Gmail signs you in with Google and fills this in; the token stays in this browser." },
 ];
 
 function FFTank({ onSignOut }) {
@@ -1485,6 +1485,7 @@ function FFTank({ onSignOut }) {
                   <label style={{ fontSize: 12, color: TC.muted, display: "flex", flexDirection: "column", gap: 4 }}>{f.label}
                     <input value={settings[f.key]} onChange={e => setSetting(f.key, e.target.value)} type={f.type === "password" ? "password" : "text"} placeholder={f.label} style={inputStyle()} />
                   </label>
+                  {f.connect && <a href={f.connect.href} style={{ ...btn(settings[f.key] ? "secondary" : "primary"), textDecoration: "none", alignSelf: "flex-start" }}>{settings[f.key] ? `Reconnect${localStorage.getItem("gmailAccount") ? ` (${localStorage.getItem("gmailAccount")})` : ""}` : f.connect.label}</a>}
                   {f.note && <div style={{ fontSize: 11.5, color: TC.faint }}>{f.note}</div>}
                 </div>
               ))}

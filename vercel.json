@@ -25,6 +25,10 @@
       "destination": "/api/$1"
     },
     {
+      "source": "/oauth/gmail",
+      "destination": "/api/index?service=gmail-auth"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
