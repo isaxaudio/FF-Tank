@@ -6,7 +6,7 @@
 set -eu
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BASE="${FF_TANK_URL:-https://ff-tank.vercel.app}"
-SECRET="${CRON_SECRET:-$(grep -E '^CRON_SECRET=' "$DIR/.env.local" | head -1 | cut -d= -f2- | tr -d '"'"'"' )}"
+SECRET="${CRON_SECRET:-$(grep -E '^CRON_SECRET=' "$DIR/.env.local" | head -1 | cut -d= -f2- | tr -d "\"'")}"
 LOG="${HOME}/Library/Logs/ff-tank-sequence-tick.log"
 if [ -z "$SECRET" ]; then echo "$(date -u +%FT%TZ) no CRON_SECRET" >> "$LOG"; exit 1; fi
 OUT=$(curl -sS -m 60 -X POST -H "Authorization: Bearer $SECRET" -H "Content-Type: application/json" -d '{}' "$BASE/api/index?service=sequence-run" 2>&1 || true)
