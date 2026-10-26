@@ -1,6 +1,6 @@
 // src/screens/Prospecting.jsx — the Outreach area: research kept apart from the pipeline. Tabs:
 // Handoff (the one-lead-at-a-time queue), Signals (a light table over `opportunities` with
-// promote-to-deal), Campaigns. Target accounts live in Companies as a view. Promote is the only path from a
+// promote-to-deal), Campaigns, Templates (email templates with tokens). Target accounts live in Companies as a view. Promote is the only path from a
 // signal to a deal, and it is a person's click.
 import React, { useEffect, useState } from "react";
 import { c as TC, t as TT, pill, btn, inputStyle } from "../tokens.js";
@@ -9,8 +9,9 @@ import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
 import { NewDealForm } from "./Deals.jsx";
 import Campaigns from "./Campaigns.jsx";
+import Templates from "./Templates.jsx";
 
-const TABS = [["handoff", "Handoff"], ["signals", "Signals"], ["campaigns", "Campaigns"]];
+const TABS = [["handoff", "Handoff"], ["signals", "Signals"], ["campaigns", "Campaigns"], ["templates", "Templates"]];
 
 export default function Prospecting({ initialTab = "handoff", views = {}, db: legacyDb, legacyProps = {}, onNavigate }) {
   const [tab, setTab] = useState(initialTab);
@@ -29,6 +30,7 @@ export default function Prospecting({ initialTab = "handoff", views = {}, db: le
         {tab === "handoff" && Handoff && <Handoff db={legacyDb} />}
         {tab === "signals" && <SignalsTable onNavigate={onNavigate} legacyProps={legacyProps} />}
         {tab === "campaigns" && <Campaigns onNavigate={onNavigate} />}
+        {tab === "templates" && <Templates />}
       </div>
     </div>
   );

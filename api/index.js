@@ -1,5 +1,6 @@
 const { logActivity, companyIdFor, contactIdForEmail } = require('../lib/server/activity.cjs');
 const { requireAuth } = require('../lib/server/auth.cjs');
+const gmail = require('../lib/server/gmail.cjs');
 
 // ─── Anthropic shared headers ─────────────────────────────────────────────────
 // ANTHROPIC_HEADERS: base headers for all direct Anthropic API calls.
@@ -115,6 +116,7 @@ module.exports = async (req, res) => {
       case 'flex-lookalike':    return await handleFlexLookalike(req, res);
       case 'lookalike-engine':  return await handleLookalikeEngine(req, res);
       case 'gmail-draft':    return await handleGmailDraft(req, res);
+      case 'gmail-send':     return await handleGmailSend(req, res);
       case 'send-lead':      return await handleSendLead(req, res);
       case 'enrich-lead':    return await handleEnrichLead(req, res);
       case 'vps':            return await handleVpsProxy(req, res);
@@ -1156,43 +1158,19 @@ async function handleGmailDraft(req, res) {
   const { to, subject, body, refreshToken, clientId, clientSecret } = req.body || {};
   if (!to || !refreshToken) return res.status(400).json({ error: 'to and refreshToken required' });
 
-  const cId     = clientId     || process.env.GOOGLE_ADS_CLIENT_ID;
-  const cSecret = clientSecret || process.env.GOOGLE_ADS_CLIENT_SECRET;
-  if (!cId || !cSecret) return res.status(500).json({ error: 'Missing Google client credentials' });
-
-  // 1. Exchange refresh token for access token
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id:     cId,
-      client_secret: cSecret,
-      refresh_token: refreshToken,
-      grant_type:    'refresh_token',
-    }),
-  });
-  const tokenData = await tokenRes.json();
-  if (!tokenData.access_token) {
-    return res.status(401).json({ error: 'Failed to get access token', detail: tokenData.error_description || tokenData.error });
-  }
+  // 1. Access token from the user's refresh token (shared with gmail-send)
+  let accessToken;
+  try { accessToken = await gmail.accessToken(refreshToken, clientId, clientSecret); }
+  catch (e) { return res.status(e.status || 401).json({ error: e.status === 500 ? e.message : 'Failed to get access token', detail: e.message }); }
 
   // 2. Build RFC 2822 message and base64url-encode it
-  const rfc2822 = [
-    `To: ${to}`,
-    `Subject: ${subject || ''}`,
-    'Content-Type: text/plain; charset=UTF-8',
-    'MIME-Version: 1.0',
-    '',
-    body || '',
-  ].join('\r\n');
-
-  const raw = Buffer.from(rfc2822).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const raw = gmail.rawMessage({ to, subject, body });
 
   // 3. Create draft
   const draftRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${tokenData.access_token}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ message: { raw } }),
@@ -1208,6 +1186,21 @@ async function handleGmailDraft(req, res) {
       subject: subject || '(no subject)', body: `Gmail draft saved for ${to}`, actor: req.auth?.user?.email || 'ui', source: 'gmail-draft', external_id: String(draftData.id), metadata: { to } });
   }
   return res.json({ ok: true, draftId: draftData.id });
+}
+
+// One-to-one send through the signed-in user's Gmail. Records the attempt in email_messages and
+// writes an email_sent activity only after Gmail accepted the message. Unsubscribed addresses are
+// refused with 409. Needs a signed-in FF Tank user (the activity is attributed to them).
+async function handleGmailSend(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireAuth(req, res))) return;
+  const { to, subject, body, refreshToken, clientId, clientSecret, contactId, companyId, dealId, templateId } = req.body || {};
+  try {
+    const out = await gmail.sendMessage({ to, subject, body, refreshToken, clientId, clientSecret, contactId, companyId, dealId, templateId, actor: req.auth?.user?.email || 'ui' });
+    return res.json({ ok: true, message: out.message, activityId: out.activity?.id || null });
+  } catch (e) {
+    return res.status(e.status || 500).json({ error: e.message, code: e.code || null, messageId: e.messageId || null });
+  }
 }
 
 function truncate(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }

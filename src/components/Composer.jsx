@@ -27,7 +27,7 @@ export default function Composer({ companyId = null, contactId = null, dealId = 
 
   // n / c keys, the command bar and the right-click menu land here: pick the type and focus the text.
   useEffect(() => onAction(({ action }) => {
-    const map = { note: "note", call: "call", meeting: "meeting", email: "email_sent", reply: "email_reply" };
+    const map = { note: "note", call: "call", meeting: "meeting", reply: "email_reply" }; // "email" opens the Gmail composer in Timeline
     if (!map[action]) return;
     setType(map[action]); setTimeout(() => bodyRef.current?.focus(), 0);
   }), []);

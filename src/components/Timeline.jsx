@@ -3,11 +3,14 @@
 // chips and one-line entries that expand on click. Email drafts and Slack handoffs keep their own
 // labels so nobody reads them as sent outreach.
 import React, { useEffect, useMemo, useState } from "react";
-import { c as TC, t as TT, pill } from "../tokens.js";
+import { c as TC, t as TT, pill, inputStyle, btn } from "../tokens.js";
 import { StickyNote, Phone, Users, Mail, MailCheck, MessageSquare, Radar, ThumbsUp, GitBranch, ListTodo, CheckSquare, CalendarCheck, Building2, UserPlus, ArrowUpRight, Merge, ArrowDownLeft, Clock } from "lucide-react";
 import { listActivities, ACTIVITY_LABEL } from "../lib/activities.js";
 import { OUTCOME_LABEL } from "../lib/status.js";
+import { listMessages, markReplied } from "../lib/email.js";
+import { onAction } from "../lib/record.js";
 import Composer from "./Composer.jsx";
+import EmailComposer from "./EmailComposer.jsx";
 import TasksPanel from "./TasksPanel.jsx";
 import { Card } from "./RecordPage.jsx";
 
@@ -31,18 +34,27 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
   const [open, setOpen] = useState(() => new Set());
   const [tasksKey, setTasksKey] = useState(0);
   const [err, setErr] = useState("");
+  const [messages, setMessages] = useState({}); // email_messages by id: the only source of Sent / Replied
+  const [email, setEmail] = useState(null);     // { to } while the Gmail composer is open
+  const [toast, setToast] = useState("");
   // "Now" is fixed when the activities load, so the split between scheduled and past is stable across renders.
   const [now, setNow] = useState(() => Date.now());
 
   const filters = dealId ? { deal_id: `eq.${dealId}` } : contactId ? { contact_id: `eq.${contactId}` } : { company_id: `eq.${companyId}` };
   async function load() {
     setLoading(true);
-    try { setItems((await listActivities(filters, 200)) || []); setNow(Date.now()); } catch (e) { setErr(e.message); }
+    try {
+      const [acts, msgs] = await Promise.all([listActivities(filters, 200), listMessages(filters, 200).catch(() => [])]);
+      setItems(acts || []); setMessages(Object.fromEntries((msgs || []).map(m => [m.id, m]))); setNow(Date.now());
+    } catch (e) { setErr(e.message); }
     setLoading(false);
   }
   useEffect(() => { Promise.resolve().then(load); }, [companyId, contactId, dealId, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function logged() { load(); setTasksKey(k => k + 1); onLogged?.(); }
+  // c, the command bar and the right-click menu open the Gmail composer here.
+  useEffect(() => onAction(({ action, email: to }) => { if (action === "email") setEmail({ to: to || null }); }), []);
+  function sent(r) { setToast(r.kind === "sent" ? "Sent through Gmail and logged." : "Draft saved in Gmail. It is logged as a draft, not as sent."); setTimeout(() => setToast(""), 4000); logged(); }
 
   const upcoming = useMemo(() => items.filter(a => a.due_at && new Date(a.due_at).getTime() > now).sort((a, b) => new Date(a.due_at) - new Date(b.due_at)), [items, now]);
   const past = useMemo(() => {
@@ -54,6 +66,8 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
 
   return (
     <>
+      <EmailComposer open={!!email} onClose={() => setEmail(null)} contacts={contacts} contactId={contactId} companyId={companyId} dealId={dealId} toEmail={email?.to || null} onSent={sent} />
+      {toast && <div data-toast style={{ ...pill("evergreen"), display: "block", padding: "6px 12px" }}>{toast}</div>}
       <Composer companyId={companyId} contactId={contactId} dealId={dealId} contacts={contacts} onLogged={logged} />
 
       <Card title="Focus" note="Open tasks first; the earliest is the next step.">
@@ -73,22 +87,42 @@ export default function Timeline({ companyId, contactId, dealId, contacts = [], 
         {err && <div style={{ ...pill("rust"), marginBottom: 10 }}>{err}</div>}
         {loading && <div style={{ ...TT.body2, color: TC.muted }}>Loading…</div>}
         {!loading && past.length === 0 && <div style={{ ...TT.body2, color: TC.muted }}>{items.length === 0 ? "Nothing logged yet. Log the first note or call above." : "Nothing of this type yet."}</div>}
-        {past.map(a => <Entry key={a.id} a={a} open={open.has(a.id)} onToggle={() => toggle(a.id)} />)}
+        {past.map(a => <Entry key={a.id} a={a} open={open.has(a.id)} onToggle={() => toggle(a.id)} msg={a.email_message_id ? messages[a.email_message_id] : null} onReplied={logged} />)}
         {items.length >= 200 && <div style={{ ...TT.caption, color: TC.muted, marginTop: 8 }}>Showing the latest 200.</div>}
       </Card>
     </>
   );
 }
 
-function Entry({ a, open, onToggle, upcoming = false }) {
+// Status of an email entry, read from email_messages: Sent and Replied only ever come from there.
+function emailStatus(a, msg) {
+  if (a.type === "email_draft") return ["Draft · not sent", "sand"];
+  if (a.type === "email_reply") return null;
+  if (a.type !== "email_sent") return null;
+  if (!msg) return ["Logged by hand", "outline"];
+  if (msg.replied_at) return [`Replied ${when(msg.replied_at)}`, "evergreen"];
+  if (msg.status === "sent") return ["Sent", "evergreen"];
+  return [msg.status === "failed" ? "Failed" : msg.status === "bounced" ? "Bounced" : "Queued", msg.status === "queued" ? "sand" : "rust"];
+}
+
+function Entry({ a, open, onToggle, upcoming = false, msg = null, onReplied }) {
   const Icon = upcoming ? Clock : ICON[a.type] || StickyNote;
   const headline = a.subject || firstLine(a.body) || "";
+  const status = emailStatus(a, msg);
+  const [replyText, setReplyText] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function reply(e) {
+    e.stopPropagation(); if (busy) return; setBusy(true);
+    try { await markReplied(msg, { body: replyText.trim() }); setReplyText(""); onReplied?.(); } catch { /* the timeline reloads and shows the state */ }
+    setBusy(false);
+  }
   return (
     <div onClick={onToggle} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", borderBottom: `1px solid ${TC.lineSoft}`, cursor: "pointer" }}>
       <div style={{ width: 24, height: 24, borderRadius: 6, background: TC.bg, border: `1px solid ${TC.line}`, display: "flex", alignItems: "center", justifyContent: "center", color: TC.sub, flexShrink: 0, marginTop: 1 }}><Icon size={13} strokeWidth={1.5} /></div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
           <span style={{ ...pill(TONE[a.type] || "sand"), flexShrink: 0 }}>{a.direction === "in" && <ArrowDownLeft size={11} strokeWidth={2} />}{ACTIVITY_LABEL[a.type] || a.type}{a.outcome ? ` · ${OUTCOME_LABEL[a.outcome] || a.outcome}` : ""}</span>
+          {status && <span data-email-status={status[0]} style={{ ...pill(status[1]), flexShrink: 0 }}>{status[0]}</span>}
           <span style={{ ...TT.body2, color: TC.ink, flex: 1, minWidth: 0, overflow: open ? "visible" : "hidden", textOverflow: "ellipsis", whiteSpace: open ? "normal" : "nowrap" }}>{headline}</span>
           {a.contacts?.name && <span style={{ ...TT.caption, color: TC.muted, flexShrink: 0 }}>{a.contacts.name}</span>}
           <span style={{ ...TT.caption, color: TC.muted, flexShrink: 0 }}>{upcoming ? new Date(a.due_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : when(a.occurred_at)}</span>
@@ -96,7 +130,13 @@ function Entry({ a, open, onToggle, upcoming = false }) {
         {open && (
           <div style={{ marginTop: 4 }}>
             {a.body && a.body !== headline && <div style={{ ...TT.body2, color: TC.sub, whiteSpace: "pre-wrap" }}>{a.body}</div>}
-            <div style={{ ...TT.caption, color: TC.faint, marginTop: 4 }}>{a.actor || "system"} · {a.source || "ui"} · {new Date(a.occurred_at).toLocaleString()}{a.tasks?.title ? ` · task: ${a.tasks.title}` : ""}</div>
+            <div style={{ ...TT.caption, color: TC.faint, marginTop: 4 }}>{a.actor || "system"} · {a.source || "ui"} · {new Date(a.occurred_at).toLocaleString()}{a.tasks?.title ? ` · task: ${a.tasks.title}` : ""}{msg?.to_email ? ` · to ${msg.to_email}` : ""}</div>
+            {a.type === "email_sent" && msg && msg.status === "sent" && !msg.replied_at && (
+              <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
+                <input value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="They replied — what did they say?" style={inputStyle({ width: 280 })} onKeyDown={e => { if (e.key === "Enter") reply(e); }} />
+                <button onClick={reply} disabled={busy} style={btn("secondary")} title="Marks this email as replied and logs the reply">{busy ? "Saving…" : "Mark replied"}</button>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -21,7 +21,7 @@ export function baseActions({ email = null } = {}) {
   return [
     { id: "note", label: "Add a note", keys: "n", run: () => fireAction("note") },
     { id: "task", label: "Add a task", keys: "t", run: () => fireAction("task") },
-    { id: "email", label: email ? `Email ${email}` : "Email (no address on this record)", keys: "c", disabled: !email, hint: email ? "Opens your mail app; log it as sent afterwards" : "", run: () => { if (email) window.location.href = `mailto:${email}`; fireAction("email", { email }); } },
+    { id: "email", label: email ? `Email ${email}` : "Email (no address on this record)", keys: "c", disabled: !email, hint: email ? "Compose here and send through your Gmail" : "", run: () => { if (email) fireAction("email", { email }); } },
   ];
 }
 

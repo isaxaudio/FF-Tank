@@ -1399,7 +1399,7 @@ const SETTINGS_FIELDS = [
   { key: "apolloKey", title: "Apollo", label: "Apollo API key", type: "password" },
   { key: "tavilyKey", title: "Tavily", label: "Tavily API key", type: "password" },
   { key: "flexApiKey", title: "Flex Rental Solutions", label: "X-Auth-Token", type: "password", note: "clearlamp.flexrentalsolutions.com" },
-  { key: "gmailRefreshToken", title: "Gmail", label: "OAuth refresh token", type: "password", note: "Saves drafts and, once the send scope is granted, sends one-to-one email." },
+  { key: "gmailRefreshToken", title: "Gmail", label: "OAuth refresh token", type: "password", note: "Sends one-to-one email and saves drafts through your Gmail. The token needs the gmail.send (or gmail.compose) scope." },
 ];
 
 function FFTank({ onSignOut }) {
