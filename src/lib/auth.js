@@ -7,14 +7,14 @@ const KEY = "ffSession";
 function read() { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; } }
 function write(s) { if (s) localStorage.setItem(KEY, JSON.stringify(s)); else localStorage.removeItem(KEY); }
 
-async function gotrue(path, body, token) {
+async function gotrue(path, body, token, method = "POST") {
   const r = await fetch(`${URL_}/auth/v1/${path}`, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json", apikey: ANON, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.msg || data.error_description || data.error || `auth ${r.status}`);
+  if (!r.ok) { const err = new Error(data.msg || data.error_description || data.error || `auth ${r.status}`); err.status = r.status; throw err; }
   return data;
 }
 
@@ -31,10 +31,22 @@ export const auth = {
   user: () => read()?.user || null,
   async signIn(email, password) { return store(await gotrue("token?grant_type=password", { email, password })); },
   async signOut() { const s = read(); write(null); if (s?.access_token) await gotrue("logout", null, s.access_token).catch(() => {}); },
+  // A refresh that the auth server rejects (4xx: revoked or reused token) ends the session and tells the
+  // app so it shows the sign-in page. A network error or a 5xx keeps the session; the next call retries.
   async refresh() {
     const s = read(); if (!s?.refresh_token) return null;
     try { return store(await gotrue("token?grant_type=refresh_token", { refresh_token: s.refresh_token })); }
-    catch { write(null); return null; }
+    catch (err) {
+      if (err.status >= 400 && err.status < 500) { write(null); try { window.dispatchEvent(new Event("ff:signed-out")); } catch { /* no window */ } }
+      return null;
+    }
+  },
+  // Change the signed-in user's password (Supabase: PUT /auth/v1/user with the access token).
+  async updatePassword(password) {
+    const t = await auth.token(); if (!t) throw new Error("Not signed in");
+    const user = await gotrue("user", { password }, t, "PUT");
+    const s = read(); if (s) write({ ...s, user: user || s.user });
+    return user;
   },
   // Access token, refreshed when within 60 s of expiry. Null when signed out.
   async token() {

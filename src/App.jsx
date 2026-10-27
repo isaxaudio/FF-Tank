@@ -150,7 +150,7 @@ function LeadHandoffView({ db }) {
   const [sortMode, setSortMode] = React.useState("ranked");
   const [flexClients, setFlexClients] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [cat, setCat] = React.useState("worthy");
+  const [cat] = React.useState("worthy");
   const [sending, setSending] = React.useState({});
   const [sent, setSent] = React.useState({});
   const [dismissed, setDismissed] = React.useState({});
@@ -162,7 +162,7 @@ function LeadHandoffView({ db }) {
 
   // Learning loop: record approve (+1) / skip (-1) so the queue learns what Isaac wants.
   async function recordFeedback(o, rating) {
-    try { await db.insert("opportunity_feedback", { opportunity_id: o.id, rating, created_at: new Date().toISOString() }); await logActivity({ type: "feedback", opportunity_id: o.id, company_id: o.company_id || null, subject: rating > 0 ? "Good lead" : "Not relevant", body: o.title || null, metadata: { rating } }); } catch {}
+    try { await db.insert("opportunity_feedback", { opportunity_id: o.id, rating, created_at: new Date().toISOString() }); await logActivity({ type: "feedback", opportunity_id: o.id, company_id: o.company_id || null, subject: rating > 0 ? "Good lead" : "Not relevant", body: o.title || null, metadata: { rating } }); } catch { /* feedback is best effort */ }
   }
   // Load feedback → per-signal net weight (≥2 ratings to count), applied to ranking.
   React.useEffect(() => { (async () => {
@@ -177,7 +177,7 @@ function LeadHandoffView({ db }) {
       const w = {};
       for (const [s, a] of Object.entries(agg)) if (a.n >= 2) w[s] = Math.max(-15, Math.min(15, Math.round((a.net / a.n) * 12)));
       setWeights(w);
-    } catch {}
+    } catch { /* best effort */ }
   })(); }, []);
   const learnedBoost = o => weights[(o.signal || "none").toLowerCase()] || 0;
 
@@ -279,15 +279,6 @@ function LeadHandoffView({ db }) {
   const dedupSeen = new Set();
   const list = ranked.filter(o => { const k = ((o.company || o.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 22)); if (!k || dedupSeen.has(k)) return false; dedupSeen.add(k); return true; });
 
-  const geoOf = o => { const m = ((o.company || "") + " " + (o.title || "") + " " + (o.notes || "")).match(LEAD_GEO_RE); return m ? m[0].replace(/\b\w/g, c => c.toUpperCase()) : ""; };
-  const tagOf = o => { const s = (o.signal || "").toLowerCase();
-    if (s === "rfp") return { t: "RFP", c: TC.accentDeep };
-    if (/hire/.test(s)) return { t: "HIRE", c: TC.ink };
-    if (/expansion/.test(s)) return { t: "EXPAND", c: TC.warnInk };
-    if (/event|gala|commencement|venue/.test(s)) return { t: "EVENT", c: TC.ink };
-    if (s === "competitor") return { t: "WATCH", c: TC.criticalInk };
-    return { t: (s || "LEAD").toUpperCase().slice(0, 7), c: TC.ink }; };
-  const scoreOf = o => o.overall_score != null ? o.overall_score : Math.round(leadQuality(o) / 10);
   const cleanWhy = o => (o.why_this_matters || o.notes || "")
     .replace(/^\[[^\]]*\]\s*/, "")                              // [market] prefix
     .replace(/^\s*(rfp|market|venue|competitor|event|hire)\s*:\s*/i, "") // "rfp:" prefix
@@ -315,13 +306,11 @@ function LeadHandoffView({ db }) {
   // still hides it for this session, so the reviewer is never blocked.
   async function skip(o) { recordFeedback(o, -1); setDismissed(p => ({ ...p, [o.id]: true })); try { await db.update("opportunities", o.id, { status: "archived" }); } catch (e) { console.warn("archive failed, dismissed locally only:", e.message); } }
 
-  const reviewCount = allWorthy.filter(o => !dismissed[o.id] && !sent[o.id]).length;
   // Real counts, not session-only: send marks the row `contacted` server-side and skip marks it
   // `archived`, so these now survive a reload. Union with this session's ids because `rows` still
   // holds the pre-send status until the next load.
   // Counted server-side: handled rows are filtered out of `rows` by the query, so they can't be
   // tallied from it. Union with this session's sends, which the counts won't reflect until reload.
-  const sentCount = Math.max(totals.contacted, 0) + Object.keys(sent).filter(id => !rows.some(r => String(r.id) === id && r.status === "contacted")).length;
   const skippedCount = totals.archived;
 
   return (
@@ -515,7 +504,7 @@ function LeadHandoffView({ db }) {
 // The legacy screens move under "More" rather than being deleted — cutting access is an
 // information-architecture decision that hasn't been made yet, and orphaning a working
 // screen is worse than one extra group.
-function WBTask({ id, accent, title, why, children, cta, done, mark }) {
+function WBTask({ id, title, why, children, cta, done, mark }) {
   const isDone = !!done[id];
   return (
     <div style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "16px 4px",
@@ -1012,14 +1001,10 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
   // works off billed — the rows carrying real aggregates from project history.
   const INTERNAL_RE = /^(fat fish media( group)?|clear lamp( av)?)$/i;
   const billed = clients.filter(c => c.total_revenue != null && !INTERNAL_RE.test((c.name || "").trim()));
-  const repeatClients = billed.filter(c => (c.total_events || 0) > 1).length;
   const totalBooked = billed.reduce((s, c) => s + (Number(c.total_revenue) || 0), 0);
-  const totalJobs = billed.reduce((s, c) => s + (c.total_events || 0), 0);
   const monthsSince = d => (d ? (Date.now() - new Date(d + "T00:00:00").getTime()) / 2629800000 : 9999);
-  const activeClients = billed.filter(c => monthsSince(c.last_event_date) <= 12);
   const winback = billed.filter(c => monthsSince(c.last_event_date) > 12)
     .sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
-  const winbackValue = winback.reduce((s, c) => s + (Number(c.total_revenue) || 0), 0);
   // Median, not mean. WGU is 31.6% of all revenue, so the average client value ($67.8k) is a
   // number only 42 of 257 clients have ever reached — it describes almost nobody.
   const clientValues = billed.map(c => Number(c.total_revenue) || 0).filter(v => v > 0).sort((a, b) => a - b);
@@ -1028,9 +1013,6 @@ function FlexView({ db, flexApiKey, onNavigate, apolloKey }) {
         ? clientValues[(clientValues.length - 1) / 2]
         : (clientValues[clientValues.length / 2 - 1] + clientValues[clientValues.length / 2]) / 2)
     : 0;
-  const topClients = billed.slice().sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0)).slice(0, 8);
-  const maxClientRev = topClients.length ? (Number(topClients[0].total_revenue) || 1) : 1;
-  const concentration = totalBooked ? (Number(topClients[0]?.total_revenue || 0) / totalBooked * 100) : 0;
 
   // Booked value per calendar year, straight off project rows.
   // Same rules as the client aggregates above, so the two never disagree: real external client,
@@ -1403,6 +1385,37 @@ const SETTINGS_FIELDS = [
   { key: "gmailRefreshToken", title: "Gmail", label: "OAuth refresh token", type: "password", connect: { href: "/oauth/gmail", label: "Connect Gmail" }, note: "Sends one-to-one email and saves drafts through your Gmail. Connect Gmail signs you in with Google and fills this in; the token stays in this browser." },
 ];
 
+// Settings → Account: change the signed-in user's password. Other devices keep their sessions.
+function PasswordCard() {
+  const [pw, setPw] = useState(""); const [again, setAgain] = useState("");
+  const [state, setState] = useState({ busy: false, msg: "", ok: false });
+  const email = auth.user()?.email || "";
+  async function submit(e) {
+    e.preventDefault();
+    if (pw.length < 12) return setState({ busy: false, ok: false, msg: "Use at least 12 characters." });
+    if (pw !== again) return setState({ busy: false, ok: false, msg: "The two entries differ." });
+    setState({ busy: true, msg: "", ok: false });
+    try { await auth.updatePassword(pw); setPw(""); setAgain(""); setState({ busy: false, ok: true, msg: "Password changed. Use it next time you sign in." }); }
+    catch (err) { setState({ busy: false, ok: false, msg: err.message || "Could not change the password." }); }
+  }
+  return (
+    <form data-password-card onSubmit={submit} style={{ background: TC.bg, border: `1px solid ${TC.line}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 13, fontWeight: 450, color: TC.ink }}>Account</span><span style={{ marginLeft: "auto", fontSize: 11.5, color: TC.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</span></div>
+      <input type="text" name="username" autoComplete="username" value={email} readOnly hidden />
+      <label style={{ fontSize: 12, color: TC.muted, display: "flex", flexDirection: "column", gap: 4 }}>New password
+        <input type="password" autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} placeholder="At least 12 characters" style={inputStyle()} />
+      </label>
+      <label style={{ fontSize: 12, color: TC.muted, display: "flex", flexDirection: "column", gap: 4 }}>Again
+        <input type="password" autoComplete="new-password" value={again} onChange={e => setAgain(e.target.value)} placeholder="Repeat it" style={inputStyle()} />
+      </label>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button type="submit" disabled={state.busy || !pw} style={btn("primary")}>{state.busy ? "Changing…" : "Change password"}</button>
+        {state.msg && <span data-password-msg style={{ fontSize: 11.5, color: state.ok ? TC.positiveInk : TC.criticalInk }}>{state.msg}</span>}
+      </div>
+    </form>
+  );
+}
+
 function FFTank({ onSignOut }) {
   const [activeId, setActiveId] = useState("today");
   const [navParams, setNavParams] = useState({});
@@ -1417,7 +1430,7 @@ function FFTank({ onSignOut }) {
     setNavParams(params); setActiveId(id);
   };
   const setSetting = (key, value) => { setSettings(s => ({ ...s, [key]: value })); localStorage.setItem(key, value); };
-  const { apolloKey, tavilyKey, flexApiKey, gmailRefreshToken } = settings;
+  const { apolloKey, flexApiKey } = settings;
 
   useEffect(() => {
     let on = true;
@@ -1483,6 +1496,7 @@ function FFTank({ onSignOut }) {
             </div>
             <div style={{ fontSize: 13, lineHeight: "20px", color: TC.sub, marginBottom: 18 }}>Keys entered here stay in this browser. Scheduled jobs use the keys configured on the server.</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
+              <PasswordCard />
               {SETTINGS_FIELDS.map(f => (
                 <div key={f.key} style={{ background: TC.bg, border: `1px solid ${TC.line}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 13, fontWeight: 450, color: TC.ink }}>{f.title}</span><span style={{ marginLeft: "auto", fontSize: 11.5, color: settings[f.key] ? TC.positiveInk : TC.faint }}>{settings[f.key] ? "configured" : "not set"}</span></div>
@@ -1569,7 +1583,9 @@ export default function App() {
     const tick = () => tickSequences();
     const t0 = setTimeout(tick, 4000);
     const t2 = setInterval(tick, 5 * 60 * 1000);
-    return () => { clearInterval(t); clearTimeout(t0); clearInterval(t2); };
+    const out = () => setSession(null);
+    window.addEventListener("ff:signed-out", out);
+    return () => { clearInterval(t); clearTimeout(t0); clearInterval(t2); window.removeEventListener("ff:signed-out", out); };
   }, [session]);
   if (auth.configured() && !session) return <Login onSignedIn={() => setSession(auth.session())} />;
   return <FFTank onSignOut={async () => { await auth.signOut(); setSession(null); }} />;
