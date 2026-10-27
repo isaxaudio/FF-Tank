@@ -11,6 +11,7 @@ import { auth } from "../lib/auth.js";
 import { createTask, completeTask, openTasksByDeal, today as todayStr } from "../lib/tasks.js";
 import { STAGE_LABEL, STAGE_TONE, OPEN_STAGES, nextActivity, byNextActivity } from "../lib/deals.js";
 import { Card, Empty } from "../components/RecordPage.jsx";
+import { useIsPhone } from "../lib/viewport.js";
 
 const money = n => (n == null ? "—" : "$" + Math.round(Number(n)).toLocaleString());
 const me = () => auth.user()?.email || "";
@@ -23,6 +24,8 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb, onSearch 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [loadedAt, setLoadedAt] = useState(() => Date.now());
+  const phone = useIsPhone();
+  const pad = phone ? 16 : 28;
 
   async function load() {
     setLoading(true); setErr(""); setLoadedAt(Date.now());
@@ -76,10 +79,10 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb, onSearch 
 
   return (
     <div style={{ flex: 1, overflowY: "auto", background: TC.bg }}>
-      <div style={{ padding: "22px 28px 0", maxWidth: 1180 }}>
+      <div style={{ padding: `${phone ? 16 : 22}px ${pad}px 0`, maxWidth: 1180 }}>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
           <div>
-            <div style={{ ...TT.h2, color: TC.ink }}>{greet}, {name || "there"}.</div>
+            <div style={{ ...(phone ? TT.h3 : TT.h2), color: TC.ink }}>{greet}, {name || "there"}.</div>
             <div style={{ ...TT.body2, color: TC.sub }}>{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -91,16 +94,16 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb, onSearch 
       {tab === "week" ? (
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>{WeeklyBrief ? <WeeklyBrief db={legacyDb} onNavigate={onNavigate} /> : null}</div>
       ) : (
-        <div style={{ padding: "18px 28px 40px", maxWidth: 1180 }}>
+        <div style={{ padding: `${phone ? 14 : 18}px ${pad}px ${phone ? 90 : 40}px`, maxWidth: 1180 }}>
           {err && <div style={{ ...pill("rust"), marginBottom: 12 }}>{err}</div>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: phone ? "1fr 1fr" : "repeat(4, 1fr)", gap: 12 }}>
             <Kpi label="Overdue tasks" value={overdue.length} tone="rust" />
             <Kpi label="Due today" value={dueToday.length} tone="ember" />
             <Kpi label="Deals needing attention" value={attention.length} tone="ocean" onClick={() => onNavigate("deals")} />
             <Kpi label="Replies waiting" value={(d?.waiting || []).length} tone="iris" />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 16, marginTop: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: phone ? "1fr" : "3fr 2fr", gap: 16, marginTop: 16 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <Card title="Tasks" note={loading ? "Loading…" : `${tasks.length} open`}>
                 {!loading && tasks.length === 0 && <Empty action={<button onClick={() => onNavigate("deals")} style={linkBtn}>Open deals <ArrowRight size={12} /></button>}>Nothing is due. Tasks come from a record page or from logging a call or meeting with a follow-up. Press t on any record to add one.</Empty>}
@@ -109,7 +112,7 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb, onSearch 
                     <div style={{ ...TT.caption, color: TC.muted, margin: "6px 0 4px" }}>{h}</div>
                     {list.map(x => (
                       <div key={x.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${TC.lineSoft}` }}>
-                        <button onClick={() => done(x)} title="Mark done" style={checkBtn}><Check size={12} strokeWidth={2} style={{ opacity: 0.35 }} /></button>
+                        <button data-task-done={x.id} onClick={() => done(x)} title="Mark done" style={{ ...checkBtn, ...(phone ? { width: 32, height: 32, borderRadius: 8 } : {}) }}><Check size={phone ? 16 : 12} strokeWidth={2} style={{ opacity: 0.35 }} /></button>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ ...TT.body2Med, color: TC.ink }}>{x.title}</div>
                           <div style={{ ...TT.caption, color: TC.muted }}>
@@ -180,6 +183,7 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb, onSearch 
 
 // A deal that needs attention, with the one action that clears it: add the next step right here.
 function AttentionRow({ deal: x, onNavigate, onChanged }) {
+  const phone = useIsPhone();
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [due, setDue] = useState(todayStr());
@@ -190,9 +194,9 @@ function AttentionRow({ deal: x, onNavigate, onChanged }) {
   }
   return (
     <div style={{ padding: "8px 0", borderBottom: `1px solid ${TC.lineSoft}` }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: phone ? "wrap" : "nowrap" }}>
         <span style={pill(STAGE_TONE[x.stage])}>{STAGE_LABEL[x.stage]}</span>
-        <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => onNavigate("deals", { dealId: x.id })}>
+        <div style={{ flex: phone ? "1 1 200px" : 1, minWidth: 0, cursor: "pointer" }} onClick={() => onNavigate("deals", { dealId: x.id })}>
           <div style={{ ...TT.body2Med, color: TC.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.name} <span style={{ color: TC.muted, fontWeight: 400 }}>· {x.companies?.name}</span></div>
           <div style={{ display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>{x.reasons.map(([r, tone]) => <span key={r} style={pill(tone)}>{r}</span>)}{x._next.label && x._next.state !== "none" && <span style={{ ...TT.caption, color: TC.sub }}>{x._next.label}</span>}</div>
         </div>
@@ -200,8 +204,8 @@ function AttentionRow({ deal: x, onNavigate, onChanged }) {
         {!adding && <button onClick={() => { setAdding(true); setTitle(x._next.state === "overdue" && x._next.label ? x._next.label : ""); }} title="Add the next step" style={{ ...btn("secondary"), padding: "2px 8px", fontSize: 12 }}><Plus size={13} strokeWidth={1.5} /> Task</button>}
       </div>
       {adding && (
-        <form onSubmit={add} style={{ display: "flex", gap: 6, marginTop: 8 }}>
-          <input value={title} onChange={e => setTitle(e.target.value)} autoFocus placeholder={`Next step for ${x.name}`} onKeyDown={e => e.key === "Escape" && setAdding(false)} style={inputStyle({ flex: 1, padding: "4px 8px" })} />
+        <form onSubmit={add} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+          <input value={title} onChange={e => setTitle(e.target.value)} autoFocus placeholder={`Next step for ${x.name}`} onKeyDown={e => e.key === "Escape" && setAdding(false)} style={inputStyle({ flex: 1, minWidth: 180, padding: "4px 8px" })} />
           <input type="date" value={due} onChange={e => setDue(e.target.value)} style={inputStyle({ width: 150, padding: "4px 8px" })} />
           <button type="submit" disabled={busy || !title.trim()} style={{ ...btn("primary"), padding: "4px 10px" }}>{busy ? "Saving…" : "Add"}</button>
           <button type="button" onClick={() => setAdding(false)} style={{ ...btn("tertiary"), padding: "4px 8px" }}>Cancel</button>

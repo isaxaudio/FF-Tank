@@ -123,6 +123,8 @@ try {
   check('Bulk enroll: Delta enrolled, Alpha skipped as already in a sequence (toast says so)', !!enD && enD.status === 'active' && await has('1 enrolled in ZZ Step6 Follow-up') && await has('already in a sequence'));
 
   // ---- scheduler: email step with no Gmail for the sender → retry, then fail after 3
+  // The editor saved the default 8–17 Denver window; open it fully so this script passes at any hour (the window rule itself is checked below).
+  await patch(`sequences?id=eq.${seq1.id}`, { timezone: 'UTC', window_start: 0, window_end: 24, send_days: [0, 1, 2, 3, 4, 5, 6] });
   const r401 = await run('Bearer nope');
   check('API: sequence-run refuses a bad token', r401.status === 401);
   const r1 = await run();

@@ -142,7 +142,8 @@ try {
   check('Deal page: history shows the stage change', await has('Prospect → Qualified'));
   // mobile layout
   await page.setViewport({ width: 390, height: 800 }); await sleep(400); await shot('deal-mobile');
-  const stacked = await page.evaluate(() => getComputedStyle(document.querySelector('.ff-record')).gridTemplateColumns.split(' ').length === 1);
+  // Since step 8 a phone renders the reduced record page (header, actions, timeline, folded details) instead of the stacked grid.
+  const stacked = await page.evaluate(() => { const g = document.querySelector('.ff-record'); return g ? getComputedStyle(g).gridTemplateColumns.split(' ').length === 1 : !!document.querySelector('[data-phone-record] [data-phone-actions]'); });
   check('Record page stacks to one column under 760px', stacked);
   await page.setViewport({ width: 1440, height: 900 }); await sleep(300);
 

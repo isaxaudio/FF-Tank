@@ -1431,9 +1431,12 @@ function FFTank({ onSignOut }) {
         .ff-tab-bar { display: none; }
         @media (max-width: 760px) {
           .ff-sidebar { display: none !important; }
-          .ff-tab-bar { display: flex !important; }
+          .ff-tab-bar { display: flex !important; height: calc(56px + env(safe-area-inset-bottom)) !important; padding-bottom: env(safe-area-inset-bottom) !important; }
           .ff-right-col { padding-bottom: 56px !important; }
+          .ff-topbar { padding: 0 16px !important; }
+          .ff-user-email { display: none !important; }
           table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+          input, select, textarea { font-size: 16px !important; }
         }
         .ff-pulse { animation: ffpulse 2s ease-in-out infinite; }
         .ff-inline:hover { background: ${TC.hover}; }
@@ -1450,7 +1453,7 @@ function FFTank({ onSignOut }) {
         @keyframes ffpulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }
       `}</style>
 
-      <div style={{ padding: "0 24px", height: 52, borderBottom: `1px solid ${TC.line}`, background: TC.card, display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+      <div className="ff-topbar" style={{ padding: "0 24px", height: 52, borderBottom: `1px solid ${TC.line}`, background: TC.card, display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
         <span style={{ fontSize: 15, fontWeight: 450, color: TC.ink }}>{PAGE_TITLE[activeId] || "FF Tank"}</span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <button onClick={openSearch} title="Search people, companies and deals (⌘K or /)" className="ff-search"
@@ -1464,7 +1467,7 @@ function FFTank({ onSignOut }) {
           {auth.user() && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 8, marginLeft: 4, borderLeft: `1px solid ${TC.line}` }}>
               <div title={auth.user().email} style={{ width: 28, height: 28, borderRadius: 999, background: TC.ink, color: TC.onInk, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 450 }}>{(auth.user().email || "?")[0].toUpperCase()}</div>
-              <span style={{ fontSize: 13, color: TC.sub, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{auth.user().email}</span>
+              <span className="ff-user-email" style={{ fontSize: 13, color: TC.sub, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{auth.user().email}</span>
               <button onClick={onSignOut} title="Sign out" style={{ background: "transparent", border: "none", color: TC.muted, cursor: "pointer", padding: 4, display: "flex" }}><LogOut size={16} strokeWidth={1.5} /></button>
             </div>
           )}

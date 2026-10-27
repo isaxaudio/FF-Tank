@@ -13,6 +13,7 @@ import { listCampaigns } from "../lib/campaigns.js";
 import { openTasksByDeal } from "../lib/tasks.js";
 import { bulkPatch } from "../lib/bulk.js";
 import { usePersonalViews, thisMonth, thisYear } from "../lib/views.js";
+import { useIsPhone } from "../lib/viewport.js";
 import { setRecord, clearRecord, baseActions, fireAction } from "../lib/record.js";
 import { ListTable, ViewTabs, BulkBar, barBtn, Toast, PreviewPane, usePreview, useSelection, Facet } from "../components/ListTable.jsx";
 import { RecordLayout, RecordHeader, Card, Prop, Empty } from "../components/RecordPage.jsx";
@@ -75,6 +76,7 @@ export default function Deals({ initialDealId = null, initialNew = false, onNavi
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const personal = usePersonalViews("deals");
+  const phone = useIsPhone();
 
   async function load() {
     setLoading(true); setErr("");
@@ -125,10 +127,10 @@ export default function Deals({ initialDealId = null, initialNew = false, onNavi
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, background: TC.bg }}>
-      <div style={{ padding: "16px 24px 0" }}>
+      <div style={{ padding: phone ? "12px 16px 0" : "16px 24px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <div style={{ ...TT.h3, color: TC.ink }}>Deals</div>
+            {!phone && <div style={{ ...TT.h3, color: TC.ink }}>Deals</div>}
             <div style={{ ...TT.caption, color: TC.muted }}>{open.length} open in this view · {money(pipelineValue)} estimated · {money(weightedValue)} weighted · {overdue ? `${overdue} overdue` : "none overdue"}{none ? ` · ${none} with nothing scheduled` : ""}</div>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
@@ -140,11 +142,14 @@ export default function Deals({ initialDealId = null, initialNew = false, onNavi
           <ViewTabs builtin={BUILTIN} personal={personal.views} state={state} counts={counts} onPick={v => setState({ ...DEFAULT, ...v.state })} onSave={name => personal.save(name, state)} onRemove={personal.remove} />
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
-          <div style={{ position: "relative", width: 240 }}><Search size={16} strokeWidth={1.5} style={{ position: "absolute", left: 10, top: 8, color: TC.sub }} /><input value={state.q} onChange={e => set("q")(e.target.value)} placeholder="Search deal or company" style={inputStyle({ padding: "4px 8px 4px 32px" })} /></div>
-          <Facet value={state.owner} onChange={set("owner")} options={[["all", "Any owner"], ["me", "Mine"], ["none", "No owner"], ...owners.map(o => [o, o])]} />
-          <Facet value={state.stage} onChange={set("stage")} options={[["open", "Open stages"], ["all", "Any stage"], ...STAGES.map(s => [s, STAGE_LABEL[s]])]} width={140} />
-          <Facet value={state.next} onChange={set("next")} options={[["all", "Any next activity"], ["overdue", "Overdue"], ["today", "Due today"], ["none", "Nothing scheduled"], ["future", "Scheduled"]]} width={160} />
-          <Facet value={state.when} onChange={set("when")} options={[["all", "Any time"], ["month", "Expected this month"], ["year", "Closed this year"]]} width={160} />
+          <div style={{ position: "relative", width: phone ? "100%" : 240 }}><Search size={16} strokeWidth={1.5} style={{ position: "absolute", left: 10, top: 8, color: TC.sub }} /><input value={state.q} onChange={e => set("q")(e.target.value)} placeholder="Search deal or company" style={inputStyle({ padding: "4px 8px 4px 32px" })} /></div>
+          {/* On a phone the saved views carry the common filters; the stage picker on the board does the rest. */}
+          {!phone && <>
+            <Facet value={state.owner} onChange={set("owner")} options={[["all", "Any owner"], ["me", "Mine"], ["none", "No owner"], ...owners.map(o => [o, o])]} />
+            <Facet value={state.stage} onChange={set("stage")} options={[["open", "Open stages"], ["all", "Any stage"], ...STAGES.map(s => [s, STAGE_LABEL[s]])]} width={140} />
+            <Facet value={state.next} onChange={set("next")} options={[["all", "Any next activity"], ["overdue", "Overdue"], ["today", "Due today"], ["none", "Nothing scheduled"], ["future", "Scheduled"]]} width={160} />
+            <Facet value={state.when} onChange={set("when")} options={[["all", "Any time"], ["month", "Expected this month"], ["year", "Closed this year"]]} width={160} />
+          </>}
           {JSON.stringify(state) !== JSON.stringify(DEFAULT) && <button onClick={() => setState({ ...DEFAULT })} style={{ ...btn("tertiary"), padding: "2px 8px", fontSize: 12, color: TC.sub }}>Reset</button>}
         </div>
         {err && <div style={{ ...pill("rust"), marginTop: 10 }}>{err}</div>}
@@ -182,6 +187,8 @@ export default function Deals({ initialDealId = null, initialNew = false, onNavi
 function Board({ deals, loading, onOpen }) {
   const [collapsed, setCollapsed] = useState(() => new Set());
   const toggle = s => setCollapsed(c => { const n = new Set(c); n.has(s) ? n.delete(s) : n.add(s); return n; });
+  const phone = useIsPhone();
+  if (phone) return <PhoneBoard deals={deals} loading={loading} onOpen={onOpen} />;
   return (
     <div style={{ flex: 1, overflowX: "auto", overflowY: "hidden", padding: "12px 24px 24px" }}>
       {loading && <div style={{ color: TC.muted, fontSize: 13 }}>Loading…</div>}
@@ -210,6 +217,30 @@ function Board({ deals, loading, onOpen }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// The pipeline on a phone: one column, a stage picker across the top with counts, the picked
+// stage's cards below in next-activity order. Starts on the first stage that has a deal.
+function PhoneBoard({ deals, loading, onOpen }) {
+  const [picked, setPicked] = useState(null);
+  const stage = picked || STAGES.find(s => deals.some(d => d.stage === s)) || "prospect";
+  const col = deals.filter(d => d.stage === stage);
+  const val = col.reduce((s, d) => s + Number(d.amount_estimate || 0), 0);
+  return (
+    <div data-phone-board style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "10px 16px", WebkitOverflowScrolling: "touch", flexShrink: 0 }}>
+        {STAGES.map(s => { const n = deals.filter(d => d.stage === s).length; return (
+          <button key={s} data-stage-chip={s} onClick={() => setPicked(s)} style={{ ...pill(stage === s ? "ink" : STAGE_TONE[s]), cursor: "pointer", padding: "5px 10px", whiteSpace: "nowrap", flexShrink: 0, opacity: n || stage === s ? 1 : 0.55 }}>{STAGE_LABEL[s]} {n}</button>
+        ); })}
+      </div>
+      <div style={{ ...TT.caption, color: TC.muted, padding: "0 16px 6px" }}>{col.length} in {STAGE_LABEL[stage]}{val ? ` · ${money(val)}` : ""} · {STAGE_PROBABILITY[stage]}% likely to book</div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 90px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {loading && <div style={{ color: TC.muted, fontSize: 13 }}>Loading…</div>}
+        {col.map(d => <DealCard key={d.id} d={d} onClick={() => onOpen(d)} />)}
+        {!loading && col.length === 0 && <div style={{ ...TT.caption, color: TC.faint, padding: "8px 4px" }}>Nothing in {STAGE_LABEL[stage]}.</div>}
       </div>
     </div>
   );
@@ -278,6 +309,26 @@ function StageBar({ d, onMove }) {
   const [lostNote, setLostNote] = useState("");
   const idx = STAGES.indexOf(d.stage);
   const steps = STAGES.filter(s => s !== "lost");
+  const phone = useIsPhone();
+  if (phone) return (
+    <div data-phone-stage style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ ...TT.caption, color: TC.muted, width: 44 }}>Stage</span>
+        <select data-stage-select value={d.stage} onChange={e => { const to = e.target.value; if (to === "lost") return; onMove(to); }} style={inputStyle({ flex: 1, height: 40, fontSize: 15 })}>
+          {steps.map(s => <option key={s} value={s} disabled={s === "booked" && !d.flex_project_id}>{STAGE_LABEL[s]} · {STAGE_PROBABILITY[s]}%{s === "booked" && !d.flex_project_id ? " (link Flex first)" : ""}</option>)}
+          {d.stage === "lost" && <option value="lost">Lost</option>}
+        </select>
+      </label>
+      {d.stage === "lost" ? (
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}><span style={pill("rust")}>Lost{d.lost_reason ? ` · ${d.lost_reason}` : ""}</span><button onClick={() => onMove("qualified")} style={{ ...btn("secondary"), padding: "4px 10px" }}>Reopen</button></div>
+      ) : d.stage !== "booked" && (
+        <div style={{ display: "flex", gap: 6 }}>
+          <input value={lostNote} onChange={e => setLostNote(e.target.value)} placeholder="Reason, then mark lost" style={inputStyle({ flex: 1, padding: "4px 8px" })} />
+          <button onClick={() => onMove("lost", lostNote)} disabled={!lostNote.trim()} style={{ ...btn("secondary"), padding: "4px 10px", flexShrink: 0 }}>Mark lost</button>
+        </div>
+      )}
+    </div>
+  );
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
       <div style={{ display: "flex", gap: 4, flex: 1, minWidth: 420 }}>
