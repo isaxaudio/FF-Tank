@@ -72,7 +72,31 @@ export async function linkFlexBooking(deal, flexProject, { via = "manual" } = {}
   let updated = rows[0];
   if (updated.stage !== "booked") updated = await setStage(updated, "booked", `Flex booking ${flexProject.flex_id} linked (${via})`);
   await logActivity({ type: "flex_booking", company_id: deal.company_id, deal_id: deal.id, subject: `Flex booking linked: ${flexProject.event_type || "project"} ${flexProject.event_date || ""}`.trim(), body: flexProject.budget_estimate != null ? `Budget ${Math.round(flexProject.budget_estimate).toLocaleString()}` : null, source: via, external_id: `flex:${flexProject.flex_id}`, metadata: { flex_id: flexProject.flex_id, venue: flexProject.venue_name || null } });
+  // The project now belongs to this deal: nightly candidates offering it to other deals are withdrawn.
+  await db.updateWhere("flex_booking_candidates", { flex_project_id: `eq.${flexProject.flex_id}`, status: "eq.pending", deal_id: `neq.${deal.id}` }, { status: "rejected", decided_at: new Date().toISOString(), decided_by: me(), note: "Project linked to another deal" }).catch(() => {});
   return updated;
+}
+
+// Candidates the nightly matcher wrote (lib/server/flexjobs.cjs), waiting for a person. With no deal
+// they are the whole queue; with one they are that deal's.
+export function pendingFlexCandidates(deal_id = null) {
+  return db.select("flex_booking_candidates", { status: "eq.pending", select: "*,deals(id,name,stage,company_id,expected_event_date,primary_contact_id,flex_project_id,companies(id,name))", order: "confidence.desc,created_at.asc", ...(deal_id ? { deal_id: `eq.${deal_id}` } : {}) });
+}
+// Confirm links the booking (the only way a deal becomes booked) and rejects the deal's other pending
+// candidates; reject just records the decision. Either way the row stays so the nightly run never
+// offers the same pair again.
+export async function decideFlexCandidate(cand, confirm) {
+  const who = me(); const at = new Date().toISOString();
+  if (confirm) {
+    const deal = cand.deals || (await db.select("deals", { id: `eq.${cand.deal_id}`, select: "*" }))?.[0];
+    if (!deal) throw new Error("Deal no longer exists");
+    const [p] = (await db.select("flex_projects", { flex_id: `eq.${cand.flex_project_id}`, select: "id,flex_id,client_name,venue_name,event_type,event_date,budget_estimate" })) || [];
+    await linkFlexBooking(deal, p || { flex_id: cand.flex_project_id, client_name: cand.flex_client_name, event_date: cand.event_date, budget_estimate: cand.budget_estimate }, { via: "candidate" });
+    await db.update("flex_booking_candidates", cand.id, { status: "confirmed", decided_at: at, decided_by: who });
+    await db.updateWhere("flex_booking_candidates", { deal_id: `eq.${cand.deal_id}`, status: "eq.pending" }, { status: "rejected", decided_at: at, decided_by: who, note: "Another project was linked" });
+  } else {
+    await db.update("flex_booking_candidates", cand.id, { status: "rejected", decided_at: at, decided_by: who });
+  }
 }
 
 // Candidate Flex projects for a deal: projects of the Flex clients linked to the deal's company,

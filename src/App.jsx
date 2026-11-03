@@ -8,7 +8,7 @@ import People from "./screens/People.jsx";
 import Companies from "./screens/Companies.jsx";
 import Today from "./screens/Today.jsx";
 import Prospecting from "./screens/Prospecting.jsx";
-import { tickIfDue as tickSequences, registerGmail } from "./lib/sequences.js";
+import { tickIfDue as tickSequences, registerGmail, connectedSenders } from "./lib/sequences.js";
 import Deals from "./screens/Deals.jsx";
 import Reports from "./screens/Reports.jsx";
 import Automation from "./screens/Automation.jsx";
@@ -1382,7 +1382,7 @@ const SETTINGS_FIELDS = [
   { key: "apolloKey", title: "Apollo", label: "Apollo API key", type: "password" },
   { key: "tavilyKey", title: "Tavily", label: "Tavily API key", type: "password" },
   { key: "flexApiKey", title: "Flex Rental Solutions", label: "X-Auth-Token", type: "password", note: "clearlamp.flexrentalsolutions.com" },
-  { key: "gmailRefreshToken", title: "Gmail", label: "OAuth refresh token", type: "password", connect: { href: "/oauth/gmail", label: "Connect Gmail" }, note: "Sends one-to-one email and saves drafts through your Gmail. Connect Gmail signs you in with Google and fills this in; the token stays in this browser." },
+  { key: "gmailRefreshToken", title: "Gmail", label: "OAuth refresh token", type: "password", connect: { href: "/oauth/gmail", label: "Connect Gmail" }, note: "Sends one-to-one email and sequences through your Gmail and reads the headers of your sent threads to notice replies (never bodies). Connect Gmail signs you in with Google and fills this in; the token stays in this browser and the scheduler keeps a copy.", status: "gmail" },
 ];
 
 // Settings → Account: change the signed-in user's password. Other devices keep their sessions.
@@ -1420,6 +1420,9 @@ function FFTank({ onSignOut }) {
   const [activeId, setActiveId] = useState("today");
   const [navParams, setNavParams] = useState({});
   const [showSettings, setShowSettings] = useState(false);
+  const [senders, setSenders] = useState(null);
+  useEffect(() => { const open = () => setShowSettings(true); window.addEventListener("ff:open-settings", open); return () => window.removeEventListener("ff:open-settings", open); }, []);
+  useEffect(() => { if (showSettings) connectedSenders().then(setSenders).catch(() => setSenders([])); }, [showSettings]);
   const [settings, setSettings] = useState(() => Object.fromEntries(SETTINGS_FIELDS.map(f => [f.key, localStorage.getItem(f.key) || ""])));
   const [scoutSignalCount, setScoutSignalCount] = useState(0);
   const [searchSignal, setSearchSignal] = useState(0);
@@ -1505,6 +1508,12 @@ function FFTank({ onSignOut }) {
                   </label>
                   {f.connect && <a href={f.connect.href} style={{ ...btn(settings[f.key] ? "secondary" : "primary"), textDecoration: "none", alignSelf: "flex-start" }}>{settings[f.key] ? `Reconnect${localStorage.getItem("gmailAccount") ? ` (${localStorage.getItem("gmailAccount")})` : ""}` : f.connect.label}</a>}
                   {f.note && <div style={{ fontSize: 11.5, color: TC.faint }}>{f.note}</div>}
+                  {f.status === "gmail" && senders && (
+                    <div data-gmail-status style={{ fontSize: 11.5, color: TC.sub, display: "flex", flexDirection: "column", gap: 2 }}>
+                      {senders.length === 0 && <span>No Gmail account is registered for the scheduler yet.</span>}
+                      {senders.map(a => <span key={a.email}>{a.email}: sequences on · reply detection <b style={{ fontWeight: 500, color: a.replies_ok ? TC.positiveInk : TC.warnInk }}>{a.replies_ok ? "on" : "off"}</b>{!a.replies_ok && <> · {a.reply_error ? "Reconnect to grant the read scope." : "Reconnect once to grant the read scope."}</>}{a.replies_checked_at ? ` · last check ${new Date(a.replies_checked_at).toLocaleString()}` : ""}</span>)}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1549,7 +1558,7 @@ function FFTank({ onSignOut }) {
           ) : activeId === "outreach" ? (
             <Prospecting key={navParams.tab || "handoff"} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView }} db={db} legacyProps={{ sequenceId: navParams.sequenceId || null }} onNavigate={navTo} />
           ) : activeId === "deals" ? (
-            <Deals key={navParams.dealId || (navParams.new ? "new" : "all")} initialDealId={navParams.dealId || null} initialNew={!!navParams.new} onNavigate={navTo} />
+            <Deals key={navParams.review ? "review" : navParams.dealId || (navParams.new ? "new" : "all")} initialDealId={navParams.dealId || null} initialNew={!!navParams.new} initialReview={!!navParams.review} onNavigate={navTo} />
           ) : activeId === "reports" ? (
             <Reports views={{ Flex: FlexView }} db={db} legacyProps={{ flexApiKey, apolloKey }} onNavigate={navTo} />
           ) : activeId === "automation" ? (

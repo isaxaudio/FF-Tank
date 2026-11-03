@@ -120,6 +120,9 @@ export async function exitEnrollment(en, reason = "Removed by hand") {
 // scheduler ----------------------------------------------------------------------------------
 export function runScheduler({ dryRun = false } = {}) { return api("sequence-run", { dryRun }, { query: dryRun ? "&dry=1" : "" }); }
 export async function connectedSenders() { try { return (await api("gmail-accounts", null, { method: "GET" })).accounts || []; } catch { return []; } }
+// Reply detection and the Flex booking matcher ride the scheduler tick; these run them on demand.
+export function checkReplies({ limit = 40 } = {}) { return api("reply-check", { limit }); }
+export function runFlexCandidates() { return api("flex-candidates", { force: true }, { query: "&force=1" }); }
 export function registerGmail({ email, refreshToken }) { return api("gmail-register", { email, refreshToken }); }
 // Tick at most once per 15 minutes per browser while the app is open, so sequences move even when no cron runs.
 export async function tickIfDue() {

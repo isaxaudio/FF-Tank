@@ -10,6 +10,7 @@ import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
 import { createTask, completeTask, openTasksByDeal, today as todayStr } from "../lib/tasks.js";
 import { STAGE_LABEL, STAGE_TONE, OPEN_STAGES, nextActivity, byNextActivity } from "../lib/deals.js";
+import { connectedSenders } from "../lib/sequences.js";
 import { Card, Empty } from "../components/RecordPage.jsx";
 import { useIsPhone } from "../lib/viewport.js";
 
@@ -31,7 +32,7 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb, onSearch 
     setLoading(true); setErr(""); setLoadedAt(Date.now());
     try {
       const t = todayStr(); const since14 = new Date(Date.now() - 14 * 864e5).toISOString(); const dayStart = `${t}T00:00:00`; const dayEnd = `${t}T23:59:59`;
-      const [tasks, deals, dealTasks, meetingsDue, meetingsHeld, replies, reviews, bookings, handoff, seqFailed, seqDue] = await Promise.all([
+      const [tasks, deals, dealTasks, meetingsDue, meetingsHeld, replies, reviews, bookings, handoff, seqFailed, seqDue, senders] = await Promise.all([
         db.select("tasks", { kind: "eq.crm", completed_at: "is.null", select: "*,companies(id,name),contacts(id,name),deals(id,name)", order: "due_date.asc.nullslast", limit: 200 }),
         db.selectAll("deals", { stage: `in.(${OPEN_STAGES.join(",")})`, select: "id,name,company_id,stage,owner,amount_estimate,next_action,next_action_due,expected_event_date,companies(id,name)" }),
         openTasksByDeal(),
@@ -43,6 +44,7 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb, onSearch 
         db.count("opportunities", { status: "eq.new", overall_score: "gte.8" }),
         db.count("sequence_enrollments", { status: "eq.failed", ended_at: `gte.${since14}` }).catch(() => 0),
         db.count("sequence_enrollments", { status: "eq.active", next_step_at: `lte.${new Date(new Date(dayEnd).getTime()).toISOString()}` }).catch(() => 0),
+        connectedSenders(),
       ]);
       // A reply is waiting until something outbound (email, call, meeting) follows it on the same contact or deal.
       let waiting = [];
@@ -52,7 +54,7 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb, onSearch 
         waiting = replies.filter(r => !(out || []).some(o => o.occurred_at > r.occurred_at && ((r.contact_id && o.contact_id === r.contact_id) || (!r.contact_id && r.deal_id && o.deal_id === r.deal_id))));
       }
       const seen = new Set(); const meetings = [...(meetingsDue || []), ...(meetingsHeld || [])].filter(m => !seen.has(m.id) && seen.add(m.id));
-      setD({ tasks: tasks || [], deals: (deals || []).map(x => ({ ...x, _next: nextActivity(x, dealTasks[x.id] || []) })), meetings, waiting, counts: { reviews: reviews || 0, bookings: bookings || 0, handoff: handoff || 0, seqFailed: seqFailed || 0, seqDue: seqDue || 0 } });
+      setD({ tasks: tasks || [], deals: (deals || []).map(x => ({ ...x, _next: nextActivity(x, dealTasks[x.id] || []) })), meetings, waiting, replyOff: (senders || []).filter(a => !a.replies_ok).length, counts: { reviews: reviews || 0, bookings: bookings || 0, handoff: handoff || 0, seqFailed: seqFailed || 0, seqDue: seqDue || 0 } });
     } catch (e) { setErr(e.message); }
     setLoading(false);
   }
@@ -167,7 +169,8 @@ export default function Today({ onNavigate, WeeklyBrief, db: legacyDb, onSearch 
               <Card title="Decisions waiting">
                 <Decision icon={Inbox} n={counts.handoff} label="send-worthy leads scoring 8+ in the handoff queue" cta="Work the queue" onClick={() => onNavigate("outreach", { tab: "handoff" })} />
                 <Decision icon={GitMerge} n={counts.reviews} label="company matches to confirm or reject" cta="Review" onClick={() => onNavigate("companies", { review: true })} />
-                <Decision icon={Link2} n={counts.bookings} label="Flex booking candidates to link" cta="Open deals" onClick={() => onNavigate("deals")} />
+                <Decision icon={Link2} n={counts.bookings} label="Flex booking candidates to link (matched nightly; a person links)" cta="Review" onClick={() => onNavigate("deals", { review: true })} />
+                <Decision icon={Reply} n={d?.replyOff || 0} label="connected Gmail account needs a reconnect before replies can be detected" cta="Open Settings" onClick={() => window.dispatchEvent(new CustomEvent("ff:open-settings"))} />
                 <Decision icon={ListOrdered} n={counts.seqFailed} label="sequence enrollments failed in the last 14 days (no Gmail connected, or a send error)" cta="Open sequences" onClick={() => onNavigate("outreach", { tab: "sequences" })} />
                 {counts.handoff + counts.reviews + counts.bookings + (counts.seqFailed || 0) === 0 && <Empty>Nothing waiting on a decision.{counts.seqDue ? ` ${counts.seqDue} sequence step${counts.seqDue === 1 ? "" : "s"} go out today inside the send window.` : ""}</Empty>}
               </Card>

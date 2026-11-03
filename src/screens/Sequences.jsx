@@ -38,7 +38,8 @@ export default function Sequences({ onNavigate, initialId = null }) {
     try {
       const r = await runScheduler();
       const parts = [`${r.sent} sent`, `${r.tasks} task${r.tasks === 1 ? "" : "s"}`, r.completed ? `${r.completed} completed` : "", r.ended ? `${r.ended} exited` : "", r.retried ? `${r.retried} to retry` : "", r.skipped?.window ? `${r.skipped.window} outside the window` : "", r.skipped?.cap ? `${r.skipped.cap} over the daily cap` : ""].filter(Boolean);
-      setToast(`Ran: ${r.due} due · ${parts.join(" · ")}${r.errors?.length ? ` · first error: ${r.errors[0]}` : ""}`); load();
+      const extra = [r.replies?.replies ? `${r.replies.replies} repl${r.replies.replies === 1 ? "y" : "ies"} detected` : "", r.replies?.checked ? `${r.replies.checked} thread${r.replies.checked === 1 ? "" : "s"} read` : "", r.flex && !r.flex.skipped && r.flex.candidates_new ? `${r.flex.candidates_new} Flex candidate${r.flex.candidates_new === 1 ? "" : "s"}` : ""].filter(Boolean);
+      setToast(`Ran: ${r.due} due · ${parts.join(" · ")}${extra.length ? " · " + extra.join(" · ") : ""}${r.errors?.length ? ` · first error: ${r.errors[0]}` : ""}`); load();
     } catch (e) { setToast(`Run failed: ${e.message}`); }
     setRunning(false);
   }

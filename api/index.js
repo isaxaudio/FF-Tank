@@ -3,6 +3,8 @@ const { requireAuth } = require('../lib/server/auth.cjs');
 const gmail = require('../lib/server/gmail.cjs');
 const sequences = require('../lib/server/sequences.cjs');
 const campaigns = require('../lib/server/campaigns.cjs');
+const replies = require('../lib/server/replies.cjs');
+const flexjobs = require('../lib/server/flexjobs.cjs');
 
 // ─── Anthropic shared headers ─────────────────────────────────────────────────
 // ANTHROPIC_HEADERS: base headers for all direct Anthropic API calls.
@@ -123,6 +125,8 @@ module.exports = async (req, res) => {
       case 'gmail-register': return await handleGmailRegister(req, res);
       case 'gmail-accounts': return await handleGmailAccounts(req, res);
       case 'sequence-run':   return await handleSequenceRun(req, res);
+      case 'reply-check':    return await handleReplyCheck(req, res);
+      case 'flex-candidates': return await handleFlexCandidates(req, res);
       case 'campaign-send':     return await handleCampaignSend(req, res);
       case 'campaign-audience': return await handleCampaignAudience(req, res);
       case 'resend-webhook':    return await handleResendWebhook(req, res);
@@ -1199,10 +1203,11 @@ async function handleGmailDraft(req, res) {
 }
 
 // Connect Gmail: /oauth/gmail (rewritten to this service) sends the browser to Google's consent
-// screen for the compose scope (drafts and send) and the account email; the callback exchanges the
+// screen for the compose scope (drafts and send), the metadata scope (reply detection) and the account email; the callback exchanges the
 // code with the server's Google client and hands the refresh token to the browser, which stores it
 // in Settings (localStorage) and returns to the app. The server keeps nothing.
-const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/userinfo.email';
+// gmail.metadata (headers and labels, never bodies) is what reply detection reads threads with (lib/server/replies.cjs).
+const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.metadata https://www.googleapis.com/auth/userinfo.email';
 async function handleGmailAuth(req, res) {
   const cId = process.env.GOOGLE_ADS_CLIENT_ID, cSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
   if (!cId || !cSecret) return res.status(500).send('Missing Google client credentials on the server');
@@ -1227,7 +1232,7 @@ async function handleGmailAuth(req, res) {
   let email = '';
   try { const u = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${td.access_token}` } }).then(r => r.json()); email = u.email || ''; } catch { /* optional */ }
   // The scheduler sends sequences without a browser, so the token is also kept server-side (gmail_accounts, service key only).
-  if (email) await gmail.registerAccount({ email, refreshToken: td.refresh_token, by: 'oauth' }).catch(() => null);
+  if (email) await gmail.registerAccount({ email, refreshToken: td.refresh_token, by: 'oauth', scopes: td.scope || GMAIL_SCOPES }).catch(() => null);
   res.setHeader('Set-Cookie', 'gmail_oauth_state=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(pageStart + `<h2>Gmail connected${email ? ' as ' + esc(email) : ''}</h2><p>The token is saved in this browser's FF Tank settings. Taking you back…</p>
@@ -1271,13 +1276,32 @@ async function handleSequenceRun(req, res) {
     const dryRun = req.query.dry === '1' || req.body?.dryRun === true;
     const out = await sequences.run({ dryRun });
     out.via = req.auth?.via || null;
-    // Scheduled campaigns ride the same tick.
-    if (!dryRun) out.campaigns = await campaigns.runDue({ baseUrl: publicBase(req) }).catch(e => ({ error: e.message }));
+    // Scheduled campaigns, reply detection and the nightly Flex matcher ride the same tick.
+    if (!dryRun) {
+      out.campaigns = await campaigns.runDue({ baseUrl: publicBase(req) }).catch(e => ({ error: e.message }));
+      out.replies = await replies.check().catch(e => ({ error: e.message }));
+      out.flex = await flexjobs.nightly().catch(e => ({ error: e.message }));
+    }
     return res.json(out);
   } catch (e) { return res.status(500).json({ error: e.message }); }
 }
 
 const publicBase = req => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
+
+// Reply detection on its own: read up to ?limit threads now (cron or a signed-in user).
+async function handleReplyCheck(req, res) {
+  if (!(await requireAuth(req, res))) return;
+  try {
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit || req.body?.limit || replies.MAX_PER_RUN, 10) || replies.MAX_PER_RUN));
+    return res.json(await replies.check({ limit }));
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+// The Flex booking matcher on its own: ?force=1 runs it even if it ran in the last day.
+async function handleFlexCandidates(req, res) {
+  if (!(await requireAuth(req, res))) return;
+  try { return res.json(await flexjobs.nightly({ force: req.query.force === '1' || req.body?.force === true })); }
+  catch (e) { return res.status(500).json({ error: e.message }); }
+}
 
 // Send a campaign (or a test to given addresses) through Resend. ?dry=1 returns the audience size and a sample.
 async function handleCampaignSend(req, res) {

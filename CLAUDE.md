@@ -282,6 +282,14 @@ Accessed via Vercel proxy: `POST /api/index?service=vps` with `{vpsUrl, agentSec
 - Remote stored with token in URL: `git push origin main` works directly
 - Token scope needed: `repo` + `workflow`
 
+## Scheduled automation (CRM rebuild, see CRM-PLAN.md)
+One tick does everything: `POST /api/index?service=sequence-run` (CRON_SECRET or a signed-in user), called every
+15 minutes by the LaunchAgent on the Mac mini (`scripts/install-sequence-tick.sh`) and by any open FF Tank tab.
+It sends due sequence steps and scheduled campaigns, reads Gmail threads for replies (`lib/server/replies.cjs`,
+needs the `gmail.metadata` scope: reconnect Gmail in Settings once after upgrading) and, once a day, matches
+deals in Proposal or later against the Flex mirror into `flex_booking_candidates` (`lib/server/flexjobs.cjs`).
+`service=reply-check` and `service=flex-candidates&force=1` run either on its own. A person links every booking.
+
 ## What is NOT built yet
 - Apollo automation triggered from agent (Flex → Lookalike Engine → Apollo enrich)
 - Dedup of outreach_drafts by contact (if contact already has a draft, skip)

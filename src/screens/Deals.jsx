@@ -4,10 +4,10 @@
 // person; the Booked stage stays gated until that link exists.
 import React, { useEffect, useMemo, useState } from "react";
 import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
-import { Plus, Search, Link2, Building2, Star, Trash2, Kanban, CalendarDays } from "lucide-react";
+import { Plus, Search, Link2, Building2, Star, Trash2, Kanban, CalendarDays, Check, X } from "lucide-react";
 import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
-import { STAGES, STAGE_LABEL, STAGE_TONE, STAGE_PROBABILITY, OPEN_STAGES, loadStages, weighted, createDeal, setStage, updateDeal, linkFlexBooking, flexCandidatesFor, listDeals, dealContacts, addDealContact, setDealContactRole, setDealContactPrimary, removeDealContact, nextActivity, byNextActivity, NEXT_TONE, NEXT_LABEL } from "../lib/deals.js";
+import { STAGES, STAGE_LABEL, STAGE_TONE, STAGE_PROBABILITY, OPEN_STAGES, loadStages, weighted, createDeal, setStage, updateDeal, linkFlexBooking, flexCandidatesFor, pendingFlexCandidates, decideFlexCandidate, listDeals, dealContacts, addDealContact, setDealContactRole, setDealContactPrimary, removeDealContact, nextActivity, byNextActivity, NEXT_TONE, NEXT_LABEL } from "../lib/deals.js";
 import { DEAL_ROLES, DEAL_ROLE_LABEL, DEAL_TYPES, DEAL_TYPE_LABEL, LEAD_STATUS_LABEL, LEAD_STATUS_TONE, CAMPAIGN_KIND_LABEL, ago } from "../lib/status.js";
 import { listCampaigns } from "../lib/campaigns.js";
 import { openTasksByDeal } from "../lib/tasks.js";
@@ -44,7 +44,7 @@ function NextPill({ d, short = false }) {
   return <span style={pill(NEXT_TONE[n.state])} title={n.label ? `${NEXT_LABEL[n.state]}: ${n.label}` : NEXT_LABEL[n.state]}><CalendarDays size={11} strokeWidth={1.5} /> {text}</span>;
 }
 
-const DEFAULT = { q: "", owner: "all", stage: "open", next: "all", when: "all" };
+const DEFAULT = { q: "", owner: "all", stage: "open", next: "all", when: "all", review: false };
 const BUILTIN = [
   { id: "open", label: "All open", state: { stage: "open" } },
   { id: "mine", label: "My open deals", state: { stage: "open", owner: "me" } },
@@ -53,6 +53,7 @@ const BUILTIN = [
   { id: "booked", label: "Booked this year", state: { stage: "booked", when: "year" } },
   { id: "lost", label: "Lost", state: { stage: "lost" } },
   { id: "every", label: "All", state: { stage: "all" } },
+  { id: "flexq", label: "Flex bookings to link", state: { review: true } },
 ];
 function matches(d, s) {
   const q = s.q.trim().toLowerCase();
@@ -65,13 +66,14 @@ function matches(d, s) {
   return true;
 }
 
-export default function Deals({ initialDealId = null, initialNew = false, onNavigate }) {
+export default function Deals({ initialDealId = null, initialNew = false, initialReview = false, onNavigate }) {
   const [deals, setDeals] = useState([]);
+  const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(initialDealId);
   const [showNew, setShowNew] = useState(!!initialNew);
   const [view, setView] = useState(() => { try { return localStorage.getItem("ff:deals:view") || "board"; } catch { return "board"; } });
-  const [state, setState] = useState({ ...DEFAULT });
+  const [state, setState] = useState({ ...DEFAULT, review: !!initialReview });
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -82,8 +84,9 @@ export default function Deals({ initialDealId = null, initialNew = false, onNavi
     setLoading(true); setErr("");
     try {
       await loadStages();
-      const [rows, tasks] = await Promise.all([listDeals(), openTasksByDeal()]);
+      const [rows, tasks, pending] = await Promise.all([listDeals(), openTasksByDeal(), pendingFlexCandidates().catch(() => [])]);
       setDeals((rows || []).map(d => ({ ...d, _next: nextActivity(d, tasks[d.id] || []), _tasks: tasks[d.id] || [] })));
+      setQueue(pending || []);
     } catch (e) { setErr(e.message); }
     setLoading(false);
   }
@@ -92,7 +95,7 @@ export default function Deals({ initialDealId = null, initialNew = false, onNavi
 
   const owners = useMemo(() => [...new Set(deals.map(d => d.owner).filter(Boolean))].sort(), [deals]);
   const visible = useMemo(() => deals.filter(d => matches(d, state)).sort(byNextActivity), [deals, state]);
-  const counts = useMemo(() => Object.fromEntries(BUILTIN.map(v => [v.id, deals.filter(d => matches(d, { ...DEFAULT, ...v.state })).length])), [deals]);
+  const counts = useMemo(() => ({ ...Object.fromEntries(BUILTIN.filter(v => !v.state.review).map(v => [v.id, deals.filter(d => matches(d, { ...DEFAULT, ...v.state })).length])), flexq: queue.length }), [deals, queue]);
   const open = visible.filter(d => OPEN_STAGES.includes(d.stage));
   const pipelineValue = open.reduce((s, d) => s + Number(d.amount_estimate || 0), 0);
   const weightedValue = open.reduce((s, d) => s + weighted(d), 0);
@@ -100,7 +103,7 @@ export default function Deals({ initialDealId = null, initialNew = false, onNavi
   const none = open.filter(d => d._next.state === "none").length;
   const sel = useSelection(visible);
   const preview = usePreview(visible);
-  const set = k => v => setState(s => ({ ...s, [k]: v }));
+  const set = k => v => setState(s => ({ ...s, [k]: v, review: false }));
 
   async function act(msg, fn) {
     setBusy(true);
@@ -155,7 +158,9 @@ export default function Deals({ initialDealId = null, initialNew = false, onNavi
         {err && <div style={{ ...pill("rust"), marginTop: 10 }}>{err}</div>}
         {showNew && <div style={{ marginTop: 12 }}><NewDealForm onDone={d => { setShowNew(false); load().then(() => setOpenId(d.id)); }} onCancel={() => setShowNew(false)} /></div>}
       </div>
-      {view === "board" ? (
+      {state.review ? (
+        <div style={{ flex: 1, overflowY: "auto" }}><FlexQueue candidates={queue} loading={loading} onChanged={load} onOpen={id => setOpenId(id)} /></div>
+      ) : view === "board" ? (
         <Board deals={visible} loading={loading} onOpen={d => setOpenId(d.id)} />
       ) : (
         <div style={{ flex: 1, display: "flex", minHeight: 0, padding: "12px 24px 24px" }}>
@@ -180,6 +185,38 @@ export default function Deals({ initialDealId = null, initialNew = false, onNavi
         <label style={{ ...TT.caption, color: "inherit", display: "inline-flex", gap: 6, alignItems: "center" }}>Next action due <input type="date" onChange={e => e.target.value && act(`Next action due ${e.target.value} on ${n}`, () => bulkPatch("deals", sel.selectedRows, { next_action_due: e.target.value }))} style={{ ...barBtn, padding: "2px 6px" }} /></label>
       </BulkBar>
       <Toast toast={toast} onDone={() => setToast(null)} />
+    </div>
+  );
+}
+
+// The queue the nightly matcher fills: each row is a Flex project that could be a deal's booking.
+// Link books the deal through that project id (the only way a deal becomes booked) and clears the
+// deal's other candidates; Not this one records the rejection so it is never offered again.
+function FlexQueue({ candidates, loading, onChanged, onOpen }) {
+  const [busy, setBusy] = useState(null); const [err, setErr] = useState("");
+  async function decide(cand, confirm) {
+    setBusy(cand.id); setErr("");
+    try { await decideFlexCandidate(cand, confirm); onChanged(); } catch (e) { setErr(e.message); }
+    setBusy(null);
+  }
+  return (
+    <div data-flex-queue style={{ padding: "16px 24px 32px", maxWidth: 960 }}>
+      <div style={{ ...TT.body2, color: TC.sub, lineHeight: 1.6 }}>Every night the deals in Proposal or later that have no Flex project are matched against the Flex mirror by client and by name. Link marks the deal booked through that project; Not this one keeps looking. Nothing is linked without you.</div>
+      {err && <div style={{ ...pill("rust"), marginTop: 12 }}>{err}</div>}
+      <div style={{ marginTop: 14 }}>
+        {candidates.map(cand => (
+          <div key={cand.id} data-flex-candidate={cand.id} style={{ ...tile({ marginBottom: 10 }), display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <div style={{ fontSize: 14.5, color: TC.ink }}><b style={{ fontWeight: 500, cursor: "pointer", color: TC.link }} onClick={() => onOpen(cand.deal_id)}>{cand.deals?.name || "Deal"}</b> <span style={{ color: TC.muted }}>· {cand.deals?.companies?.name || ""}{cand.deals?.stage ? ` · ${STAGE_LABEL[cand.deals.stage] || cand.deals.stage}` : ""}{cand.deals?.expected_event_date ? ` · expected ${day(cand.deals.expected_event_date)}` : ""}</span></div>
+              <div style={{ fontSize: 13, color: TC.sub, marginTop: 2 }}>→ Flex <span style={TT.mono}>{cand.flex_project_id}</span> · {cand.flex_client_name || "client unknown"} · {day(cand.event_date)} · {money(cand.budget_estimate)} <span style={{ ...TT.caption, color: TC.faint }}>· {cand.match_type === "client" ? "same Flex client" : "name match"} · confidence {cand.confidence}</span></div>
+              {cand.note && <div style={{ ...TT.caption, color: TC.muted, marginTop: 4 }}>{cand.note}</div>}
+            </div>
+            <button data-flex-link disabled={busy === cand.id} onClick={() => decide(cand, true)} style={btn("primary")}><Check size={16} strokeWidth={1.5} /> Link</button>
+            <button data-flex-reject disabled={busy === cand.id} onClick={() => decide(cand, false)} style={btn("secondary")}><X size={16} strokeWidth={1.5} /> Not this one</button>
+          </div>
+        ))}
+        {!loading && candidates.length === 0 && <div style={{ color: TC.muted, fontSize: 13 }}>Nothing pending. The matcher runs nightly over deals in Proposal or later without a Flex link; a candidate appears here when a project in the Flex mirror matches the deal's company and falls near its expected date.</div>}
+      </div>
     </div>
   );
 }
@@ -357,6 +394,7 @@ function StageBar({ d, onMove }) {
 function DealPage({ id, onBack, onChanged, onNavigate }) {
   const [d, setD] = useState(null);
   const [cands, setCands] = useState(null);
+  const [pending, setPending] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [roles, setRoles] = useState([]);
   const [addC, setAddC] = useState({ contact_id: "", role: "other" });
@@ -372,12 +410,13 @@ function DealPage({ id, onBack, onChanged, onNavigate }) {
       const rows = await db.select("deals", { id: `eq.${id}`, select: "*,companies(id,name,domain,kind,tier,lifecycle_stage),contacts(id,name,email),campaigns(id,name,kind)" });
       const deal = rows?.[0] || null; setD(deal);
       if (deal) {
-        const [cs, rs, ts] = await Promise.all([
+        const [cs, rs, ts, pc] = await Promise.all([
           db.select("contacts", { company_id: `eq.${deal.company_id}`, merged_into_id: "is.null", select: "id,name,email,title,lead_status,last_touch_at" }),
           dealContacts(deal.id),
           db.select("tasks", { deal_id: `eq.${deal.id}`, kind: "eq.crm", completed_at: "is.null", select: "id,title,due_date", order: "due_date.asc.nullslast" }),
+          deal.flex_project_id ? [] : pendingFlexCandidates(deal.id).catch(() => []),
         ]);
-        setContacts(cs || []); setRoles(rs || []); setTasks(ts || []);
+        setContacts(cs || []); setRoles(rs || []); setTasks(ts || []); setPending(pc || []);
       }
     } catch (e) { setErr(e.message); }
   }
@@ -393,6 +432,7 @@ function DealPage({ id, onBack, onChanged, onNavigate }) {
   async function roleAction(fn) { try { await fn(); changed(); } catch (e) { setErr(e.message); } }
   async function loadCands() { try { setCands(await flexCandidatesFor(d)); } catch (e) { setErr(e.message); } }
   async function link(p) { try { await linkFlexBooking(d, p); setCands(null); changed(); } catch (e) { setErr(e.message); } }
+  async function decide(cand, confirm) { try { await decideFlexCandidate({ ...cand, deals: d }, confirm); setCands(null); changed(); } catch (e) { setErr(e.message); } }
   // Publish this record: the base actions, stage moves (Booked only once Flex is linked; Lost needs a reason on the bar), and links.
   useEffect(() => {
     if (!d) return;
@@ -469,6 +509,18 @@ function DealPage({ id, onBack, onChanged, onNavigate }) {
         <Card title="Flex booking" action={!d.flex_project_id && <button onClick={loadCands} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }}><Link2 size={14} strokeWidth={1.5} /> Find in Flex</button>}>
           {d.flex_project_id ? <div style={{ ...TT.body2, color: TC.ink }}>Linked to Flex project <span style={TT.mono}>{d.flex_project_id}</span>{d.flex_linked_by ? ` by ${d.flex_linked_by}` : ""}{d.flex_linked_at ? ` on ${day(d.flex_linked_at)}` : ""}.</div>
             : <div style={{ ...TT.caption, color: TC.muted }}>No booking linked. A deal counts as booked only once a Flex project is linked by its id.</div>}
+          {!d.flex_project_id && pending.length > 0 && (
+            <div data-deal-candidates style={{ marginTop: 8, border: `1px solid ${TC.line}`, borderRadius: 8, overflow: "hidden" }}>
+              <div style={{ padding: "6px 10px", ...TT.caption, color: TC.sub, background: TC.bg, borderBottom: `1px solid ${TC.lineSoft}` }}>Found by the nightly matcher · is one of these this deal's booking?</div>
+              {pending.map(p => (
+                <div key={p.id} data-deal-candidate={p.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 10px", borderBottom: `1px solid ${TC.lineSoft}` }}>
+                  <div style={{ flex: 1, minWidth: 0 }}><div style={{ ...TT.body2Med, color: TC.ink }}>{p.flex_client_name || "Flex project"} · {day(p.event_date)}</div><div style={{ ...TT.caption, color: TC.muted }}><span style={TT.mono}>{p.flex_project_id}</span> · {money(p.budget_estimate)} · {p.match_type === "client" ? "same Flex client" : "name match"} · confidence {p.confidence}{p.note ? ` · ${p.note}` : ""}</div></div>
+                  <button onClick={() => decide(p, true)} style={btn("primary")}>Link</button>
+                  <button onClick={() => decide(p, false)} style={{ ...btn("secondary"), padding: "4px 10px" }}>Not this one</button>
+                </div>
+              ))}
+            </div>
+          )}
           {cands && (
             <div style={{ marginTop: 8, border: `1px solid ${TC.line}`, borderRadius: 8, overflow: "hidden" }}>
               {cands.length === 0 && <div style={{ padding: 10, ...TT.caption, color: TC.muted }}>No unlinked Flex projects for this company's Flex clients within 120 days of the expected date. Link the company to its Flex client first.</div>}
