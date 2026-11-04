@@ -5,7 +5,7 @@
 // its follow-up newsletter under the same roof as its badge scans and deals.
 import React, { useEffect, useMemo, useState } from "react";
 import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
-import { Send, Clock, FlaskConical, Users, RefreshCw } from "lucide-react";
+import { Send, Clock, FlaskConical, Users, RefreshCw, LayoutTemplate } from "lucide-react";
 import { auth } from "../lib/auth.js";
 import { listTemplates, SAMPLE, render, previewHtml } from "../lib/email.js";
 import { updateCampaign, audienceFor, sendTest, sendNow, scheduleCampaign, unschedule, listSends, cleanSegment, EMPTY_SEGMENT, SEND_STATUS_LABEL, SEND_STATUS_TONE, RECIPIENT_TONE, listCampaigns } from "../lib/campaigns.js";
@@ -17,7 +17,7 @@ const COMPANY_KINDS = ["prospect", "client", "partner", "venue", "other"];
 const when = ts => (ts ? new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
 const localInput = ts => { const d = ts ? new Date(ts) : new Date(Date.now() + 3600e3); const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
 
-export default function CampaignEmail({ campaign: c, onChanged }) {
+export default function CampaignEmail({ campaign: c, onChanged, onNavigate }) {
   const [templates, setTemplates] = useState([]);
   const [others, setOthers] = useState([]);
   const [f, setF] = useState({ email_template_id: c.email_template_id || "", subject: c.subject || "", from_name: c.from_name || "", from_email: c.from_email || "", reply_to: c.reply_to || "" });
@@ -108,8 +108,13 @@ export default function CampaignEmail({ campaign: c, onChanged }) {
 
           <div style={{ display: "grid", gap: 8 }}>
             <div><span style={label}>Template (campaign kind)</span>
-              <select data-campaign-template value={f.email_template_id} onChange={set("email_template_id")} style={inputStyle()}><option value="">Pick a template…</option>{templates.map(t => <option key={t.id} value={t.id}>{t.name} · {t.format === "html" ? "HTML" : "text"}</option>)}</select>
-              {templates.length === 0 && <div style={{ ...TT.caption, color: TC.muted, marginTop: 2 }}>No campaign templates yet: Outreach → Templates → New template, kind "Campaign".</div>}
+              <div style={{ display: "flex", gap: 6 }}>
+                <select data-campaign-template value={f.email_template_id} onChange={set("email_template_id")} style={inputStyle()}><option value="">Pick a template…</option>{templates.map(t => <option key={t.id} value={t.id}>{t.name} · {t.design ? "newsletter" : t.format === "html" ? "HTML" : "text"}</option>)}</select>
+                {tpl?.design
+                  ? <button data-open-builder type="button" onClick={() => onNavigate?.("outreach", { tab: "templates", templateId: tpl.id })} style={{ ...btn("secondary"), whiteSpace: "nowrap" }} title="Edit this newsletter in the builder"><LayoutTemplate size={13} strokeWidth={1.5} /> Open in builder</button>
+                  : <button data-new-newsletter type="button" onClick={() => onNavigate?.("outreach", { tab: "templates", new: "newsletter" })} style={{ ...btn("secondary"), whiteSpace: "nowrap" }} title="Design a newsletter block by block"><LayoutTemplate size={13} strokeWidth={1.5} /> New newsletter</button>}
+              </div>
+              {templates.length === 0 && <div style={{ ...TT.caption, color: TC.muted, marginTop: 2 }}>No campaign templates yet. New newsletter opens the builder; it saves as a campaign template you can pick here.</div>}
             </div>
             <div><span style={label}>Subject</span><input value={f.subject} onChange={set("subject")} placeholder={tpl?.subject || "Subject"} style={inputStyle()} /></div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>

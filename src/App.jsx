@@ -1556,7 +1556,7 @@ function FFTank({ onSignOut }) {
           ) : activeId === "companies" ? (
             <Companies key={navParams.review ? "review" : navParams.companyId || (navParams.new ? "new" : "list")} initialReview={!!navParams.review} initialCompanyId={navParams.companyId || null} initialNew={!!navParams.new} onNavigate={navTo} />
           ) : activeId === "outreach" ? (
-            <Prospecting key={navParams.tab || "handoff"} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView }} db={db} legacyProps={{ sequenceId: navParams.sequenceId || null }} onNavigate={navTo} />
+            <Prospecting key={`${navParams.tab || "handoff"}-${navParams.templateId || navParams.new || ""}`} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView }} db={db} legacyProps={{ sequenceId: navParams.sequenceId || null, templateId: navParams.templateId || null, newTemplate: navParams.new || null }} onNavigate={navTo} />
           ) : activeId === "deals" ? (
             <Deals key={navParams.review ? "review" : navParams.dealId || (navParams.new ? "new" : "all")} initialDealId={navParams.dealId || null} initialNew={!!navParams.new} initialReview={!!navParams.review} onNavigate={navTo} />
           ) : activeId === "reports" ? (

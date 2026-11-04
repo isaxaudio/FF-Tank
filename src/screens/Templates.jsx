@@ -1,12 +1,14 @@
 // src/screens/Templates.jsx — email templates: a name, a subject and a body with tokens that the
 // composer fills from the record ({{first_name}}, {{company}}, {{event}}, {{sender_first_name}}…).
-// One-to-one templates are picked in the composer; sequence and campaign kinds wait for steps 6 and 7.
-// Archiving hides a template from the picker without losing the messages that used it.
+// One-to-one templates are picked in the composer; sequence steps and campaigns pick their kinds.
+// Newsletters (campaign kind, built block by block) open in the builder; hand-written ones in the
+// plain editor. Archiving hides a template from the pickers without losing the messages that used it.
 import React, { useEffect, useRef, useState } from "react";
 import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
-import { Plus, Archive, ArchiveRestore } from "lucide-react";
-import { listTemplates, createTemplate, updateTemplate, archiveTemplate, TOKENS, CAMPAIGN_TOKENS, SAMPLE, render, senderNames, previewHtml } from "../lib/email.js";
+import { Plus, Archive, ArchiveRestore, Copy, LayoutTemplate } from "lucide-react";
+import { listTemplates, createTemplate, updateTemplate, archiveTemplate, duplicateTemplate, TOKENS, CAMPAIGN_TOKENS, SAMPLE, render, senderNames, previewHtml } from "../lib/email.js";
 import { ago } from "../lib/status.js";
+import NewsletterBuilder from "../components/NewsletterBuilder.jsx";
 
 const KIND = { one_to_one: "One-to-one", sequence: "Sequence step", campaign: "Campaign" };
 const KIND_TONE = { one_to_one: "ocean", sequence: "iris", campaign: "tropic" };
@@ -14,46 +16,57 @@ const label = { ...TT.label, marginBottom: 4, display: "block" };
 const th = { ...TT.tableHead, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${TC.line}`, background: TC.bg };
 const td = { fontSize: 13, lineHeight: "20px", color: TC.ink, padding: "9px 10px", borderBottom: `1px solid ${TC.lineSoft}`, verticalAlign: "top" };
 
-export default function Templates() {
+export default function Templates({ initialTemplateId = null, initialNew = null }) {
   const [rows, setRows] = useState([]);
   const [archived, setArchived] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(null); // null | "new" | template row
+  const [editing, setEditing] = useState(null); // null | "new" | template row (plain editor)
+  const [building, setBuilding] = useState(initialNew === "newsletter" ? { template: null, starter: "newsletter" } : null); // { template | null, starter }
   const [err, setErr] = useState("");
+  const opened = useRef(false);
 
+  const open = t => { if (t.design) setBuilding({ template: t, starter: null }); else setEditing(t); };
   async function load() {
     setLoading(true); setErr("");
-    try { setRows((await listTemplates({ archived })) || []); } catch (e) { setErr(e.message); }
+    try {
+      const list = (await listTemplates({ archived })) || []; setRows(list);
+      // Arriving with a template id (from a campaign's "Open in builder"): open it once, when the list is here.
+      if (initialTemplateId && !opened.current) { const t = list.find(r => r.id === initialTemplateId); if (t) { opened.current = true; open(t); } }
+    } catch (e) { setErr(e.message); }
     setLoading(false);
   }
   useEffect(() => { Promise.resolve().then(load); }, [archived]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  if (building) return <NewsletterBuilder template={building.template} starter={building.starter} onClose={() => { setBuilding(null); load(); }} onSaved={() => {}} />;
+
   return (
     <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
       <div style={{ flex: 1, minWidth: 0, overflow: "auto", padding: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
           <div style={{ ...TT.h4, color: TC.ink }}>Templates</div>
-          <span style={{ ...TT.caption, color: TC.muted }}>Picked in the email composer on any record. Tokens fill from the record.</span>
+          <span style={{ ...TT.caption, color: TC.muted }}>Picked in the email composer, in sequence steps and on campaigns. Tokens fill from the record.</span>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             <button onClick={() => setArchived(a => !a)} style={btn("ghost")}>{archived ? "Show active" : "Show archived"}</button>
-            <button data-new-template onClick={() => setEditing("new")} style={btn("primary")}><Plus size={13} strokeWidth={1.5} /> New template</button>
+            <button data-new-template onClick={() => setEditing("new")} style={btn("secondary")}><Plus size={13} strokeWidth={1.5} /> Template</button>
+            <button data-new-newsletter onClick={() => setBuilding({ template: null, starter: "newsletter" })} style={btn("primary")}><LayoutTemplate size={13} strokeWidth={1.5} /> New newsletter</button>
           </div>
         </div>
         {err && <div style={{ ...pill("rust"), marginBottom: 10 }}>{err}</div>}
         {loading ? <div style={{ ...TT.body2, color: TC.muted }}>Loading…</div> : rows.length === 0 ? (
-          <div style={{ ...TT.body2, color: TC.muted }}>{archived ? "Nothing archived." : "No templates yet. The first one you write shows up in the composer's Template menu."}</div>
+          <div style={{ ...TT.body2, color: TC.muted }}>{archived ? "Nothing archived." : "No templates yet. New newsletter opens the builder; Template is a plain subject and body."}</div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr><th style={th}>Name</th><th style={th}>Subject</th><th style={th}>Kind</th><th style={th}>Owner</th><th style={th}>Updated</th><th style={th}></th></tr></thead>
             <tbody>
               {rows.map(t => (
-                <tr key={t.id} className="ff-row" data-template={t.name} onClick={() => setEditing(t)} style={{ cursor: "pointer" }}>
+                <tr key={t.id} className="ff-row" data-template={t.name} onClick={() => open(t)} style={{ cursor: "pointer" }}>
                   <td style={{ ...td, fontWeight: 450 }}>{t.name}</td>
                   <td style={{ ...td, color: TC.sub, maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject}</td>
-                  <td style={td}><span style={pill(KIND_TONE[t.kind] || "sand")}>{KIND[t.kind] || t.kind}</span></td>
+                  <td style={td}><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}><span style={pill(KIND_TONE[t.kind] || "sand")}>{KIND[t.kind] || t.kind}</span>{t.design ? <span data-newsletter-tag style={pill("outline")}>Newsletter</span> : t.format === "html" ? <span style={pill("outline")}>HTML</span> : null}</div></td>
                   <td style={{ ...td, color: TC.sub }}>{t.owner || "—"}</td>
                   <td style={{ ...td, color: TC.muted }}>{ago(t.updated_at || t.created_at)}</td>
-                  <td style={{ ...td, textAlign: "right" }}>
+                  <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button data-duplicate onClick={async e => { e.stopPropagation(); try { await duplicateTemplate(t); load(); } catch (e2) { setErr(e2.message); } }} style={{ ...btn("ghost"), padding: "2px 6px" }} title="Duplicate"><Copy size={14} strokeWidth={1.5} /></button>
                     <button onClick={async e => { e.stopPropagation(); await archiveTemplate(t.id, !archived); load(); }} style={{ ...btn("ghost"), padding: "2px 6px" }} title={archived ? "Restore" : "Archive"}>{archived ? <ArchiveRestore size={14} strokeWidth={1.5} /> : <Archive size={14} strokeWidth={1.5} />}</button>
                   </td>
                 </tr>
@@ -107,6 +120,7 @@ function Editor({ template, onDone, onCancel }) {
           <div><span style={label}>Preheader</span><input value={preheader} onChange={e => setPreheader(e.target.value)} placeholder="The line inbox previews show after the subject" style={inputStyle()} /></div>
         </div>
       )}
+      {kind === "campaign" && <div style={{ ...TT.caption, color: TC.muted }}>For a designed newsletter, close this and use New newsletter: the builder writes the HTML for you.</div>}
       <div>
         <span style={label}>{format === "html" ? "HTML" : "Body"}</span>
         <textarea ref={bodyRef} value={body} onChange={e => setBody(e.target.value)} rows={format === "html" ? 16 : 10} spellCheck={format !== "html"} placeholder={format === "html" ? "Paste the newsletter's HTML. Tokens like {{first_name}} work inside it; {{unsubscribe_url}} goes in the footer link." : ""} style={inputStyle({ resize: "vertical", minHeight: 160, fontFamily: format === "html" ? "ui-monospace, SFMono-Regular, Menlo, monospace" : "inherit", fontSize: format === "html" ? 12 : undefined })} />

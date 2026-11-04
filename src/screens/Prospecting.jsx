@@ -32,7 +32,7 @@ export default function Prospecting({ initialTab = "handoff", views = {}, db: le
         {tab === "signals" && <SignalsTable onNavigate={onNavigate} legacyProps={legacyProps} />}
         {tab === "sequences" && <Sequences onNavigate={onNavigate} initialId={legacyProps.sequenceId || null} />}
         {tab === "campaigns" && <Campaigns onNavigate={onNavigate} />}
-        {tab === "templates" && <Templates />}
+        {tab === "templates" && <Templates initialTemplateId={legacyProps.templateId || null} initialNew={legacyProps.newTemplate || null} />}
       </div>
     </div>
   );

@@ -129,6 +129,7 @@ module.exports = async (req, res) => {
       case 'flex-candidates': return await handleFlexCandidates(req, res);
       case 'campaign-send':     return await handleCampaignSend(req, res);
       case 'campaign-audience': return await handleCampaignAudience(req, res);
+      case 'template-test':     return await handleTemplateTest(req, res);
       case 'resend-webhook':    return await handleResendWebhook(req, res);
       case 'unsubscribe':       return await handleUnsubscribe(req, res);
       case 'send-lead':      return await handleSendLead(req, res);
@@ -1315,6 +1316,15 @@ async function handleCampaignSend(req, res) {
     const out = await campaigns.sendCampaign({ campaignId, baseUrl: publicBase(req), test: testList, actor: req.auth?.user?.email || 'ui', dryRun: req.query.dry === '1' });
     return res.json({ ok: true, ...out });
   } catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code || null, summary: e.summary || null }); }
+}
+// The newsletter builder's test send: a template (no campaign yet) to up to five addresses through Resend.
+async function handleTemplateTest(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireAuth(req, res))) return;
+  const { templateId, to } = req.body || {};
+  if (!templateId) return res.status(400).json({ error: 'templateId required' });
+  try { return res.json({ ok: true, ...(await campaigns.sendTemplateTest({ templateId, to: Array.isArray(to) ? to : [to], baseUrl: publicBase(req), actor: req.auth?.user?.email || 'ui' })) }); }
+  catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code || null }); }
 }
 // Who a segment reaches right now (count and a sample), for the campaign editor.
 async function handleCampaignAudience(req, res) {

@@ -290,6 +290,13 @@ needs the `gmail.metadata` scope: reconnect Gmail in Settings once after upgradi
 deals in Proposal or later against the Flex mirror into `flex_booking_candidates` (`lib/server/flexjobs.cjs`).
 `service=reply-check` and `service=flex-candidates&force=1` run either on its own. A person links every booking.
 
+## Newsletter builder (CRM rebuild step 10, see CRM-PLAN.md)
+Outreach → Templates → New newsletter opens `src/components/NewsletterBuilder.jsx`; the model and the email-safe HTML
+compiler are in `src/lib/newsletter.js`. A newsletter is an `email_templates` row of kind campaign with `design`
+(the blocks) and `body` (the compiled HTML the campaign send uses as is). Images upload to the public storage bucket
+`email-assets` (`src/lib/storage.js`). `service=template-test` sends one template to a few addresses through Resend.
+Migration `011_newsletter_builder` must be applied before saving a newsletter works.
+
 ## What is NOT built yet
 - Apollo automation triggered from agent (Flex → Lookalike Engine → Apollo enrich)
 - Dedup of outreach_drafts by contact (if contact already has a draft, skip)

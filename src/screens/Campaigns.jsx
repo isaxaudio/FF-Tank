@@ -146,7 +146,7 @@ function CampaignPanel({ campaign: c, onClose, onChanged, onNavigate }) {
         </div>
         {roi != null && <div style={{ ...TT.caption, color: TC.muted }}>Open pipeline minus cost: <b style={{ color: roi >= 0 ? TC.ink : TC.criticalInk, fontWeight: 450 }}>{money(roi)}</b>. Booked value is counted only for deals linked to a Flex project.</div>}
 
-        <CampaignEmail key={`${c.id}-${c.send_status}-${c.updated_at}`} campaign={c} onChanged={onChanged} />
+        <CampaignEmail key={`${c.id}-${c.send_status}-${c.updated_at}`} campaign={c} onChanged={onChanged} onNavigate={onNavigate} />
 
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>

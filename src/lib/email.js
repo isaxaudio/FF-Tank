@@ -38,10 +38,16 @@ export function unresolved(text) { return [...new Set([...String(text || "").mat
 export function listTemplates({ archived = false, kind = null } = {}) {
   return db.select("email_templates", { select: "*", order: "name.asc", archived_at: archived ? "not.is.null" : "is.null", ...(kind ? { kind: `eq.${kind}` } : {}) });
 }
-export async function createTemplate({ name, subject = "", body = "", kind = "one_to_one", format = "text", preheader = null }) {
-  const rows = await db.insert("email_templates", { name: name.trim(), subject, body, kind, format, preheader, owner: me(), created_by: me() });
+export async function createTemplate({ name, subject = "", body = "", kind = "one_to_one", format = "text", preheader = null, design = null }) {
+  const rows = await db.insert("email_templates", { name: name.trim(), subject, body, kind, format, preheader, design, owner: me(), created_by: me() });
   return rows?.[0] || null;
 }
+// A copy to start from (the builder's "Duplicate"); the name gets " copy".
+export async function duplicateTemplate(t) {
+  return createTemplate({ name: `${t.name} copy`, subject: t.subject || "", body: t.body || "", kind: t.kind, format: t.format || "text", preheader: t.preheader || null, design: t.design || null });
+}
+// The builder's test send: the template rendered with sample values, to up to five addresses, through Resend.
+export function sendTemplateTest(templateId, addresses) { return api("template-test", { templateId, to: addresses }); }
 // Campaign emails also know {{unsubscribe_url}}; the server adds a link when a template has none.
 export const CAMPAIGN_TOKENS = [...TOKENS, ["unsubscribe_url", "One-click unsubscribe link (added automatically if missing)"]];
 // A template body as a recipient would see it: HTML rendered in an iframe, text in a pre block.
