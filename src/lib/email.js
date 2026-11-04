@@ -1,14 +1,12 @@
-// src/lib/email.js — one-to-one email: templates with tokens, sending through the user's Gmail
-// (server: api/index?service=gmail-send), and the email_messages rows that are the only source
-// of "sent". A Gmail draft is logged as email_draft and never counts as sent. Replies are marked
-// by hand until the Gmail read scope exists; marking one writes an email_reply activity.
+// src/lib/email.js — one-to-one email: templates with tokens, sending through a connected Gmail
+// account (server: api/index?service=gmail-send; the token stays server-side and the server checks the
+// signed-in user may send as that account), and the email_messages rows that are the only source
+// of "sent". A Gmail draft is logged as email_draft and never counts as sent.
 import { db } from "./db.js";
 import { auth } from "./auth.js";
 import { logActivity } from "./activities.js";
 
 const me = () => auth.user()?.email || "user";
-export const GMAIL_TOKEN_KEY = "gmailRefreshToken";
-export const gmailToken = () => { try { return localStorage.getItem(GMAIL_TOKEN_KEY) || ""; } catch { return ""; } };
 
 // Tokens a template may use. `event` is the deal name when composing from a deal, else blank.
 export const TOKENS = [
@@ -72,24 +70,26 @@ export async function isUnsubscribed(email) {
   return (u?.length || 0) > 0 || (c?.length || 0) > 0;
 }
 
-async function api(service, payload) {
-  const r = await fetch(`/api/index?service=${service}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await auth.token()}` }, body: JSON.stringify(payload) });
+async function api(service, payload, method = "POST") {
+  const r = await fetch(`/api/index?service=${service}`, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${await auth.token()}` }, body: method === "POST" ? JSON.stringify(payload) : undefined });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) { const err = new Error(d.error || `${service} failed (${r.status})`); err.status = r.status; err.code = d.code; throw err; }
   return d;
 }
-// Send through Gmail. Resolves to the email_messages row (status 'sent'); the server wrote the activity.
-export async function sendEmail({ to, subject, body, contactId = null, companyId = null, dealId = null, templateId = null }) {
-  const refreshToken = gmailToken();
-  if (!refreshToken) { const e = new Error("Add your Gmail refresh token in Settings to send from FF Tank"); e.code = "no_token"; throw e; }
-  const d = await api("gmail-send", { to, subject, body, refreshToken, contactId, companyId, dealId, templateId });
+// The Gmail accounts this user may send as (the server decides: their own address or ones they connected).
+// Each row: { email, connected_by, replies_ok, usable }. Tokens never come to the browser.
+export async function mySenders() {
+  try { const d = await api("gmail-accounts", null, "GET"); return (d.accounts || []).filter(a => a.usable); } catch { return []; }
+}
+// Send through Gmail as `from` (default: the signed-in user's own connected account). Resolves to the
+// email_messages row (status 'sent'); the server wrote the activity.
+export async function sendEmail({ to, subject, body, from = null, contactId = null, companyId = null, dealId = null, templateId = null }) {
+  const d = await api("gmail-send", { to, subject, body, from, contactId, companyId, dealId, templateId });
   return d.message;
 }
 // Save a Gmail draft. Logged as email_draft by the server; never as sent.
-export async function saveDraft({ to, subject, body, contactId = null, companyId = null }) {
-  const refreshToken = gmailToken();
-  if (!refreshToken) { const e = new Error("Add your Gmail refresh token in Settings to save drafts from FF Tank"); e.code = "no_token"; throw e; }
-  return api("gmail-draft", { to, subject, body, refreshToken, contactId, companyId });
+export async function saveDraft({ to, subject, body, from = null, contactId = null, companyId = null }) {
+  return api("gmail-draft", { to, subject, body, from, contactId, companyId });
 }
 // The reply came in (read by hand in Gmail): record it against the sent message and the timeline.
 export async function markReplied(message, { body = "", occurred_at = null } = {}) {

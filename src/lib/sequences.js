@@ -123,7 +123,9 @@ export async function connectedSenders() { try { return (await api("gmail-accoun
 // Reply detection and the Flex booking matcher ride the scheduler tick; these run them on demand.
 export function checkReplies({ limit = 40 } = {}) { return api("reply-check", { limit }); }
 export function runFlexCandidates() { return api("flex-candidates", { force: true }, { query: "&force=1" }); }
-export function registerGmail({ email, refreshToken }) { return api("gmail-register", { email, refreshToken }); }
+// Connect (or reconnect) a Gmail account: the server signs the OAuth state for this user and returns Google's
+// consent URL; the callback keeps the refresh token server-side, connected_by this user.
+export async function startGmailConnect() { const d = await api("gmail-connect", {}); if (d?.url) window.location.assign(d.url); return d; }
 // Tick at most once per 15 minutes per browser while the app is open, so sequences move even when no cron runs.
 export async function tickIfDue() {
   let last = 0; try { last = Number(localStorage.getItem(TICK_KEY) || 0); } catch { /* ignore */ }

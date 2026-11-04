@@ -8,7 +8,7 @@ import People from "./screens/People.jsx";
 import Companies from "./screens/Companies.jsx";
 import Today from "./screens/Today.jsx";
 import Prospecting from "./screens/Prospecting.jsx";
-import { tickIfDue as tickSequences, registerGmail, connectedSenders } from "./lib/sequences.js";
+import { tickIfDue as tickSequences, connectedSenders, startGmailConnect } from "./lib/sequences.js";
 import Deals from "./screens/Deals.jsx";
 import Reports from "./screens/Reports.jsx";
 import Automation from "./screens/Automation.jsx";
@@ -1382,8 +1382,31 @@ const SETTINGS_FIELDS = [
   { key: "apolloKey", title: "Apollo", label: "Apollo API key", type: "password" },
   { key: "tavilyKey", title: "Tavily", label: "Tavily API key", type: "password" },
   { key: "flexApiKey", title: "Flex Rental Solutions", label: "X-Auth-Token", type: "password", note: "clearlamp.flexrentalsolutions.com" },
-  { key: "gmailRefreshToken", title: "Gmail", label: "OAuth refresh token", type: "password", connect: { href: "/oauth/gmail", label: "Connect Gmail" }, note: "Sends one-to-one email and sequences through your Gmail and reads the headers of your sent threads to notice replies (never bodies). Connect Gmail signs you in with Google and fills this in; the token stays in this browser and the scheduler keeps a copy.", status: "gmail" },
 ];
+
+// Settings → Gmail: which accounts are connected for sending and reply detection, and the connect flow.
+// The browser never holds a Gmail token: Connect asks the server for Google's consent URL (signed for this
+// user) and the callback stores the refresh token server-side.
+function GmailCard({ senders }) {
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const me = (auth.user()?.email || "").toLowerCase();
+  const mine = (senders || []).filter(a => a.usable);
+  async function connect() { setBusy(true); setErr(""); try { await startGmailConnect(); } catch (e) { setErr(e.message || "Could not start the Google sign-in."); setBusy(false); } }
+  return (
+    <div data-gmail-card style={{ background: TC.bg, border: `1px solid ${TC.line}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 13, fontWeight: 450, color: TC.ink }}>Gmail</span><span style={{ marginLeft: "auto", fontSize: 11.5, color: mine.length ? TC.positiveInk : TC.faint }}>{senders == null ? "checking…" : mine.length ? "connected" : "not connected"}</span></div>
+      <div style={{ fontSize: 11.5, color: TC.faint }}>Sends one-to-one email and sequences through your Gmail and reads the headers of your sent threads to notice replies. The sign-in token stays on the server; nothing is kept in this browser.</div>
+      {senders && (
+        <div data-gmail-status style={{ fontSize: 11.5, color: TC.sub, display: "flex", flexDirection: "column", gap: 2 }}>
+          {senders.length === 0 && <span>No Gmail account is connected yet.</span>}
+          {senders.map(a => <span key={a.email}>{a.email}{a.usable ? "" : ` (connected by ${a.connected_by || "someone else"})`}: sending <b style={{ fontWeight: 500, color: a.usable ? TC.positiveInk : TC.faint }}>{a.usable ? "yours" : "not yours"}</b> · reply detection <b style={{ fontWeight: 500, color: a.replies_ok ? TC.positiveInk : TC.warnInk }}>{a.replies_ok ? "on" : "off"}</b>{!a.replies_ok && a.usable && <> · reconnect to grant the read scope</>}</span>)}
+        </div>
+      )}
+      <button data-gmail-connect onClick={connect} disabled={busy} style={{ ...btn(mine.length ? "secondary" : "primary"), alignSelf: "flex-start" }}>{busy ? "Opening Google…" : mine.length ? `Reconnect (${mine[0].email})` : `Connect Gmail${me ? ` as ${me}` : ""}`}</button>
+      {err && <div style={{ fontSize: 11.5, color: TC.criticalInk }}>{err}</div>}
+    </div>
+  );
+}
 
 // Settings → Account: change the signed-in user's password. Other devices keep their sessions.
 function PasswordCard() {
@@ -1497,23 +1520,17 @@ function FFTank({ onSignOut }) {
               <div style={{ fontSize: 20, fontWeight: 450, color: TC.ink }}>Settings</div>
               <button onClick={() => setShowSettings(false)} style={{ marginLeft: "auto", background: "transparent", border: `1px solid ${TC.lineStrong}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: TC.sub, fontFamily: "inherit" }}>✕</button>
             </div>
-            <div style={{ fontSize: 13, lineHeight: "20px", color: TC.sub, marginBottom: 18 }}>Keys entered here stay in this browser. Scheduled jobs use the keys configured on the server.</div>
+            <div style={{ fontSize: 13, lineHeight: "20px", color: TC.sub, marginBottom: 18 }}>Keys entered here stay in this browser and are only used by the legacy Flex and Apollo views. Scheduled jobs and email use the keys configured on the server.</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
               <PasswordCard />
+              <GmailCard senders={senders} />
               {SETTINGS_FIELDS.map(f => (
                 <div key={f.key} style={{ background: TC.bg, border: `1px solid ${TC.line}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 13, fontWeight: 450, color: TC.ink }}>{f.title}</span><span style={{ marginLeft: "auto", fontSize: 11.5, color: settings[f.key] ? TC.positiveInk : TC.faint }}>{settings[f.key] ? "configured" : "not set"}</span></div>
                   <label style={{ fontSize: 12, color: TC.muted, display: "flex", flexDirection: "column", gap: 4 }}>{f.label}
                     <input value={settings[f.key]} onChange={e => setSetting(f.key, e.target.value)} type={f.type === "password" ? "password" : "text"} placeholder={f.label} style={inputStyle()} />
                   </label>
-                  {f.connect && <a href={f.connect.href} style={{ ...btn(settings[f.key] ? "secondary" : "primary"), textDecoration: "none", alignSelf: "flex-start" }}>{settings[f.key] ? `Reconnect${localStorage.getItem("gmailAccount") ? ` (${localStorage.getItem("gmailAccount")})` : ""}` : f.connect.label}</a>}
                   {f.note && <div style={{ fontSize: 11.5, color: TC.faint }}>{f.note}</div>}
-                  {f.status === "gmail" && senders && (
-                    <div data-gmail-status style={{ fontSize: 11.5, color: TC.sub, display: "flex", flexDirection: "column", gap: 2 }}>
-                      {senders.length === 0 && <span>No Gmail account is registered for the scheduler yet.</span>}
-                      {senders.map(a => <span key={a.email}>{a.email}: sequences on · reply detection <b style={{ fontWeight: 500, color: a.replies_ok ? TC.positiveInk : TC.warnInk }}>{a.replies_ok ? "on" : "off"}</b>{!a.replies_ok && <> · {a.reply_error ? "Reconnect to grant the read scope." : "Reconnect once to grant the read scope."}</>}{a.replies_checked_at ? ` · last check ${new Date(a.replies_checked_at).toLocaleString()}` : ""}</span>)}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -1588,7 +1605,8 @@ export default function App() {
     const t = setInterval(() => auth.token(), 10 * 60 * 1000);
     // Sequences: this browser's Gmail token is registered for the scheduler, and an open tab ticks the
     // scheduler at most every 15 minutes so steps go out even when no cron is running.
-    try { const tok = localStorage.getItem("gmailRefreshToken"), acct = localStorage.getItem("gmailAccount"); if (tok && acct) registerGmail({ email: acct, refreshToken: tok }).catch(() => {}); } catch { /* ignore */ }
+    // Gmail tokens live only on the server now; clear anything an older build left in this browser.
+    try { localStorage.removeItem("gmailRefreshToken"); localStorage.removeItem("gmailAccount"); } catch { /* ignore */ }
     const tick = () => tickSequences();
     const t0 = setTimeout(tick, 4000);
     const t2 = setInterval(tick, 5 * 60 * 1000);

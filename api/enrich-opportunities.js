@@ -109,7 +109,11 @@ function shouldReveal(row, hasEmail, dailyRevealsUsed, forceOverride) {
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
+const { requireAuth } = require('../lib/server/auth.cjs');
+
 module.exports = async function handler(req, res) {
+  // Spends provider credits and writes with the service key: a signed-in user or the scheduler secret is required.
+  if (!(await requireAuth(req, res))) return;
   const startMs   = Date.now();
   const runId     = `enrich-${startMs}`;
   const forceOverride = req.query.force === 'true' || req.body?.force === true;

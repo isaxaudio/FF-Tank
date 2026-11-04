@@ -1,7 +1,7 @@
 # FF Tank — Project Brief
 
 ## What it is
-Isaac's internal sales + marketing AI dashboard for Fatfish, a full-service event production company in Salt Lake City, Utah. React/Vite SPA deployed at https://ff-tank.vercel.app. All credentials stored in localStorage — no login required (internal tool only).
+Isaac's internal sales + marketing CRM for Fatfish, a full-service event production company in Salt Lake City, Utah. React/Vite SPA deployed at https://ff-tank.vercel.app. Sign-in is a Supabase user account (`src/lib/auth.js`); every table has RLS and every API service checks the caller (see "Auth boundaries"). The Settings panel keeps only the legacy Apollo / Tavily / Flex keys in localStorage; Gmail tokens live server-side.
 
 ## System architecture
 
@@ -17,8 +17,8 @@ Isaac's internal sales + marketing AI dashboard for Fatfish, a full-service even
 OpenClaw runs continuously on the VPS and does work even when nobody is using the dashboard. The Managed Agent runs on-demand, triggered from the UI, and completes in a single session.
 
 ## Stack
-- **Frontend**: React + Vite, single file (`src/App.jsx`, ~8,800+ lines), no component library, all inline styles
-- **Backend**: Vercel serverless functions in `/api/` — exactly 12 functions (Hobby plan limit). Do NOT add new files without removing one.
+- **Frontend**: React + Vite. `src/App.jsx` is the shell (nav, settings, login gate); screens live in `src/screens/`, shared pieces in `src/components/`, data access in `src/lib/`. No component library; inline styles from `src/tokens.js` (Apollo-derived light theme, see CRM-PLAN.md).
+- **Backend**: Vercel serverless functions in `/api/` (6 of the Hobby plan's 12 slots in use: `index.js` hub plus five stand-alone files). Add service cases to `api/index.js`; do not add files casually. Shared server code is in `lib/server/*.cjs` (not counted as functions).
 - **Agent runtime**: Anthropic Managed Agents (`anthropic-beta: managed-agents-2026-04-01`)
 - **Agent SSE proxy**: `api/agent-stream.js` — streams agent events to the browser (maxDuration: 300s)
 - **Database**: Supabase (raw fetch, no JS client)
@@ -201,13 +201,14 @@ WEBFLOW_SITE_ID
 GOOGLE_ADS_CLIENT_ID
 GOOGLE_ADS_CLIENT_SECRET
 SETUP_SECRET          -- guards agent-setup endpoint
-CRON_SECRET           -- scheduled runs (sequence tick, crons)
+CRON_SECRET           -- scheduled runs (sequence tick, crons); also signs the Gmail OAuth state
+STATE_SECRET          -- optional: a separate secret for signing OAuth state (defaults to CRON_SECRET)
 RESEND_API_KEY        -- campaigns (bulk email); without it sends stop at "Resend is not configured"
 RESEND_FROM           -- default sender, e.g. "Fatfish <news@fatfishmedia.com>" on a verified domain
 RESEND_WEBHOOK_SECRET -- svix signing secret for /api/index?service=resend-webhook
 ```
 
-## localStorage keys (user credentials, set via Settings panel)
+## localStorage keys (set via Settings panel; legacy views only. Gmail tokens are NOT here since PR 1A.)
 ```
 agentId               -- Anthropic Managed Agent ID (set after /agent-setup)
 environmentId         -- Anthropic Environment ID (set after /agent-setup)
@@ -281,6 +282,25 @@ Accessed via Vercel proxy: `POST /api/index?service=vps` with `{vpsUrl, agentSec
 ### Git push
 - Remote stored with token in URL: `git push origin main` works directly
 - Token scope needed: `repo` + `workflow`
+
+## Auth boundaries (PR 1A, 2026-11-04)
+`lib/server/auth.cjs` is the one gate. `api/index.js` runs `requireAuth` before any service except three public ones, so an
+unauthenticated call never reaches a handler that holds server keys:
+- **public** — `gmail-auth` (Google's OAuth redirect; the signed state binds it to the user who started it), `resend-webhook`
+  (Svix signature, 5-minute timestamp window), `unsubscribe` (`/u/<token>`, the contact's own `unsub_token`).
+- **staff** — every other service and the stand-alone files (`apollo-prospect`, `enrich-opportunities`, `scan-targets`,
+  `cron-exec-movement`, `cron-scout`): a Supabase user JWT or `CRON_SECRET` (`Authorization: Bearer …`).
+- **person only** — `gmail-send`, `gmail-draft`, `gmail-connect` need a signed-in user (`requireUser`); the cron secret is refused.
+- **sender permission** — a user may send as a Gmail account whose address is their own sign-in email or that they connected
+  (`gmail_accounts.connected_by`); `canUseSender`. The scheduler sends as the sequence's configured `sender_email`.
+Gmail: Settings → Gmail → Connect posts to `gmail-connect`, which returns Google's consent URL with a signed state
+(HMAC with `CRON_SECRET`, or `STATE_SECRET` when set) and a cookie nonce; the callback stores the refresh token only in
+`gmail_accounts` (service key). Browsers hold no Gmail token; requests name a `from` address and the server looks the token up.
+`gmail-accounts` returns addresses with a `usable` flag for the caller. There is no `gmail-register` service any more.
+Still in the browser (legacy Flex and Apollo views only): `apolloKey`, `tavilyKey`, `flexApiKey` in localStorage, sent in request
+bodies to `flex-sync` / `flex-lookalike`. Migration: read them from the server env in those handlers and drop the fields.
+Tests: `npm test` runs `test/*.test.cjs` with node's test runner, no credentials or network (fetch is stubbed in
+`test/helpers.cjs`); CI runs lint + tests on every push and PR (`.github/workflows/test.yml`).
 
 ## Scheduled automation (CRM rebuild, see CRM-PLAN.md)
 One tick does everything: `POST /api/index?service=sequence-run` (CRON_SECRET or a signed-in user), called every
