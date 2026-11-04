@@ -8,7 +8,7 @@ import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
 import { Send, Clock, FlaskConical, Users, RefreshCw, LayoutTemplate } from "lucide-react";
 import { auth } from "../lib/auth.js";
 import { listTemplates, SAMPLE, render, previewHtml } from "../lib/email.js";
-import { updateCampaign, audienceFor, sendTest, sendNow, scheduleCampaign, unschedule, listSends, cleanSegment, EMPTY_SEGMENT, SEND_STATUS_LABEL, SEND_STATUS_TONE, RECIPIENT_TONE, listCampaigns } from "../lib/campaigns.js";
+import { updateCampaign, audienceFor, sendTest, sendNow, retryFailed, scheduleCampaign, unschedule, listSends, cleanSegment, EMPTY_SEGMENT, SEND_STATUS_LABEL, SEND_STATUS_TONE, OUTCOME_LABEL, OUTCOME_TONE, RECIPIENT_TONE, listCampaigns } from "../lib/campaigns.js";
 import { LIFECYCLE, LIFECYCLE_LABEL, LEAD_STATUS, LEAD_STATUS_LABEL } from "../lib/status.js";
 
 const label = { ...TT.label, marginBottom: 4, display: "block" };
@@ -30,7 +30,9 @@ export default function CampaignEmail({ campaign: c, onChanged, onNavigate }) {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [confirm, setConfirm] = useState(false);
-  const live = ["sending", "sent"].includes(c.send_status);
+  const live = ["sending", "sent", "finished_with_failures"].includes(c.send_status);
+  const summary = c.send_summary || null;
+  const unfinished = summary ? (summary.queued || 0) + (summary.retryable_failure || 0) + (summary.uncertain || 0) : 0;
 
   useEffect(() => { Promise.resolve().then(async () => { try { const [t, all] = await Promise.all([listTemplates({ kind: "campaign" }), listCampaigns()]); setTemplates(t || []); setOthers(all.filter(x => x.id !== c.id)); } catch (e) { setErr(e.message); } }); }, [c.id]);
   async function loadSends() { try { setSends((await listSends(c.id)) || []); } catch (e) { setErr(e.message); } }
@@ -76,6 +78,14 @@ export default function CampaignEmail({ campaign: c, onChanged, onNavigate }) {
         {c.sent_at && <span style={{ ...TT.caption, color: TC.sub }}>sent {when(c.sent_at)}</span>}
         {c.send_error && <span style={{ ...pill("rust"), maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.send_error}>{c.send_error}</span>}
       </div>
+      {summary && (
+        <div data-send-summary style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          {Object.entries(summary).filter(([k]) => k !== "at").map(([k, n]) => <span key={k} style={pill(OUTCOME_TONE[k] || "sand")} title={OUTCOME_LABEL[k] || k}>{n} {OUTCOME_LABEL[k] || k}</span>)}
+          {c.send_status === "finished_with_failures" && (
+            <button data-retry-failed onClick={() => act("retry", async () => { const r = await retryFailed(c.id); return `Retried ${r.sent} recipient${r.sent === 1 ? "" : "s"}; ${r.failed || 0} failed again${r.uncertain ? `, ${r.uncertain} unknown` : ""}.`; })} disabled={busy !== "" || !unfinished} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }} title={unfinished ? "Sends only to recipients that were never accepted" : "Nothing left to retry: the remaining failures are permanent"}>{busy === "retry" ? "Retrying…" : `Retry ${unfinished || ""} unfinished`}</button>
+          )}
+        </div>
+      )}
 
       {live ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>

@@ -110,8 +110,9 @@ function shouldReveal(row, hasEmail, dailyRevealsUsed, forceOverride) {
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 const { requireAuth } = require('../lib/server/auth.cjs');
+const { wrap } = require('../lib/server/http.cjs');
 
-module.exports = async function handler(req, res) {
+module.exports = wrap(async function handler(req, res) {
   // Spends provider credits and writes with the service key: a signed-in user or the scheduler secret is required.
   if (!(await requireAuth(req, res))) return;
   const startMs   = Date.now();
@@ -391,4 +392,4 @@ module.exports = async function handler(req, res) {
     daily_reveals: { used: dailyRevealsUsed + revealsDone, cap: DAILY_REVEAL_CAP },
     details,
   });
-};
+});

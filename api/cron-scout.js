@@ -1,6 +1,7 @@
 const { requireAuth } = require('../lib/server/auth.cjs');
+const { wrap } = require('../lib/server/http.cjs');
 
-module.exports = async function handler(req, res) {
+module.exports = wrap(async function handler(req, res) {
   if (!(await requireAuth(req, res))) return;
   const runId = `scout-${Date.now()}`;
   const startedAt = new Date().toISOString();
@@ -509,4 +510,4 @@ Historical data: ${JSON.stringify({ clients: Array.isArray(flexClients) ? flexCl
     console.error('[cron-scout] error:', e.message);
     return res.status(500).json({ error: e.message });
   }
-};
+});

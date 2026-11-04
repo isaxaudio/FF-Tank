@@ -51,9 +51,12 @@ export function membershipsForCompany(company_id) {
 }
 
 // ---- the email send on a campaign (step 7): segment, template, test, schedule, send, results ----
-export const SEND_STATUS_LABEL = { draft: "Draft", scheduled: "Scheduled", sending: "Sending", sent: "Sent", failed: "Failed" };
-export const SEND_STATUS_TONE = { draft: "sand", scheduled: "ocean", sending: "ember", sent: "evergreen", failed: "rust" };
+export const SEND_STATUS_LABEL = { draft: "Draft", scheduled: "Scheduled", sending: "Sending", sent: "Sent", finished_with_failures: "Finished with failures", failed: "Failed" };
+export const SEND_STATUS_TONE = { draft: "sand", scheduled: "ocean", sending: "ember", sent: "evergreen", finished_with_failures: "ember", failed: "rust" };
 export const RECIPIENT_TONE = { queued: "sand", sent: "ocean", delivered: "evergreen", opened: "evergreen", clicked: "evergreen", bounced: "rust", complained: "rust", unsubscribed: "pebble", failed: "rust" };
+// Delivery outcome per recipient (apart from engagement): what actually happened to the send.
+export const OUTCOME_LABEL = { queued: "Queued", accepted: "Accepted by Resend", delivered: "Delivered", suppressed: "Opted out before sending", retryable_failure: "Failed, will retry", permanent_failure: "Failed", uncertain: "Unknown, will retry" };
+export const OUTCOME_TONE = { queued: "sand", accepted: "ocean", delivered: "evergreen", suppressed: "pebble", retryable_failure: "ember", permanent_failure: "rust", uncertain: "ember" };
 export const EMPTY_SEGMENT = { lifecycle: [], lead_status: [], source: [], company_kind: [], owner: "", in_campaign: "", added_days: "" };
 
 async function api(service, payload, query = "") {
@@ -74,6 +77,16 @@ export function cleanSegment(s) {
 export function audienceFor(segment) { return api("campaign-audience", { segment: cleanSegment(segment) }); }
 export function sendTest(campaignId, addresses) { return api("campaign-send", { campaignId, test: addresses }); }
 export function sendNow(campaignId) { return api("campaign-send", { campaignId }); }
+// Only this campaign's own unfinished recipients (failed, unknown, never sent); the audience is never widened.
+export function retryFailed(campaignId) { return api("campaign-send", { campaignId, retry: true }); }
+// Delivery health for Automation: worker heartbeat, step runs needing a decision, mailbox sync, campaigns with failures.
+export async function workerStatus() {
+  const r = await fetch("/api/index?service=worker-status", { headers: { Authorization: `Bearer ${await auth.token()}` } });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `worker-status failed (${r.status})`);
+  return d;
+}
+export function recoverRun(runId, action) { return api("worker-recover", { runId, action }); }
 export function dryRunSend(campaignId) { return api("campaign-send", { campaignId }, "&dry=1"); }
 export function scheduleCampaign(id, at) { return updateCampaign(id, { send_status: "scheduled", scheduled_at: at, send_error: null }); }
 export function unschedule(id) { return updateCampaign(id, { send_status: "draft", scheduled_at: null }); }
