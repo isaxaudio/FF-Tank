@@ -297,6 +297,13 @@ compiler are in `src/lib/newsletter.js`. A newsletter is an `email_templates` ro
 `email-assets` (`src/lib/storage.js`). `service=template-test` sends one template to a few addresses through Resend.
 Migration `011_newsletter_builder` must be applied before saving a newsletter works.
 
+## Importing lists (Monday export, trade-show lists)
+`node scripts/import-monday-leads.mjs <sheet-values.json> [--apply]` loads a Monday "Leads" board export (Google Sheets
+values JSON with columns Name / First Name / Last Name / Company / Title / Email / Phone / Group / Last Activity / Monday Link)
+into `contacts` + `companies`: one contact per email, `source` monday, the Monday group as `source_detail`, opt-out groups
+become `marketing_status` unsubscribed, companies matched by name then email domain. Dry run first, then `--apply`.
+Keep the raw export under `backups/imports/` (gitignored, it holds personal data).
+
 ## What is NOT built yet
 - Apollo automation triggered from agent (Flex → Lookalike Engine → Apollo enrich)
 - Dedup of outreach_drafts by contact (if contact already has a draft, skip)
