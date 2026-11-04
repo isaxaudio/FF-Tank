@@ -24,6 +24,7 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^[A-Z_]' }], // components passed as props (icon: Icon) are used in JSX
+      'react-refresh/only-export-components': 'warn', // dev-only ergonomics; shared helpers next to components are fine
     },
   },
 ])

@@ -1,4 +1,8 @@
+const { requireAuth } = require('../lib/server/auth.cjs');
+
 module.exports = async function handler(req, res) {
+  // Spends provider credits and writes with the service key: a signed-in user or the scheduler secret is required.
+  if (!(await requireAuth(req, res))) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const tavilyKey = process.env.TAVILY_API_KEY;

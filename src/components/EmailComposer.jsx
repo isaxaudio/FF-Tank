@@ -1,13 +1,13 @@
 // src/components/EmailComposer.jsx — compose a one-to-one email from a record and send it through
 // the signed-in user's Gmail. Templates fill subject and body with the record's tokens; unresolved
 // tokens are called out before sending. An unsubscribed address cannot be sent to. "Save as Gmail
-// draft" is offered as well and is logged as a draft, never as sent. With no Gmail token in
+// draft" is offered as well and is logged as a draft, never as sent. With no Gmail account connected for
 // Settings the only way out is the mail app, after which the email is logged by hand.
 import React, { useEffect, useRef, useState } from "react";
 import { c as TC, t as TT, pill, btn, inputStyle } from "../tokens.js";
 import { X, Send, FileText, ExternalLink } from "lucide-react";
 import { db } from "../lib/db.js";
-import { listTemplates, contextFor, render, unresolved, sendEmail, saveDraft, gmailToken, isUnsubscribed } from "../lib/email.js";
+import { listTemplates, contextFor, render, unresolved, sendEmail, saveDraft, mySenders, isUnsubscribed } from "../lib/email.js";
 
 const label = { ...TT.label, marginBottom: 4, display: "block" };
 
@@ -23,11 +23,13 @@ export default function EmailComposer({ open, onClose, contacts = [], contactId 
   const [err, setErr] = useState("");
   const [seen, setSeen] = useState(false);
   const bodyRef = useRef(null);
-  const token = gmailToken();
+  const [sender, setSender] = useState(null);     // the connected Gmail account this user may send as, or null
+  const [senderKnown, setSenderKnown] = useState(false);
 
   // Reset when opened: pick the recipient, load templates and the token context.
   if (open && !seen) {
     setSeen(true);
+    mySenders().then(list => { setSender(list[0]?.email || null); setSenderKnown(true); });
     const first = contacts.find(p => p.id === contactId) || contacts.find(p => toEmail && p.email === toEmail) || contacts.find(p => p.email) || null;
     setTo(toEmail || first?.email || ""); setTemplateId(""); setSubject(""); setBody(""); setErr(""); setBusy(""); setBlocked(false);
   }
@@ -75,7 +77,7 @@ export default function EmailComposer({ open, onClose, contacts = [], contactId 
   async function send() {
     if (!canSend) return; setBusy("send"); setErr("");
     try {
-      const m = await sendEmail({ to, subject: subject.trim(), body, contactId: recipient?.id || contactId, companyId: companyId || recipient?.company_id || null, dealId, templateId: templateId || null });
+      const m = await sendEmail({ to, subject: subject.trim(), body, from: sender, contactId: recipient?.id || contactId, companyId: companyId || recipient?.company_id || null, dealId, templateId: templateId || null });
       onSent?.({ kind: "sent", message: m }); onClose?.();
     } catch (e) { setErr(e.code === "unsubscribed" ? "This address is unsubscribed; FF Tank will not send to it." : e.message); }
     setBusy("");
@@ -83,7 +85,7 @@ export default function EmailComposer({ open, onClose, contacts = [], contactId 
   async function draft() {
     if (!to || busy) return; setBusy("draft"); setErr("");
     try {
-      await saveDraft({ to, subject: subject.trim(), body, contactId: recipient?.id || contactId, companyId: companyId || recipient?.company_id || null });
+      await saveDraft({ to, subject: subject.trim(), body, from: sender, contactId: recipient?.id || contactId, companyId: companyId || recipient?.company_id || null });
       onSent?.({ kind: "draft" }); onClose?.();
     } catch (e) { setErr(e.message); }
     setBusy("");
@@ -99,9 +101,9 @@ export default function EmailComposer({ open, onClose, contacts = [], contactId 
           <button onClick={onClose} aria-label="Close" style={{ ...btn("ghost"), padding: 4 }}><X size={16} strokeWidth={1.5} /></button>
         </div>
         <div style={{ padding: 16, display: "grid", gap: 12 }}>
-          {!token && (
-            <div style={{ ...pill("ember"), display: "block", whiteSpace: "normal", padding: "8px 12px" }}>
-              No Gmail token in Settings, so FF Tank cannot send for you yet. Add the OAuth refresh token under Settings → Gmail, or open this in your mail app and log it as "Email I sent" afterwards.
+          {senderKnown && !sender && (
+            <div data-no-sender style={{ ...pill("ember"), display: "block", whiteSpace: "normal", padding: "8px 12px" }}>
+              No Gmail account is connected for you, so FF Tank cannot send for you yet. Open Settings → Gmail → Connect Gmail, or open this in your mail app and log it as "Email I sent" afterwards.
             </div>
           )}
           {blocked && <div data-unsubscribed style={{ ...pill("rust"), display: "block", whiteSpace: "normal", padding: "8px 12px" }}>{to} is unsubscribed. One-to-one email to this address is blocked; a phone call is still fine.</div>}
@@ -132,8 +134,8 @@ export default function EmailComposer({ open, onClose, contacts = [], contactId 
           {missing.length > 0 && <div style={{ ...pill("ember"), display: "block", whiteSpace: "normal", padding: "6px 10px" }}>Fill in before sending: {missing.map(m => `{{${m}}}`).join(", ")}. {missing.includes("event") && !dealId ? "Compose from the deal to fill {{event}} automatically." : ""}</div>}
           {err && <div style={{ ...pill("rust"), display: "block", whiteSpace: "normal", padding: "6px 10px" }}>{err}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={send} disabled={!canSend || !token} style={btn("primary")} title={token ? "Sends from your Gmail and logs it as sent" : "Needs the Gmail token in Settings"}><Send size={13} strokeWidth={1.5} /> {busy === "send" ? "Sending…" : "Send via Gmail"}</button>
-            <button onClick={draft} disabled={!to || !!busy || !token || blocked} style={btn("secondary")} title="Saves a draft in your Gmail; logged as a draft, not as sent"><FileText size={13} strokeWidth={1.5} /> {busy === "draft" ? "Saving…" : "Save as Gmail draft"}</button>
+            <button onClick={send} disabled={!canSend || !sender} style={btn("primary")} title={sender ? `Sends from ${sender} and logs it as sent` : "Connect Gmail in Settings first"}><Send size={13} strokeWidth={1.5} /> {busy === "send" ? "Sending…" : "Send via Gmail"}</button>
+            <button onClick={draft} disabled={!to || !!busy || !sender || blocked} style={btn("secondary")} title="Saves a draft in your Gmail; logged as a draft, not as sent"><FileText size={13} strokeWidth={1.5} /> {busy === "draft" ? "Saving…" : "Save as Gmail draft"}</button>
             <a href={blocked ? undefined : mailto} aria-disabled={blocked} style={{ ...btn("ghost"), textDecoration: "none", opacity: blocked ? 0.4 : 1, pointerEvents: blocked ? "none" : "auto" }} title="Opens your mail app; log it as 'Email I sent' afterwards"><ExternalLink size={13} strokeWidth={1.5} /> Open in mail app</a>
             <span style={{ ...TT.caption, color: TC.faint, marginLeft: "auto" }}>⌘↩ sends</span>
           </div>

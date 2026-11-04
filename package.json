@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "lint": "eslint src",
+    "preview": "vite preview",
+    "test": "node --test test/"
   },
   "dependencies": {
     "lucide-react": "^1.61.0",

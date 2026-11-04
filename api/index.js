@@ -1,5 +1,5 @@
 const { logActivity, companyIdFor, contactIdForEmail } = require('../lib/server/activity.cjs');
-const { requireAuth } = require('../lib/server/auth.cjs');
+const { requireAuth, requireUser, userEmail, canUseSender, signState, verifyState } = require('../lib/server/auth.cjs');
 const gmail = require('../lib/server/gmail.cjs');
 const sequences = require('../lib/server/sequences.cjs');
 const campaigns = require('../lib/server/campaigns.cjs');
@@ -104,11 +104,21 @@ const logRun = (handler, provider, model, inT, outT, durationMs, success) => {
   }).catch(() => {});
 };
 
+// Access boundaries. Every service needs a signed-in user or the scheduler secret before it runs,
+// except the three that are reached from outside and validate their own input (lib/server/auth.cjs).
+const PUBLIC_SERVICES = new Set(['gmail-auth', 'resend-webhook', 'unsubscribe']);
+const SERVICES = ['apollo', 'tavily', 'supabase', 'qualify', 'flex-analyze', 'flex-sync', 'flex-intel', 'flex-lookalike', 'lookalike-engine',
+  'gmail-draft', 'gmail-send', 'gmail-auth', 'gmail-connect', 'gmail-accounts', 'sequence-run', 'reply-check', 'flex-candidates',
+  'campaign-send', 'campaign-audience', 'template-test', 'resend-webhook', 'unsubscribe', 'send-lead', 'enrich-lead', 'vps',
+  'sales-notes', 'apollo-company', 'apollo-person', 'flex-probe', 'exa', 'firecrawl', 'draft-outreach'];
+
 module.exports = async (req, res) => {
   const service = req.query.service || '';
   const path = (req.query.p || '').replace(/^\//, '');
 
   try {
+    if (!SERVICES.includes(service)) return res.status(400).json({ error: `Unknown service: "${service}"` });
+    if (!PUBLIC_SERVICES.has(service) && !(await requireAuth(req, res))) return;
     switch (service) {
       case 'apollo':        return await handleApollo(req, res, path);
       case 'tavily':        return await handleTavily(req, res, path);
@@ -122,7 +132,7 @@ module.exports = async (req, res) => {
       case 'gmail-draft':    return await handleGmailDraft(req, res);
       case 'gmail-send':     return await handleGmailSend(req, res);
       case 'gmail-auth':     return await handleGmailAuth(req, res);
-      case 'gmail-register': return await handleGmailRegister(req, res);
+      case 'gmail-connect':  return await handleGmailConnect(req, res);
       case 'gmail-accounts': return await handleGmailAccounts(req, res);
       case 'sequence-run':   return await handleSequenceRun(req, res);
       case 'reply-check':    return await handleReplyCheck(req, res);
@@ -267,6 +277,8 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 };
+module.exports.SERVICES = SERVICES;
+module.exports.PUBLIC_SERVICES = PUBLIC_SERVICES;
 
 // ─── Generic JSON proxy helper ──────────────────────────────────────────────
 
@@ -1170,13 +1182,14 @@ Data:\n${data}`,
 // Creates a Gmail draft via OAuth. Requires a refresh token with gmail.compose scope.
 async function handleGmailDraft(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const { to, subject, body, refreshToken, clientId, clientSecret } = req.body || {};
-  if (!to || !refreshToken) return res.status(400).json({ error: 'to and refreshToken required' });
+  if (!(await requireUser(req, res))) return;
+  const { to, subject, body, from } = req.body || {};
+  if (!to) return res.status(400).json({ error: 'to required' });
 
-  // 1. Access token from the user's refresh token (shared with gmail-send)
+  // 1. The sender's stored token (the caller must be allowed to send as that account), then an access token
   let accessToken;
-  try { accessToken = await gmail.accessToken(refreshToken, clientId, clientSecret); }
-  catch (e) { return res.status(e.status || 401).json({ error: e.status === 500 ? e.message : 'Failed to get access token', detail: e.message }); }
+  try { const { refreshToken } = await gmail.resolveSender(req, from); accessToken = await gmail.accessToken(refreshToken); }
+  catch (e) { return res.status(e.status || 401).json({ error: e.status === 500 ? e.message : e.message || 'Failed to get access token', code: e.code || null }); }
 
   // 2. Build RFC 2822 message and base64url-encode it
   const raw = gmail.rawMessage({ to, subject, body });
@@ -1203,41 +1216,57 @@ async function handleGmailDraft(req, res) {
   return res.json({ ok: true, draftId: draftData.id });
 }
 
-// Connect Gmail: /oauth/gmail (rewritten to this service) sends the browser to Google's consent
-// screen for the compose scope (drafts and send), the metadata scope (reply detection) and the account email; the callback exchanges the
-// code with the server's Google client and hands the refresh token to the browser, which stores it
-// in Settings (localStorage) and returns to the app. The server keeps nothing.
-// gmail.metadata (headers and labels, never bodies) is what reply detection reads threads with (lib/server/replies.cjs).
+// Connect Gmail. Settings → Gmail → Connect posts to gmail-connect (signed-in user) and gets Google's consent
+// URL back, with a signed state naming that user and a browser nonce (cookie). Google returns to /oauth/gmail
+// (rewritten to gmail-auth), which verifies the state, exchanges the code with the server's Google client and
+// keeps the refresh token only in gmail_accounts (service key), connected_by that user. The browser never sees
+// the token. Scopes: compose (drafts and send), metadata (reply detection reads headers and labels, never
+// bodies; lib/server/replies.cjs) and the account email.
 const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.metadata https://www.googleapis.com/auth/userinfo.email';
+const gmailPage = (title, html) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FF Tank · Gmail</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:520px;margin:48px auto;padding:0 20px;color:#1c1c18;line-height:1.5"><h2>${title}</h2>${html}`;
+const escHtml = s => String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const stateCookie = (nonce, maxAge) => `gmail_oauth_state=${nonce}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+
+async function handleGmailConnect(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireUser(req, res))) return;
+  const cId = process.env.GOOGLE_ADS_CLIENT_ID;
+  if (!cId || !process.env.GOOGLE_ADS_CLIENT_SECRET) return res.status(500).json({ error: 'Missing Google client credentials on the server' });
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const nonce = require('crypto').randomBytes(16).toString('hex');
+  let state;
+  try { state = signState({ n: nonce, u: userEmail(req) }); } catch (e) { return res.status(500).json({ error: e.message }); }
+  res.setHeader('Set-Cookie', stateCookie(nonce, 600));
+  const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({ client_id: cId, redirect_uri: `https://${host}/oauth/gmail`, response_type: 'code', scope: GMAIL_SCOPES, access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true', state });
+  return res.json({ url });
+}
+
 async function handleGmailAuth(req, res) {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
   const cId = process.env.GOOGLE_ADS_CLIENT_ID, cSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
-  if (!cId || !cSecret) return res.status(500).send('Missing Google client credentials on the server');
+  if (!cId || !cSecret) return res.status(500).send(gmailPage('Gmail not connected', '<p>Missing Google client credentials on the server.</p>'));
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   const redirectUri = `https://${host}/oauth/gmail`;
   const cookies = Object.fromEntries((req.headers.cookie || '').split(';').map(c => c.trim().split('=')).filter(a => a.length === 2));
-  const esc = s => String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-  const pageStart = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FF Tank · Gmail</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:520px;margin:48px auto;padding:0 20px;color:#1c1c18;line-height:1.5">';
   const { code, error, state } = req.query || {};
-  if (error) return res.status(400).send(pageStart + `<h2>Gmail not connected</h2><p>Google said: ${esc(error)}.</p><p><a href="/">Back to FF Tank</a></p>`);
-  if (!code) {
-    const nonce = require('crypto').randomBytes(16).toString('hex');
-    res.setHeader('Set-Cookie', `gmail_oauth_state=${nonce}; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax`);
-    const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({ client_id: cId, redirect_uri: redirectUri, response_type: 'code', scope: GMAIL_SCOPES, access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true', state: nonce });
-    res.statusCode = 302; res.setHeader('Location', url); return res.end();
+  const back = '<p><a href="/">Back to FF Tank</a></p>';
+  if (error) return res.status(400).send(gmailPage('Gmail not connected', `<p>Google said: ${escHtml(error)}.</p>${back}`));
+  if (!code) return res.status(400).send(gmailPage('Start from FF Tank', `<p>Open Settings → Gmail → Connect Gmail while signed in; that is what sends you to Google.</p>${back}`));
+  const claim = verifyState(state);
+  if (!claim || !claim.u || !claim.n || claim.n !== cookies.gmail_oauth_state) {
+    return res.status(400).send(gmailPage('Gmail not connected', `<p>The sign-in did not start from FF Tank, or it took longer than ten minutes (state mismatch). Open Settings → Gmail → Connect Gmail and try again.</p>${back}`));
   }
-  if (!state || state !== cookies.gmail_oauth_state) return res.status(400).send(pageStart + '<h2>Gmail not connected</h2><p>The sign-in did not start from FF Tank (state mismatch). Open Settings → Gmail → Connect Gmail and try again.</p>');
   const tr = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ code, client_id: cId, client_secret: cSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }) });
   const td = await tr.json().catch(() => ({}));
-  if (!td.refresh_token) return res.status(400).send(pageStart + `<h2>Gmail not connected</h2><p>Google returned no refresh token (${esc(td.error_description || td.error || 'no detail')}). Remove FF Tank under myaccount.google.com → Security → Third-party access, then connect again.</p><p><a href="/">Back to FF Tank</a></p>`);
+  if (!td.refresh_token) return res.status(400).send(gmailPage('Gmail not connected', `<p>Google returned no refresh token (${escHtml(td.error_description || td.error || 'no detail')}). Remove FF Tank under myaccount.google.com → Security → Third-party access, then connect again.</p>${back}`));
   let email = '';
   try { const u = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${td.access_token}` } }).then(r => r.json()); email = u.email || ''; } catch { /* optional */ }
-  // The scheduler sends sequences without a browser, so the token is also kept server-side (gmail_accounts, service key only).
-  if (email) await gmail.registerAccount({ email, refreshToken: td.refresh_token, by: 'oauth', scopes: td.scope || GMAIL_SCOPES }).catch(() => null);
-  res.setHeader('Set-Cookie', 'gmail_oauth_state=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  return res.send(pageStart + `<h2>Gmail connected${email ? ' as ' + esc(email) : ''}</h2><p>The token is saved in this browser's FF Tank settings. Taking you back…</p>
-<script>try{localStorage.setItem('gmailRefreshToken',${JSON.stringify(td.refresh_token)});localStorage.setItem('gmailAccount',${JSON.stringify(email)});}catch(e){document.body.insertAdjacentHTML('beforeend','<p>Could not save in this browser: '+e.message+'</p>');}setTimeout(function(){location.replace('/');},1200);</script>`);
+  if (!email) return res.status(400).send(gmailPage('Gmail not connected', `<p>Google did not say which account was authorised. Try again.</p>${back}`));
+  const row = await gmail.registerAccount({ email, refreshToken: td.refresh_token, by: claim.u, scopes: td.scope || GMAIL_SCOPES }).catch(() => null);
+  res.setHeader('Set-Cookie', stateCookie('', 0));
+  if (!row) return res.status(500).send(gmailPage('Gmail not connected', `<p>Google authorised ${escHtml(email)} but FF Tank could not save the connection. Try again in a minute.</p>${back}`));
+  return res.send(gmailPage(`Gmail connected as ${escHtml(email)}`, `<p>FF Tank can now send as ${escHtml(email)} for ${escHtml(claim.u)}. Taking you back…</p><script>setTimeout(function(){location.replace('/');},1200);</script>`));
 }
 
 // One-to-one send through the signed-in user's Gmail. Records the attempt in email_messages and
@@ -1245,29 +1274,22 @@ async function handleGmailAuth(req, res) {
 // refused with 409. Needs a signed-in FF Tank user (the activity is attributed to them).
 async function handleGmailSend(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!(await requireAuth(req, res))) return;
-  const { to, subject, body, refreshToken, clientId, clientSecret, contactId, companyId, dealId, templateId } = req.body || {};
+  if (!(await requireUser(req, res))) return;
+  const { to, subject, body, from, contactId, companyId, dealId, templateId } = req.body || {};
   try {
-    const out = await gmail.sendMessage({ to, subject, body, refreshToken, clientId, clientSecret, contactId, companyId, dealId, templateId, actor: req.auth?.user?.email || 'ui' });
+    const { refreshToken } = await gmail.resolveSender(req, from);
+    const out = await gmail.sendMessage({ to, subject, body, refreshToken, contactId, companyId, dealId, templateId, actor: req.auth?.user?.email || 'ui' });
     return res.json({ ok: true, message: out.message, activityId: out.activity?.id || null });
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message, code: e.code || null, messageId: e.messageId || null });
   }
 }
 
-// A signed-in browser that holds a Gmail token registers it for the scheduler (idempotent upsert).
-async function handleGmailRegister(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!(await requireAuth(req, res))) return;
-  const { email, refreshToken } = req.body || {};
-  if (!email || !refreshToken) return res.status(400).json({ error: 'email and refreshToken required' });
-  const row = await gmail.registerAccount({ email, refreshToken, by: req.auth?.user?.email || 'ui' });
-  return res.json({ ok: !!row, email: row?.email || null });
-}
 // Which Gmail accounts the scheduler can send from (addresses only, never tokens).
 async function handleGmailAccounts(req, res) {
   if (!(await requireAuth(req, res))) return;
-  return res.json({ accounts: await gmail.listAccounts() });
+  const accounts = (await gmail.listAccounts()).map(a => ({ ...a, usable: canUseSender(req, a) }));
+  return res.json({ accounts, me: userEmail(req) });
 }
 // One scheduler tick. Called by a cron with CRON_SECRET or by a signed-in user (the app ticks every 15 minutes
 // while open, and the Sequences tab has Run now). ?dry=1 reports what would send without sending.
