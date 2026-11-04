@@ -403,7 +403,7 @@ function ReviewQueue({ candidates, onChanged }) {
   }
   return (
     <div style={{ padding: "16px 24px 32px", maxWidth: 900 }}>
-      <div style={{ ...TT.body2, color: TC.sub, lineHeight: 1.6 }}>Each row is a Flex client whose name matches a target account. Confirm links the Flex history to that company. Reject keeps them separate and gives the Flex client its own record. Nothing is merged automatically.</div>
+      <div style={{ ...TT.body2, color: TC.sub, lineHeight: 1.6 }}>Each row is a record whose name looks like an existing company: a Flex client matching a target account, or an imported contact whose new company reads like one already here. Confirm links it to that company (a contact moves there). Reject keeps them separate; a rejected Flex client gets its own record. Nothing is merged automatically.</div>
       {err && <div style={{ ...pill("rust"), marginTop: 12 }}>{err}</div>}
       <div style={{ marginTop: 14 }}>
         {candidates.map(cand => (
@@ -417,7 +417,7 @@ function ReviewQueue({ candidates, onChanged }) {
             <button disabled={busy === cand.id} onClick={() => decide(cand, false)} style={btn("secondary")}><X size={16} strokeWidth={1.5} /> Reject</button>
           </div>
         ))}
-        {candidates.length === 0 && <div style={{ color: TC.muted, fontSize: 13 }}>Nothing pending. New candidates appear here when a Flex client name matches a company.</div>}
+        {candidates.length === 0 && <div style={{ color: TC.muted, fontSize: 13 }}>Nothing pending. New candidates appear here when a Flex client or an imported contact matches a company by name.</div>}
       </div>
     </div>
   );

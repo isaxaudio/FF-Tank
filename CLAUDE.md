@@ -298,11 +298,14 @@ compiler are in `src/lib/newsletter.js`. A newsletter is an `email_templates` ro
 Migration `011_newsletter_builder` must be applied before saving a newsletter works.
 
 ## Importing lists (Monday export, trade-show lists)
-`node scripts/import-monday-leads.mjs <sheet-values.json> [--apply]` loads a Monday "Leads" board export (Google Sheets
-values JSON with columns Name / First Name / Last Name / Company / Title / Email / Phone / Group / Last Activity / Monday Link)
-into `contacts` + `companies`: one contact per email, `source` monday, the Monday group as `source_detail`, opt-out groups
-become `marketing_status` unsubscribed, companies matched by name then email domain. Dry run first, then `--apply`.
-Keep the raw export under `backups/imports/` (gitignored, it holds personal data).
+`node scripts/import-monday.mjs backups/imports/2026-10-27-monday-*.json [--apply]` loads the Monday CRM export (one
+Google Sheets values JSON per board tab; shared columns Name / First Name / Last Name / Company / Title / Email / Phone /
+Status / Group / Last Activity / Location / Owner / Notes / Source Board / Monday Link, plus board-specific ones) into
+`contacts` + `companies`: one contact per email across all tabs, `source` monday, the lists a person was on joined in
+`source_detail`, subscription from the Marketing Contacts board, lead status from the Leads board, client lists → customer.
+Companies match by name, then email domain; near-duplicates of client companies go to `company_match_candidates`.
+Dry run first, then `--apply`; a rerun refreshes rows with source monday and creates nothing new. Applied 2026-11-04.
+Keep raw exports under `backups/imports/` (gitignored, personal data). Per-board rules live in `RULES` in the script.
 
 ## What is NOT built yet
 - Apollo automation triggered from agent (Flex → Lookalike Engine → Apollo enrich)
