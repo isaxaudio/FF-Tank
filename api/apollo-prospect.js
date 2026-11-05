@@ -1,6 +1,7 @@
 const { requireAuth } = require('../lib/server/auth.cjs');
+const { wrap } = require('../lib/server/http.cjs');
 
-module.exports = async function handler(req, res) {
+module.exports = wrap(async function handler(req, res) {
   // Spends provider credits and writes with the service key: a signed-in user or the scheduler secret is required.
   if (!(await requireAuth(req, res))) return;
   if (req.method !== 'POST') {
@@ -167,4 +168,4 @@ module.exports = async function handler(req, res) {
     console.error('[apollo-prospect] unexpected error:', e.message);
     return res.status(500).json({ error: 'Unexpected server error' });
   }
-};
+});

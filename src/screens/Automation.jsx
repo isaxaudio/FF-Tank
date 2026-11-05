@@ -6,6 +6,7 @@ import { c as TC, t as TT, pill, btn, tile } from "../tokens.js";
 import { Play, RefreshCw, Activity, DollarSign } from "lucide-react";
 import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
+import { workerStatus, recoverRun, retryFailed, runScheduler } from "../lib/automationApi.js";
 
 const JOBS = [
   { id: "scout", name: "Scout", desc: "Tavily scans for RFPs, venues and competitor intel. Haiku scores before insert.", schedule: "Daily 13:00 UTC (Vercel)" },
@@ -20,13 +21,88 @@ const money = n => (n == null ? "—" : "$" + Number(n).toFixed(n < 1 ? 3 : 2));
 const dur = ms => (ms == null ? "—" : ms < 60000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60000)}m`);
 const when = ts => { const d = Date.now() - new Date(ts).getTime(); return d < 3600e3 ? `${Math.max(1, Math.floor(d / 60e3))}m ago` : d < 86400e3 ? `${Math.floor(d / 3600e3)}h ago` : `${Math.floor(d / 86400e3)}d ago`; };
 
+// Email delivery: is the one worker alive, what is waiting on a person, can each mailbox guard its follow-ups,
+// which campaigns finished with failures. Every row names the record it is about and offers the next action.
+function DeliveryTab({ d, acting, decide }) {
+  if (!d) return <div style={{ padding: 24, color: TC.muted, fontSize: 13 }}>Checking…</div>;
+  if (d.error) return <div style={{ padding: 24 }}><span style={pill("rust")}>{d.error}</span></div>;
+  const sch = (d.jobs || []).find(j => j.job === "scheduler");
+  const tone = sch ? (sch.stale || sch.last_error ? "rust" : sch.minutes_since_success == null ? "sand" : sch.minutes_since_success > 30 ? "ember" : "evergreen") : "sand";
+  const r = sch?.last_result || {};
+  return (
+    <div data-delivery style={{ flex: 1, overflowY: "auto", padding: 24, display: "grid", gap: 12, alignContent: "start", maxWidth: 1000 }}>
+      <div style={tile()}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ ...TT.h4, color: TC.ink, flex: 1 }}>Scheduler</div>
+          <span data-scheduler-state style={pill(tone)}>{!sch ? "never run" : sch.running ? `running (${sch.lock_by})` : sch.stale ? `stale lock held by ${sch.lock_by}` : sch.last_error ? "last run failed" : sch.minutes_since_success == null ? "no successful run yet" : `ok · last success ${sch.minutes_since_success}m ago`}</span>
+          <button onClick={() => decide("tick", async () => { const o = await runScheduler(); return o.skipped === "locked" ? "Another run is in progress; nothing started." : `Ran: ${o.sequences?.sent || 0} sequence emails, ${o.sequences?.tasks || 0} tasks, ${o.replies?.replies || 0} replies found.`; })} disabled={!!acting} style={{ ...btn("secondary"), padding: "4px 10px" }}><Play size={14} strokeWidth={1.5} /> Run now</button>
+        </div>
+        <div style={{ ...TT.body2, color: TC.sub, marginTop: 6 }}>One worker handles sequences, scheduled campaigns and retries, webhook events, reply detection and the Flex matcher. Every tab, cron and Run now wakes the same worker; overlapping calls wait their turn.</div>
+        {sch && <div style={{ ...TT.caption, color: TC.muted, marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <span>last run {sch.last_run_at ? when(sch.last_run_at) : "never"}</span>
+          {r.sequences && <span>· sequences: {r.sequences.sent} sent, {r.sequences.recovered} recovered, {r.sequences.uncertain} uncertain, {r.sequences.skipped?.leased || 0} held elsewhere</span>}
+          {r.replies && <span>· replies: {r.replies.replies} found, {r.replies.auto_replies} automatic, {r.replies.bounces} bounces, oldest unchecked {r.replies.oldest_unchecked ? when(r.replies.oldest_unchecked) : "none"}</span>}
+          {r.events && <span>· webhook events pending {r.events.pending ?? 0}</span>}
+        </div>}
+        {sch?.last_error && <div style={{ ...TT.caption, color: TC.criticalInk, marginTop: 6 }}>{sch.last_error}</div>}
+      </div>
+
+      <div style={tile()}>
+        <div style={{ ...TT.h4, color: TC.ink }}>Steps waiting for a decision <span style={{ ...TT.caption, color: TC.muted }}>{(d.review || []).length}</span></div>
+        <div style={{ ...TT.body2, color: TC.sub, marginTop: 4 }}>The worker could not tell whether these emails went out, so it stopped rather than risk sending twice. Check the sender's Sent folder, then decide.</div>
+        {(d.review || []).length === 0 && <div style={{ ...TT.caption, color: TC.muted, marginTop: 8 }}>Nothing waiting.</div>}
+        {(d.review || []).map(run => (
+          <div key={run.id} data-review-run style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${TC.lineSoft}`, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <div style={{ fontSize: 13, color: TC.ink }}>{run.sequence_enrollments?.contacts?.name || run.sequence_enrollments?.contacts?.email || "contact"} · {run.sequence_enrollments?.sequences?.name || "sequence"} · step {run.position}</div>
+              <div style={{ ...TT.caption, color: TC.muted }}>{run.error || run.sequence_enrollments?.last_error} · started {when(run.started_at)}, attempt {run.attempt}</div>
+            </div>
+            <button onClick={() => decide(run.id, async () => { await recoverRun(run.id, "mark_sent"); return "Marked as sent; the sequence moves on."; })} disabled={!!acting} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }}>It went out</button>
+            <button onClick={() => decide(run.id, async () => { await recoverRun(run.id, "resend"); return "Will be sent on the next run."; })} disabled={!!acting} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }}>It did not, send it</button>
+            <button onClick={() => decide(run.id, async () => { await recoverRun(run.id, "skip"); return "Skipped; the sequence moves on."; })} disabled={!!acting} style={{ ...btn("ghost"), padding: "2px 10px", fontSize: 12 }}>Skip this step</button>
+          </div>
+        ))}
+      </div>
+
+      <div style={tile()}>
+        <div style={{ ...TT.h4, color: TC.ink }}>Mailboxes</div>
+        <div style={{ ...TT.body2, color: TC.sub, marginTop: 4 }}>A follow-up only goes out after its thread was re-read. A mailbox that cannot be read, or has not been read for hours, holds its follow-ups.</div>
+        {(d.mailboxes || []).length === 0 && <div style={{ ...TT.caption, color: TC.muted, marginTop: 8 }}>No Gmail account connected. Settings → Gmail → Connect Gmail.</div>}
+        {(d.mailboxes || []).map(m => (
+          <div key={m.email} data-mailbox style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderTop: `1px solid ${TC.lineSoft}` }}>
+            <span style={{ fontSize: 13, color: TC.ink, flex: 1 }}>{m.email} <span style={{ ...TT.caption, color: TC.muted }}>connected by {m.connected_by || "—"}</span></span>
+            <span style={pill(!m.ok ? "rust" : m.stale ? "ember" : "evergreen")}>{!m.ok ? "cannot read threads" : m.stale ? "reply sync stale" : "reply sync ok"}</span>
+            <span style={{ ...TT.caption, color: TC.muted }}>{m.replies_checked_at ? `read ${when(m.replies_checked_at)}` : "never read"}{m.reason ? ` · ${m.reason}` : ""}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={tile()}>
+        <div style={{ ...TT.h4, color: TC.ink }}>Campaigns needing attention <span style={{ ...TT.caption, color: TC.muted }}>{(d.campaigns || []).length}</span></div>
+        {(d.campaigns || []).length === 0 && <div style={{ ...TT.caption, color: TC.muted, marginTop: 8 }}>Every campaign send finished cleanly.</div>}
+        {(d.campaigns || []).map(c => { const s = c.send_summary || {}; const left = (s.queued || 0) + (s.retryable_failure || 0) + (s.uncertain || 0); return (
+          <div key={c.id} data-campaign-attention style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${TC.lineSoft}`, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <div style={{ fontSize: 13, color: TC.ink }}>{c.name} <span style={pill(c.stale_lock ? "rust" : c.send_status === "sent" ? "evergreen" : "ember")}>{c.stale_lock ? "stuck: worker died mid-send" : c.send_status.replace(/_/g, " ")}</span></div>
+              <div style={{ ...TT.caption, color: TC.muted }}>{Object.entries(s).filter(([k]) => k !== "at").map(([k, n]) => `${n} ${k.replace(/_/g, " ")}`).join(" · ") || c.send_error || ""}</div>
+            </div>
+            {(left > 0 || c.stale_lock) && <button onClick={() => decide(c.id, async () => { const r = await retryFailed(c.id); return `Retried ${r.sent}; ${r.failed || 0} failed again.`; })} disabled={!!acting} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }}>Retry unfinished</button>}
+          </div>
+        ); })}
+      </div>
+    </div>
+  );
+}
+
 export default function Automation() {
-  const [tab, setTab] = useState("jobs");
+  const [tab, setTab] = useState("delivery");
   const [runs, setRuns] = useState([]);
   const [health, setHealth] = useState(null);
   const [running, setRunning] = useState(null);
   const [toast, setToast] = useState("");
   const [err, setErr] = useState("");
+  const [delivery, setDelivery] = useState(null);
+  const [acting, setActing] = useState("");
 
   async function callVps(job) {
     const r = await fetch("/api/index?service=vps", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await auth.token()}` }, body: JSON.stringify({ job }) });
@@ -43,6 +119,12 @@ export default function Automation() {
       ]);
       setRuns(rs || []); setHealth(h);
     } catch (e) { setErr(e.message); }
+    workerStatus().then(setDelivery).catch(e => setDelivery({ error: e.message }));
+  }
+  async function decide(label, fn) {
+    setActing(label); setToast("");
+    try { const m = await fn(); setToast(m || "Done."); } catch (e) { setToast(`Could not: ${e.message}`); }
+    setActing(""); workerStatus().then(setDelivery).catch(() => {});
   }
   useEffect(() => { Promise.resolve().then(load); }, []);
 
@@ -71,7 +153,7 @@ export default function Automation() {
       <div style={{ padding: "14px 24px 0", display: "flex", alignItems: "center", gap: 16, borderBottom: `1px solid ${TC.line}`, background: TC.card }}>
         <div style={{ ...TT.h4, color: TC.ink, paddingBottom: 12 }}>Automation</div>
         <div style={{ display: "flex", gap: 2 }}>
-          {[["jobs", "Jobs"], ["runs", "Runs"], ["usage", "Usage"]].map(([id, l]) => (
+          {[["delivery", "Email delivery"], ["jobs", "Jobs"], ["runs", "Runs"], ["usage", "Usage"]].map(([id, l]) => (
             <button key={id} onClick={() => setTab(id)} style={{ background: "none", border: "none", borderBottom: `2px solid ${tab === id ? TC.ink : "transparent"}`, padding: "6px 10px 12px", fontSize: 13, fontWeight: tab === id ? 450 : 400, color: tab === id ? TC.ink : TC.sub, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
           ))}
         </div>
@@ -81,6 +163,8 @@ export default function Automation() {
         </div>
       </div>
       {(err || toast) && <div style={{ padding: "10px 24px 0" }}>{err && <span style={pill("rust")}>{err}</span>}{toast && <span style={{ ...TT.caption, color: TC.sub, marginLeft: 8 }}>{toast}</span>}</div>}
+
+      {tab === "delivery" && <DeliveryTab d={delivery} acting={acting} decide={decide} />}
 
       {tab === "jobs" && (
         <div style={{ flex: 1, overflowY: "auto", padding: 24, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12, alignContent: "start" }}>

@@ -5,6 +5,8 @@ const sequences = require('../lib/server/sequences.cjs');
 const campaigns = require('../lib/server/campaigns.cjs');
 const replies = require('../lib/server/replies.cjs');
 const flexjobs = require('../lib/server/flexjobs.cjs');
+const worker = require('../lib/server/worker.cjs');
+const { wrap, signedBody } = require('../lib/server/http.cjs');
 
 // ─── Anthropic shared headers ─────────────────────────────────────────────────
 // ANTHROPIC_HEADERS: base headers for all direct Anthropic API calls.
@@ -109,10 +111,10 @@ const logRun = (handler, provider, model, inT, outT, durationMs, success) => {
 const PUBLIC_SERVICES = new Set(['gmail-auth', 'resend-webhook', 'unsubscribe']);
 const SERVICES = ['apollo', 'tavily', 'supabase', 'qualify', 'flex-analyze', 'flex-sync', 'flex-intel', 'flex-lookalike', 'lookalike-engine',
   'gmail-draft', 'gmail-send', 'gmail-auth', 'gmail-connect', 'gmail-accounts', 'sequence-run', 'reply-check', 'flex-candidates',
-  'campaign-send', 'campaign-audience', 'template-test', 'resend-webhook', 'unsubscribe', 'send-lead', 'enrich-lead', 'vps',
+  'campaign-send', 'campaign-audience', 'template-test', 'resend-webhook', 'unsubscribe', 'worker-status', 'worker-recover', 'send-lead', 'enrich-lead', 'vps',
   'sales-notes', 'apollo-company', 'apollo-person', 'flex-probe', 'exa', 'firecrawl', 'draft-outreach'];
 
-module.exports = async (req, res) => {
+module.exports = wrap(async (req, res) => {
   const service = req.query.service || '';
   const path = (req.query.p || '').replace(/^\//, '');
 
@@ -142,6 +144,8 @@ module.exports = async (req, res) => {
       case 'template-test':     return await handleTemplateTest(req, res);
       case 'resend-webhook':    return await handleResendWebhook(req, res);
       case 'unsubscribe':       return await handleUnsubscribe(req, res);
+      case 'worker-status':     return await handleWorkerStatus(req, res);
+      case 'worker-recover':    return await handleWorkerRecover(req, res);
       case 'send-lead':      return await handleSendLead(req, res);
       case 'enrich-lead':    return await handleEnrichLead(req, res);
       case 'vps':            return await handleVpsProxy(req, res);
@@ -276,7 +280,7 @@ module.exports = async (req, res) => {
     console.error(`[proxy:${service}] unhandled error:`, e.message);
     res.status(500).json({ error: e.message });
   }
-};
+});
 module.exports.SERVICES = SERVICES;
 module.exports.PUBLIC_SERVICES = PUBLIC_SERVICES;
 
@@ -1293,20 +1297,57 @@ async function handleGmailAccounts(req, res) {
 }
 // One scheduler tick. Called by a cron with CRON_SECRET or by a signed-in user (the app ticks every 15 minutes
 // while open, and the Sequences tab has Run now). ?dry=1 reports what would send without sending.
+// Every caller (Vercel cron, the Mac mini LaunchAgent, an open tab, Run now) wakes the same worker: the
+// job lock in job_state lets exactly one run at a time; a second caller gets { skipped: 'locked' } and
+// the state of the run in progress. A dry run never takes the lock.
 async function handleSequenceRun(req, res) {
   if (!(await requireAuth(req, res))) return;
+  const dryRun = req.query.dry === '1' || req.body?.dryRun === true;
+  const via = req.auth?.via || null;
+  if (dryRun) { try { return res.json({ ...(await sequences.run({ dryRun: true })), via }); } catch (e) { return res.status(500).json({ error: e.message }); } }
+  let lock = null;
+  try { lock = await worker.claimJob('scheduler', { by: worker.WORKER_ID }); }
+  catch (e) { return res.status(500).json({ error: `Could not take the worker lock: ${e.message}` }); }
+  if (!lock) { const st = (await worker.status().catch(() => [])).find(j => j.job === 'scheduler') || null; return res.json({ skipped: 'locked', via, scheduler: st }); }
+  const out = { via, worker: worker.WORKER_ID };
+  let error = null;
   try {
-    const dryRun = req.query.dry === '1' || req.body?.dryRun === true;
-    const out = await sequences.run({ dryRun });
-    out.via = req.auth?.via || null;
-    // Scheduled campaigns, reply detection and the nightly Flex matcher ride the same tick.
-    if (!dryRun) {
-      out.campaigns = await campaigns.runDue({ baseUrl: publicBase(req) }).catch(e => ({ error: e.message }));
-      out.replies = await replies.check().catch(e => ({ error: e.message }));
-      out.flex = await flexjobs.nightly().catch(e => ({ error: e.message }));
-    }
-    return res.json(out);
+    out.sequences = await sequences.run({ worker: worker.WORKER_ID });
+    // Scheduled campaigns, retries, webhook reconciliation, reply detection and the nightly Flex matcher ride the same tick.
+    out.campaigns = await campaigns.runDue({ baseUrl: publicBase(req), worker: worker.WORKER_ID }).catch(e => ({ error: e.message }));
+    out.events = await campaigns.applyPendingEvents().catch(e => ({ error: e.message }));
+    out.replies = await replies.check().catch(e => ({ error: e.message }));
+    out.flex = await flexjobs.nightly().catch(e => ({ error: e.message }));
+  } catch (e) { error = e.message; out.error = error; }
+  await worker.finishJob('scheduler', { result: summarise(out), error });
+  return res.status(error ? 500 : 200).json(out);
+}
+const summarise = out => ({ sequences: out.sequences ? { due: out.sequences.due, sent: out.sequences.sent, tasks: out.sequences.tasks, recovered: out.sequences.recovered, uncertain: out.sequences.uncertain, skipped: out.sequences.skipped, errors: out.sequences.errors?.length || 0 } : null,
+  campaigns: out.campaigns ? { due: out.campaigns.due, sent: out.campaigns.sent?.length || 0, retried: out.campaigns.retried?.length || 0, failed: out.campaigns.failed?.length || 0 } : null,
+  replies: out.replies ? { checked: out.replies.checked, replies: out.replies.replies, auto_replies: out.replies.auto_replies, bounces: out.replies.bounces, oldest_unchecked: out.replies.oldest_unchecked, errors: out.replies.errors?.length || 0 } : null,
+  events: out.events || null });
+
+// What a person needs to see about delivery: the worker's heartbeat, step runs waiting for a decision,
+// each mailbox's reply-sync state, campaigns that finished with failures.
+async function handleWorkerStatus(req, res) {
+  if (!(await requireAuth(req, res))) return;
+  try {
+    const now = new Date();
+    const [jobs, review, accounts, unfinished] = await Promise.all([
+      worker.status({ now }), sequences.needsReview(), gmail.listAccountsForStatus(), campaigns.unfinishedCampaigns(),
+    ]);
+    const mailboxes = accounts.map(a => ({ email: a.email, connected_by: a.connected_by, replies_checked_at: a.replies_checked_at, ...replies.mailboxState(a, now), refresh_token: undefined }));
+    return res.json({ now: now.toISOString(), jobs, review, mailboxes, campaigns: unfinished });
   } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+// A person resolves an uncertain step run: mark_sent, resend or skip.
+async function handleWorkerRecover(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireUser(req, res))) return;
+  const { runId, action } = req.body || {};
+  if (!runId || !action) return res.status(400).json({ error: 'runId and action required' });
+  try { return res.json(await sequences.recover({ runId, action, actor: userEmail(req) })); }
+  catch (e) { return res.status(e.status || 500).json({ error: e.message }); }
 }
 
 const publicBase = req => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
@@ -1335,7 +1376,7 @@ async function handleCampaignSend(req, res) {
   const testList = Array.isArray(test) ? test.map(s => String(s).trim()).filter(s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)).slice(0, 5) : null;
   if (Array.isArray(test) && !testList.length) return res.status(400).json({ error: 'Give one to five test addresses' });
   try {
-    const out = await campaigns.sendCampaign({ campaignId, baseUrl: publicBase(req), test: testList, actor: req.auth?.user?.email || 'ui', dryRun: req.query.dry === '1' });
+    const out = await campaigns.sendCampaign({ campaignId, baseUrl: publicBase(req), test: testList, actor: req.auth?.user?.email || 'ui', dryRun: req.query.dry === '1', retry: req.body?.retry === true, worker: worker.WORKER_ID });
     return res.json({ ok: true, ...out });
   } catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code || null, summary: e.summary || null }); }
 }
@@ -1357,16 +1398,22 @@ async function handleCampaignAudience(req, res) {
     return res.json({ count: rows.length, sample: rows.slice(0, 8).map(r => ({ id: r.id, name: r.name, email: r.email, company: r.companies?.name || null })) });
   } catch (e) { return res.status(500).json({ error: e.message }); }
 }
-// Resend → FF Tank. Signed by Svix; the body is re-serialised from the parsed JSON (Vercel gives no raw body).
+// Resend → FF Tank. Signed by Svix over the exact request bytes: with NODEJS_HELPERS=0 (lib/server/http.cjs)
+// those bytes are what is verified; with Vercel's helpers on, the parsed body re-serialised is the best
+// available and the answer says so (`exact: false`). The receipt is stored before Resend is acknowledged,
+// duplicates by svix-id are dropped, and an event for a send row that does not exist yet waits for it.
 async function handleResendWebhook(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const secret = process.env.RESEND_WEBHOOK_SECRET;
   if (!secret) return res.status(500).json({ error: 'RESEND_WEBHOOK_SECRET not set' });
-  const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
-  const ok = campaigns.verifySignature({ secret, id: req.headers['svix-id'], timestamp: req.headers['svix-timestamp'], signature: req.headers['svix-signature'], body });
-  if (!ok) return res.status(400).json({ error: 'Bad signature' });
-  try { return res.json(await campaigns.applyEvent(typeof req.body === 'string' ? JSON.parse(req.body) : req.body)); }
-  catch (e) { return res.status(500).json({ error: e.message }); }
+  const { body, exact } = signedBody(req);
+  const id = req.headers['svix-id'];
+  const ok = campaigns.verifySignature({ secret, id, timestamp: req.headers['svix-timestamp'], signature: req.headers['svix-signature'], body });
+  if (!ok) return res.status(400).json({ error: 'Bad signature', exact });
+  let event;
+  try { event = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body && typeof req.body === 'object' ? req.body : JSON.parse(body)); } catch { return res.status(400).json({ error: 'Body is not JSON' }); }
+  try { return res.json({ ...(await campaigns.recordEvent({ eventId: String(id), event })), exact }); }
+  catch (e) { return res.status(500).json({ error: `Receipt not stored: ${e.message}` }); }   // not acknowledged: Resend retries
 }
 // /u/<token>: GET shows a one-button page; POST (the button, or List-Unsubscribe-Post one-click) unsubscribes.
 async function handleUnsubscribe(req, res) {
@@ -1376,7 +1423,9 @@ async function handleUnsubscribe(req, res) {
   if (req.method === 'GET') {
     return res.send(page('Unsubscribe', 'Stop receiving marketing email from Fatfish? Your project emails and replies are not affected.') + `<form method="post" action="/u/${encodeURIComponent(token)}"><button type="submit" style="font:inherit;padding:10px 18px;border-radius:8px;border:1px solid #1c1c18;background:#EBF212;cursor:pointer">Unsubscribe me</button></form>`);
   }
-  const c = await campaigns.unsubscribeByToken(token, { source: 'link', campaignId: req.query.c || null }).catch(() => null);
+  let c;
+  try { c = await campaigns.unsubscribeByToken(token, { source: 'link', campaignId: req.query.c || null }); }
+  catch (e) { console.error('[unsubscribe] write failed', e.message); return res.status(500).send(page('Not done yet', 'We could not record this just now. Please try the link again in a minute, or reply to the email and we will take you off by hand.')); }
   if (!c) return res.status(404).send(page('Link not recognised', 'This unsubscribe link is not valid. Reply to the email and we will take you off by hand.'));
   return res.send(page('You are unsubscribed', `${c.email} will not get marketing email from Fatfish again.`));
 }

@@ -1,4 +1,5 @@
 import { requireAuth } from '../lib/server/auth.cjs';
+import { wrap } from '../lib/server/http.cjs';
 import { logActivity, companyIdFor } from '../lib/server/activity.cjs';
 // api/cron-exec-movement.js
 // Runs daily. Finds CMO/VP Marketing/Head of Events/Brand Director transitions
@@ -246,7 +247,7 @@ async function writeSignal(signal) {
 }
 
 // Main handler
-export default async function handler(req, res) {
+export default wrap(async function handler(req, res) {
   // Cron secret or a signed-in user; the old `?manual=1` bypass let anyone trigger this.
   if (!(await requireAuth(req, res))) return;
 
@@ -372,7 +373,7 @@ export default async function handler(req, res) {
       error: err.message
     });
   }
-}
+});
 
 export const config = {
   maxDuration: 300

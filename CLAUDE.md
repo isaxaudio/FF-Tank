@@ -203,6 +203,7 @@ GOOGLE_ADS_CLIENT_SECRET
 SETUP_SECRET          -- guards agent-setup endpoint
 CRON_SECRET           -- scheduled runs (sequence tick, crons); also signs the Gmail OAuth state
 STATE_SECRET          -- optional: a separate secret for signing OAuth state (defaults to CRON_SECRET)
+NODEJS_HELPERS=0      -- optional but recommended: raw request bytes for exact webhook signatures (lib/server/http.cjs)
 RESEND_API_KEY        -- campaigns (bulk email); without it sends stop at "Resend is not configured"
 RESEND_FROM           -- default sender, e.g. "Fatfish <news@fatfishmedia.com>" on a verified domain
 RESEND_WEBHOOK_SECRET -- svix signing secret for /api/index?service=resend-webhook
@@ -305,10 +306,46 @@ Tests: `npm test` runs `test/*.test.cjs` with node's test runner, no credentials
 ## Scheduled automation (CRM rebuild, see CRM-PLAN.md)
 One tick does everything: `POST /api/index?service=sequence-run` (CRON_SECRET or a signed-in user), called every
 15 minutes by the LaunchAgent on the Mac mini (`scripts/install-sequence-tick.sh`) and by any open FF Tank tab.
-It sends due sequence steps and scheduled campaigns, reads Gmail threads for replies (`lib/server/replies.cjs`,
-needs the `gmail.metadata` scope: reconnect Gmail in Settings once after upgrading) and, once a day, matches
-deals in Proposal or later against the Flex mirror into `flex_booking_candidates` (`lib/server/flexjobs.cjs`).
-`service=reply-check` and `service=flex-candidates&force=1` run either on its own. A person links every booking.
+It sends due sequence steps, scheduled campaigns and campaign retries, applies kept webhook events, reads Gmail
+threads for replies (`lib/server/replies.cjs`, needs the `gmail.metadata` scope: reconnect Gmail in Settings once
+after upgrading) and, once a day, matches deals in Proposal or later against the Flex mirror into
+`flex_booking_candidates` (`lib/server/flexjobs.cjs`). `service=reply-check` and `service=flex-candidates&force=1`
+run either on its own. A person links every booking.
+
+## Email delivery and recovery (PR 1B, migration 012)
+- **One worker.** `lib/server/worker.cjs`: every caller of `sequence-run` takes the `scheduler` lock in `job_state`
+  with one conditional UPDATE; a second caller gets `{ skipped: "locked" }`. A lock whose lease passed is stale and is
+  taken over. `finishJob` records last run / last success / last error; `service=worker-status` (staff) returns it
+  with step runs needing review, each mailbox's reply-sync state and campaigns that finished with failures.
+  Automation → Email delivery shows all of it; `service=worker-recover` (person) resolves a run: mark_sent, resend, skip.
+- **Sequence steps.** `sequence_enrollments.lease_until/lease_by` claim one enrollment per worker (the claim also
+  re-reads the stop state: a paused, replied or unsubscribed enrollment fails the claim). `sequence_step_runs` holds
+  one durable row per enrollment and step: sending → sent / failed / uncertain / skipped, attempts and a log. A run
+  left in `sending` is reconciled before any resend: the email_messages row the send wrote, else our own message in
+  the Gmail thread (`replies.sentEvidence`); no evidence → `uncertain`, enrollment `paused` with "Needs review",
+  surfaced in Automation. Before a follow-up the sender's thread is re-read: human reply → `replied`, bounce →
+  `bounced`, automatic reply → `email_auto_reply` activity and the step goes on; a mailbox that cannot read threads
+  or has not been read within 6 h (`replies.mailboxState`) holds its follow-ups ("Waiting: …" on the enrollment).
+- **Reply detection.** `replies.classify`: bounce (mailer-daemon / delivery status), auto (Auto-Submitted,
+  Precedence, X-Autoreply, out-of-office subjects), else human. The read budget rotates across accounts, leftovers
+  flow on; `oldest_unchecked` is reported. Replies are stamped with the contact, thread, account and account owner.
+- **Campaigns.** `campaign_sends.outcome` (queued, accepted, delivered, suppressed, retryable_failure,
+  permanent_failure, uncertain) is tracked apart from the engagement `status`; `attempts`, `attempt_log`,
+  `next_attempt_at`, `idempotency_key` are kept per recipient. Each Resend batch carries an `Idempotency-Key`
+  derived from its rows, so an interrupted or uncertain batch replays without duplicates. The campaign takes
+  `send_lock_until` (409 `locked` for a second worker). Suppressions and marketing_status are re-checked before each
+  batch. `send_status` ends `sent` only when every recipient was accepted, else `finished_with_failures` with
+  `send_summary`; `campaign-send` with `{ retry: true }` (or the tick, with backoff) sends only the campaign's own
+  unfinished rows and never widens the audience.
+- **Webhooks.** `lib/server/http.cjs` wraps every function: with `NODEJS_HELPERS=0` in Vercel the handler gets the
+  raw request bytes (`req.rawBody`) and the Svix signature is verified against them (`exact: true`); with Vercel's
+  helpers on, the re-serialised JSON is the best available and the answer says `exact: false` (a pretty-printed
+  payload cannot verify then). Set `NODEJS_HELPERS=0` on the project for exact verification; the wrapper supplies
+  `req.query`, `req.body`, `res.status/json/send` either way. Receipts go to `email_events` (unique per provider
+  event id) before Resend is acknowledged; a receipt that cannot be stored answers 500 so Resend retries. Events
+  for sends that do not exist yet are kept and applied once the row appears (`reconcileEvents`, and the tick's
+  `applyPendingEvents`). An unsubscribe write that fails answers "Not done yet" instead of claiming success.
+- **Tests.** `test/delivery.test.cjs` (in-memory PostgREST in `test/fakerest.cjs`, Gmail and Resend stubbed).
 
 ## Newsletter builder (CRM rebuild step 10, see CRM-PLAN.md)
 Outreach → Templates → New newsletter opens `src/components/NewsletterBuilder.jsx`; the model and the email-safe HTML
