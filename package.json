@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint src",
     "preview": "vite preview",
-    "test": "node --test test/*.test.cjs"
+    "test": "node --test test/*.test.cjs test/*.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.61.0",

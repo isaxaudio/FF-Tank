@@ -18,7 +18,9 @@ const section = { display: "grid", gap: 10 };
 const MIME_MOVE = "text/ff-move", MIME_ADD = "text/ff-add";
 const inEditable = el => !!el && (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable);
 
-export default function NewsletterBuilder({ template = null, starter = null, onClose, onSaved }) {
+// Inside the campaign workspace it runs embedded: no back button, `onPersist(patch)` stores the content as a new
+// version of the campaign email instead of an email_templates row, `onTest(addresses)` sends through the campaign.
+export default function NewsletterBuilder({ template = null, starter = null, onClose, onSaved, embedded = false, onPersist = null, onTest = null }) {
   const phone = useIsPhone();
   const [id, setId] = useState(template?.id || null);
   const [meta, setMeta] = useState({ name: template?.name || "", subject: template?.subject || "", preheader: template?.preheader || "" });
@@ -71,13 +73,14 @@ export default function NewsletterBuilder({ template = null, starter = null, onC
     setBusy("save"); setErr("");
     try {
       let row;
-      if (id) await updateTemplate(id, patch); else { row = await createTemplate(patch); setId(row.id); }
+      if (onPersist) { row = await onPersist(patch); if (!id && row?.id) setId(row.id); }
+      else if (id) await updateTemplate(id, patch); else { row = await createTemplate(patch); setId(row.id); }
       if (!meta.name.trim()) setMeta(m => ({ ...m, name }));
       setDirty(false); setSavedAt(Date.now()); if (!quiet) setMsg("Saved."); onSaved?.(row || { id, ...patch });
       if (close) onClose?.();
     } catch (e) { setErr(e.message); }
     setBusy("");
-  }, [busy, meta, design, id, onSaved, onClose]);
+  }, [busy, meta, design, id, onSaved, onClose, onPersist]);
   // Autosave an existing template 1.5 s after the last change.
   useEffect(() => { if (!id || !dirty) return; clearTimeout(saveTimer.current); saveTimer.current = setTimeout(() => save({ quiet: true }), 1500); return () => clearTimeout(saveTimer.current); }, [design, meta, id, dirty]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!msg) return; const t = setTimeout(() => setMsg(""), 2500); return () => clearTimeout(t); }, [msg]);
@@ -96,7 +99,7 @@ export default function NewsletterBuilder({ template = null, starter = null, onC
     const list = testTo.split(/[,\s]+/).filter(Boolean);
     if (!list.length) return;
     setBusy("test"); setErr(""); setMsg("");
-    try { if (dirty || !id) await save({ quiet: true }); const r = await sendTemplateTest(id, list); setMsg(`Test sent to ${r.sent} address${r.sent === 1 ? "" : "es"}.`); }
+    try { if (dirty || !id) await save({ quiet: true }); const r = onTest ? await onTest(list) : await sendTemplateTest(id, list); setMsg(`Test sent to ${r.sent} address${r.sent === 1 ? "" : "es"}.`); }
     catch (e) { setErr(e.message); }
     setBusy("");
   }
@@ -123,7 +126,7 @@ export default function NewsletterBuilder({ template = null, starter = null, onC
       <style>{`.ff-canvas a, .ff-canvas img { pointer-events: none; -webkit-user-drag: none; } .ff-canvas [data-block]:hover { outline: 1px dashed ${ocean[40]}; } [data-props] div, [data-props] input, [data-props] select { min-width: 0; max-width: 100%; }`}</style>
       {/* top bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: phone ? "8px 12px" : "10px 16px", borderBottom: `1px solid ${TC.line}`, background: TC.card, flexWrap: phone ? "wrap" : "nowrap" }}>
-        <button data-builder-back onClick={close} title="Back to templates" style={{ ...btn("tertiary"), padding: 6 }}><ArrowLeft size={16} strokeWidth={1.5} /></button>
+        {!embedded && <button data-builder-back onClick={close} title="Back to templates" style={{ ...btn("tertiary"), padding: 6 }}><ArrowLeft size={16} strokeWidth={1.5} /></button>}
         <input data-builder-name value={meta.name} onChange={e => { setMeta(m => ({ ...m, name: e.target.value })); setDirty(true); }} placeholder="Untitled newsletter" style={{ ...inputStyle({ width: phone ? 160 : 260, fontWeight: 450 }), background: "transparent", border: "1px solid transparent" }} onFocus={e => (e.target.style.borderColor = TC.lineStrong)} onBlur={e => (e.target.style.borderColor = "transparent")} />
         <span data-builder-status style={{ ...TT.caption, color: dirty ? TC.warnInk : TC.muted, whiteSpace: "nowrap" }}>{status}</span>
         {confirmClose && (
@@ -139,7 +142,7 @@ export default function NewsletterBuilder({ template = null, starter = null, onC
           <button onClick={undo} disabled={!past.length} title="Undo (⌘Z)" style={{ ...btn("tertiary"), padding: 6, opacity: past.length ? 1 : 0.4 }}><Undo2 size={16} strokeWidth={1.5} /></button>
           <button onClick={redo} disabled={!future.length} title="Redo (⇧⌘Z)" style={{ ...btn("tertiary"), padding: 6, opacity: future.length ? 1 : 0.4 }}><Redo2 size={16} strokeWidth={1.5} /></button>
           <button data-builder-preview onClick={() => setPreview("desktop")} style={btn("secondary")}><Monitor size={14} strokeWidth={1.5} /> Preview</button>
-          <button data-builder-save onClick={() => save()} disabled={busy !== "" || (!dirty && !!id)} style={btn(dirty || !id ? "primary" : "secondary")}>{busy === "save" ? "Saving…" : id ? "Save" : "Save newsletter"}</button>
+          <button data-builder-save onClick={() => save()} disabled={busy !== "" || (!dirty && !!id)} style={btn(dirty || !id ? "primary" : "secondary")}>{busy === "save" ? "Saving…" : id || embedded ? "Save" : "Save newsletter"}</button>
         </div>
       </div>
 

@@ -33,7 +33,7 @@ function test(row, { col, expr }) {
     case 'is': return arg === 'null' ? val == null : String(val) === arg;
     case 'not': { const [op2, ...r2] = rest; return !test(row, { col, expr: `${op2}.${r2.join('.')}` }); }
     case 'in': return arg.replace(/^\(|\)$/g, '').split(',').map(s => s.replace(/^"|"$/g, '')).includes(String(val));
-    case 'ilike': return String(val || '').toLowerCase() === arg.toLowerCase().replace(/%/g, '');
+    case 'ilike': { const a = arg.toLowerCase(); const v = String(val || '').toLowerCase(); return a.includes('%') ? v.includes(a.replace(/%/g, '')) : v === a; }
     default: throw new Error(`fakerest: unsupported op ${op}`);
   }
 }
@@ -53,7 +53,7 @@ class FakeRest {
       const m = part.match(/^([a-z_]+)(?::([a-z_]+))?\((.*)\)$/);
       if (m) {
         const rel = m[1]; const inner = m[3];
-        const fk = ({ sequence_enrollments: 'enrollment_id' })[rel] || `${rel.replace(/ies$/, 'y').replace(/s$/, '')}_id`;
+        const fk = ({ sequence_enrollments: 'enrollment_id', contact_lists: 'list_id' })[rel] || `${rel.replace(/ies$/, 'y').replace(/s$/, '')}_id`;
         const target = this.table(rel).find(x => x.id === row[fk]);
         out[rel] = target ? this.project(rel, target, inner) : null;
       } else if (part === '*') Object.assign(out, row);
@@ -77,7 +77,7 @@ class FakeRest {
       const bodies = Array.isArray(init.body ? JSON.parse(init.body) : {}) ? JSON.parse(init.body) : [JSON.parse(init.body || '{}')];
       const out = [];
       for (const b of bodies) {
-        const key = q.onConflict || (t === 'activities' && b.external_id ? 'source,external_id' : t === 'unsubscribes' ? 'email' : t === 'email_events' ? 'provider,event_id' : t === 'sequence_step_runs' ? 'enrollment_id,position' : t === 'job_state' ? 'job' : t === 'gmail_accounts' ? 'email' : null);
+        const key = q.onConflict || (t === 'activities' && b.external_id ? 'source,external_id' : t === 'unsubscribes' ? 'email' : t === 'email_events' ? 'provider,event_id' : t === 'sequence_step_runs' ? 'enrollment_id,position' : t === 'job_state' ? 'job' : t === 'gmail_accounts' ? 'email' : t === 'campaign_email_versions' ? 'campaign_email_id,version' : t === 'contact_list_members' ? 'list_id,contact_id' : t === 'contact_lists' ? 'name' : null);
         const dup = key ? this.table(t).find(r => key.split(',').every(k => String(r[k]).toLowerCase() === String(b[k]).toLowerCase())) : null;
         if (dup && /ignore-duplicates/.test(prefer)) continue;
         if (dup && /merge-duplicates/.test(prefer)) { Object.assign(dup, b); out.push(dup); continue; }

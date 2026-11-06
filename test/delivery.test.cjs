@@ -196,11 +196,15 @@ test('reply detection rotates its budget across accounts and reports the oldest 
 // ---- campaign delivery ------------------------------------------------------------------------
 function campaignDb(n = 101) {
   const db = new FakeRest({
-    campaigns: [{ id: 'cp1', name: 'Launch', send_status: 'draft', segment: {}, email_template_id: 'tp1', subject: 'Big news {{first_name}}', from_name: 'Fatfish', from_email: 'news@fatfish.test', send_lock_until: null, send_lock_by: null, sent_at: null }],
-    email_templates: [{ id: 'tp1', name: 'Launch', subject: 'Big news', body: '<p>Hello {{first_name}}</p>', format: 'html' }],
+    campaigns: [{ id: 'cp1', name: 'Launch', kind: 'email', status: 'active', owner: ME }],
+    campaign_emails: [], campaign_email_versions: [],
     contacts: [], companies: [], unsubscribes: [], campaign_sends: [], email_messages: [], activities: [], email_events: [], campaign_members: [],
   });
-  for (let i = 0; i < n; i++) db.insert('contacts', { id: `c${i}`, name: `Person ${String(i).padStart(3, '0')}`, email: `p${i}@acme.test`, marketing_status: 'subscribed', merged_into_id: null, unsub_token: crypto.randomUUID(), company_id: null, created_at: ago(100) });
+  const ids = [];
+  for (let i = 0; i < n; i++) ids.push(db.insert('contacts', { id: `c${i}`, name: `Person ${String(i).padStart(3, '0')}`, email: `p${i}@acme.test`, marketing_status: 'subscribed', merged_into_id: null, unsub_token: crypto.randomUUID(), company_id: null, created_at: ago(100) }).id);
+  // One approved email whose frozen audience is everyone: the shape Review leaves behind.
+  db.insert('campaign_emails', { id: 'ce1', campaign_id: 'cp1', name: 'Email 1', position: 1, status: 'approved', version: 1, approved_version: 1, approved_at: ago(2), approved_by: ME, audience: { mode: 'all_subscribers', confirmed: true }, audience_snapshot: { count: n, contact_ids: ids, hash: 'h', at: ago(2) }, from_name: 'Fatfish', from_email: 'news@fatfish.test', frequency_days: 0, send_lock_until: null, send_lock_by: null, sent_at: null, timezone: 'America/Denver' });
+  db.insert('campaign_email_versions', { campaign_email_id: 'ce1', version: 1, subject: 'Big news {{first_name}}', body: '<p>Hello {{first_name}}</p>', format: 'html', design: null });
   return db;
 }
 // Resend batch stub: `plan` answers per batch number (1-based): 'ok' | 'ok:<id prefix>' | status code | 'throw'.
@@ -221,17 +225,17 @@ function resendStub(db, plan, hooks = {}) {
 test('one accepted batch and one retryable failure: the campaign is finished with failures, a retry sends only the failed recipient, and it is never reported as sent while a failure stands', async () => {
   process.env.RESEND_API_KEY = 'rk'; process.env.RESEND_FROM = 'Fatfish <news@fatfish.test>';
   const db = campaignDb(101); const f = resendStub(db, ['ok', 500]);
-  const out = await campaigns.sendCampaign({ campaignId: 'cp1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW });
-  assert.equal(out.accepted, 100); assert.equal(out.retryable, 1); assert.equal(out.send_status, 'finished_with_failures');
-  const cp = db.table('campaigns')[0]; assert.equal(cp.send_status, 'finished_with_failures'); assert.equal(cp.send_lock_until, null);
+  const out = await campaigns.sendEmail({ emailId: 'ce1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW });
+  assert.equal(out.accepted, 100); assert.equal(out.retryable, 1); assert.equal(out.status, 'finished_with_failures');
+  const cp = db.table('campaign_emails')[0]; assert.equal(cp.status, 'finished_with_failures'); assert.equal(cp.send_lock_until, null);
   const failed = db.table('campaign_sends').filter(s => s.outcome === 'retryable_failure'); assert.equal(failed.length, 1); assert.equal(failed[0].attempts, 1); assert.ok(failed[0].next_attempt_at);
   assert.equal(db.table('campaign_sends').filter(s => s.outcome === 'accepted').length, 100);
   // retry: only the one failed recipient, eligible now
   for (const s of failed) s.next_attempt_at = ago(1);
   const f2 = resendStub(db, ['ok:retry-']);
-  const again = await campaigns.sendCampaign({ campaignId: 'cp1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW, retry: true });
+  const again = await campaigns.sendEmail({ emailId: 'ce1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW, retry: true });
   assert.equal(f2.batches.length, 1); assert.equal(f2.batches[0].payload.length, 1); assert.equal(f2.batches[0].payload[0].to[0], failed[0].email);
-  assert.equal(again.accepted, 1); assert.equal(again.send_status, 'sent');
+  assert.equal(again.accepted, 1); assert.equal(again.status, 'sent');
   const row = db.table('campaign_sends').find(s => s.id === failed[0].id); assert.equal(row.outcome, 'accepted'); assert.equal(row.attempts, 2); assert.equal(row.attempt_log.length, 2);
   assert.equal(db.table('campaign_sends').filter(s => s.provider_message_id).length, 101);
   void f;
@@ -239,30 +243,30 @@ test('one accepted batch and one retryable failure: the campaign is finished wit
 
 test('an uncertain batch (no answer from Resend) is retried under the same idempotency key, never duplicated', async () => {
   const db = campaignDb(3); const f = resendStub(db, ['throw']);
-  const out = await campaigns.sendCampaign({ campaignId: 'cp1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW });
-  assert.equal(out.uncertain, 3); assert.equal(out.send_status, 'failed');
+  const out = await campaigns.sendEmail({ emailId: 'ce1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW });
+  assert.equal(out.uncertain, 3); assert.equal(out.status, 'failed');
   assert.ok(db.table('campaign_sends').every(s => s.outcome === 'uncertain'));
   for (const s of db.table('campaign_sends')) s.next_attempt_at = ago(1);
   const f2 = resendStub(db, ['ok']);
-  await campaigns.sendCampaign({ campaignId: 'cp1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW, retry: true });
+  await campaigns.sendEmail({ emailId: 'ce1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW, retry: true });
   assert.equal(f2.batches[0].key, f.batches[0].key, 'same rows, same key');
   assert.ok(f2.batches[0].key, 'a key was sent');
 });
 
 test('a permanently rejected batch is not retried', async () => {
   const db = campaignDb(2); resendStub(db, [422]);
-  const out = await campaigns.sendCampaign({ campaignId: 'cp1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW });
+  const out = await campaigns.sendEmail({ emailId: 'ce1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW });
   assert.equal(out.permanent, 2);
   const f2 = resendStub(db, ['ok']);
-  const again = await campaigns.sendCampaign({ campaignId: 'cp1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW, retry: true });
+  const again = await campaigns.sendEmail({ emailId: 'ce1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW, retry: true });
   assert.equal(f2.batches.length, 0); assert.equal(again.audience, 0);
 });
 
-test('a campaign send is protected against overlapping workers', async () => {
+test('a campaign email send is protected against overlapping workers', async () => {
   const db = campaignDb(2); const f = resendStub(db, ['ok']);
   const results = await Promise.allSettled([
-    campaigns.sendCampaign({ campaignId: 'cp1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW }),
-    campaigns.sendCampaign({ campaignId: 'cp1', baseUrl: 'https://ff.test', actor: ME, worker: 'w2', now: NOW }),
+    campaigns.sendEmail({ emailId: 'ce1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW }),
+    campaigns.sendEmail({ emailId: 'ce1', baseUrl: 'https://ff.test', actor: ME, worker: 'w2', now: NOW }),
   ]);
   const rejected = results.filter(r => r.status === 'rejected');
   assert.equal(rejected.length, 1); assert.equal(rejected[0].reason.code, 'locked');
@@ -273,7 +277,7 @@ test('a new opt-out takes effect before the next eligible batch', async () => {
   const db = campaignDb(101);
   const victim = db.table('contacts')[100];                     // sorted by name, the last one lands in batch 2
   const f = resendStub(db, ['ok'], { before: (n) => { if (n === 1) db.insert('unsubscribes', { email: victim.email, contact_id: victim.id, source: 'link' }); } });
-  const out = await campaigns.sendCampaign({ campaignId: 'cp1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW });
+  const out = await campaigns.sendEmail({ emailId: 'ce1', baseUrl: 'https://ff.test', actor: ME, worker: 'w1', now: NOW });
   assert.equal(out.suppressed, 1); assert.equal(out.accepted, 100);
   assert.equal(f.batches.length, 1, 'the second batch had nobody left');
   const row = db.table('campaign_sends').find(s => s.email === victim.email); assert.equal(row.outcome, 'suppressed'); assert.equal(row.status, 'unsubscribed');
@@ -300,7 +304,7 @@ async function webhook(db, { body, raw = true, id = 'evt_1', tamper = false }) {
 const pretty = (type, emailId) => JSON.stringify({ type, created_at: NOW.toISOString(), data: { email_id: emailId } }, null, 2);
 
 test('a valid signature over the raw bytes is accepted exactly as sent; a tampered payload is rejected', async () => {
-  const db = campaignDb(0); db.insert('campaign_sends', { id: 'cs1', campaign_id: 'cp1', email: 'x@y.test', provider_message_id: 'em1', status: 'sent', outcome: 'accepted', is_test: false });
+  const db = campaignDb(0); db.insert('campaign_sends', { id: 'cs1', campaign_id: 'cp1', campaign_email_id: 'ce1', email: 'x@y.test', provider_message_id: 'em1', status: 'sent', outcome: 'accepted', is_test: false });
   const ok = await webhook(db, { body: pretty('email.delivered', 'em1') });
   assert.equal(ok.statusCode, 200, JSON.stringify(ok.body)); assert.equal(ok.body.exact, true);
   assert.equal(db.table('campaign_sends')[0].outcome, 'delivered'); assert.equal(db.table('campaign_sends')[0].status, 'delivered');
@@ -323,7 +327,7 @@ test('repeated and early webhook events converge on the same delivery state, and
   const dup = await webhook(db, { body: pretty('email.delivered', 'em-early'), id: 'evt_e' });
   assert.equal(dup.body.duplicate, true); assert.equal(db.table('email_events').length, 1);
   // the send row appears (an accepted batch) and the kept event is applied
-  db.insert('campaign_sends', { id: 'cs2', campaign_id: 'cp1', email: 'x@y.test', provider_message_id: 'em-early', status: 'sent', outcome: 'accepted', is_test: false });
+  db.insert('campaign_sends', { id: 'cs2', campaign_id: 'cp1', campaign_email_id: 'ce1', email: 'x@y.test', provider_message_id: 'em-early', status: 'sent', outcome: 'accepted', is_test: false });
   global.fetch = stubFetch([restRoute(db)]);
   const r = await campaigns.reconcileEvents(['em-early']);
   assert.equal(r.applied, 1);

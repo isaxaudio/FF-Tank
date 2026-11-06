@@ -111,7 +111,7 @@ const logRun = (handler, provider, model, inT, outT, durationMs, success) => {
 const PUBLIC_SERVICES = new Set(['gmail-auth', 'resend-webhook', 'unsubscribe']);
 const SERVICES = ['apollo', 'tavily', 'supabase', 'qualify', 'flex-analyze', 'flex-sync', 'flex-intel', 'flex-lookalike', 'lookalike-engine',
   'gmail-draft', 'gmail-send', 'gmail-auth', 'gmail-connect', 'gmail-accounts', 'sequence-run', 'reply-check', 'flex-candidates',
-  'campaign-send', 'campaign-audience', 'template-test', 'resend-webhook', 'unsubscribe', 'worker-status', 'worker-recover', 'send-lead', 'enrich-lead', 'vps',
+  'campaign-send', 'campaign-audience', 'campaign-email', 'template-test', 'resend-webhook', 'unsubscribe', 'worker-status', 'worker-recover', 'send-lead', 'enrich-lead', 'vps',
   'sales-notes', 'apollo-company', 'apollo-person', 'flex-probe', 'exa', 'firecrawl', 'draft-outreach'];
 
 module.exports = wrap(async (req, res) => {
@@ -141,6 +141,7 @@ module.exports = wrap(async (req, res) => {
       case 'flex-candidates': return await handleFlexCandidates(req, res);
       case 'campaign-send':     return await handleCampaignSend(req, res);
       case 'campaign-audience': return await handleCampaignAudience(req, res);
+      case 'campaign-email':    return await handleCampaignEmail(req, res);
       case 'template-test':     return await handleTemplateTest(req, res);
       case 'resend-webhook':    return await handleResendWebhook(req, res);
       case 'unsubscribe':       return await handleUnsubscribe(req, res);
@@ -1334,7 +1335,7 @@ async function handleWorkerStatus(req, res) {
   try {
     const now = new Date();
     const [jobs, review, accounts, unfinished] = await Promise.all([
-      worker.status({ now }), sequences.needsReview(), gmail.listAccountsForStatus(), campaigns.unfinishedCampaigns(),
+      worker.status({ now }), sequences.needsReview(), gmail.listAccountsForStatus(), campaigns.unfinishedEmails(),
     ]);
     const mailboxes = accounts.map(a => ({ email: a.email, connected_by: a.connected_by, replies_checked_at: a.replies_checked_at, ...replies.mailboxState(a, now), refresh_token: undefined }));
     return res.json({ now: now.toISOString(), jobs, review, mailboxes, campaigns: unfinished });
@@ -1367,18 +1368,45 @@ async function handleFlexCandidates(req, res) {
   catch (e) { return res.status(500).json({ error: e.message }); }
 }
 
-// Send a campaign (or a test to given addresses) through Resend. ?dry=1 returns the audience size and a sample.
+// Send one campaign email: a test to given addresses, the real send of its approved version, or a retry of its own
+// unfinished recipients. ?dry=1 answers with the audience size and a sample without sending. `campaignId` alone
+// (older callers) means that campaign's first email.
 async function handleCampaignSend(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!(await requireAuth(req, res))) return;
-  const { campaignId, test } = req.body || {};
-  if (!campaignId) return res.status(400).json({ error: 'campaignId required' });
+  const { test, version } = req.body || {};
+  let emailId = req.body?.emailId || null;
+  if (!emailId && req.body?.campaignId) { const list = await campaigns.emailsForCampaign(req.body.campaignId).catch(() => []); emailId = list[0]?.id || null; }
+  if (!emailId) return res.status(400).json({ error: 'emailId required' });
   const testList = Array.isArray(test) ? test.map(s => String(s).trim()).filter(s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)).slice(0, 5) : null;
   if (Array.isArray(test) && !testList.length) return res.status(400).json({ error: 'Give one to five test addresses' });
   try {
-    const out = await campaigns.sendCampaign({ campaignId, baseUrl: publicBase(req), test: testList, actor: req.auth?.user?.email || 'ui', dryRun: req.query.dry === '1', retry: req.body?.retry === true, worker: worker.WORKER_ID });
+    const out = await campaigns.sendEmail({ emailId, baseUrl: publicBase(req), test: testList, actor: req.auth?.user?.email || 'ui', dryRun: req.query.dry === '1', retry: req.body?.retry === true, worker: worker.WORKER_ID, expectVersion: version ?? null });
     return res.json({ ok: true, ...out });
-  } catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code || null, summary: e.summary || null }); }
+  } catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code || null, version: e.version ?? null, summary: e.summary || null }); }
+}
+// Everything else about a campaign email: create, save (versioned, 409 when stale), approve (freezes version and
+// audience), unapprove, schedule, unschedule, pause, resume, duplicate, delete, sender-status.
+async function handleCampaignEmail(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireAuth(req, res))) return;
+  const b = req.body || {}; const actor = req.auth?.user?.email || 'ui';
+  try {
+    switch (b.action) {
+      case 'create':      return res.json(await campaigns.createEmail({ campaignId: b.campaignId, name: b.name, fromTemplateId: b.fromTemplateId || null, actor }));
+      case 'save':        return res.json(await campaigns.saveEmail({ emailId: b.emailId, expectVersion: b.version, patch: b.patch || {}, actor }));
+      case 'approve':     return res.json(await campaigns.approveEmail({ emailId: b.emailId, expectVersion: b.version, actor }));
+      case 'unapprove':   return res.json(await campaigns.unapproveEmail({ emailId: b.emailId }));
+      case 'schedule':    return res.json(await campaigns.scheduleEmail({ emailId: b.emailId, expectVersion: b.version, at: b.at, timezone: b.timezone || null }));
+      case 'unschedule':  return res.json(await campaigns.unscheduleEmail({ emailId: b.emailId }));
+      case 'pause':       return res.json(await campaigns.pauseEmail({ emailId: b.emailId, reason: b.reason || null, actor }));
+      case 'resume':      return res.json(await campaigns.resumeEmail({ emailId: b.emailId }));
+      case 'duplicate':   return res.json(await campaigns.duplicateEmail({ emailId: b.emailId, actor }));
+      case 'delete':      return res.json(await campaigns.deleteEmail({ emailId: b.emailId }));
+      case 'sender-status': return res.json(await campaigns.senderStatus({ from_email: b.from_email || null }));
+      default:            return res.status(400).json({ error: `Unknown action "${b.action || ''}"` });
+    }
+  } catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code || null, version: e.version ?? null, audience: e.audience || null }); }
 }
 // The newsletter builder's test send: a template (no campaign yet) to up to five addresses through Resend.
 async function handleTemplateTest(req, res) {
@@ -1389,14 +1417,14 @@ async function handleTemplateTest(req, res) {
   try { return res.json({ ok: true, ...(await campaigns.sendTemplateTest({ templateId, to: Array.isArray(to) ? to : [to], baseUrl: publicBase(req), actor: req.auth?.user?.email || 'ui' })) }); }
   catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code || null }); }
 }
-// Who a segment reaches right now (count and a sample), for the campaign editor.
+// Who an audience rule reaches right now: eligible count, everyone left out with reasons and sample names.
 async function handleCampaignAudience(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!(await requireAuth(req, res))) return;
   try {
-    const rows = await campaigns.segmentContacts(req.body?.segment || {});
-    return res.json({ count: rows.length, sample: rows.slice(0, 8).map(r => ({ id: r.id, name: r.name, email: r.email, company: r.companies?.name || null })) });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+    const out = await campaigns.resolveAudience({ campaignId: req.body?.campaignId || null, audience: req.body?.audience || { mode: 'members' }, frequencyDays: req.body?.frequencyDays || 0, excludeEmailId: req.body?.emailId || null });
+    return res.json(out);
+  } catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code || null }); }
 }
 // Resend → FF Tank. Signed by Svix over the exact request bytes: with NODEJS_HELPERS=0 (lib/server/http.cjs)
 // those bytes are what is verified; with Vercel's helpers on, the parsed body re-serialised is the best
@@ -1420,11 +1448,13 @@ async function handleUnsubscribe(req, res) {
   const token = String(req.query.t || '');
   const page = (title, text) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatfish · ${title}</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:480px;margin:64px auto;padding:0 20px;color:#1c1c18;line-height:1.5"><h2 style="font-weight:600">${title}</h2><p>${text}</p>`;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  // Previews and test sends carry /u/test: a page that explains itself and changes nothing.
+  if (token === 'test') return res.send(page('Test link', 'This is the unsubscribe link as it appears in a preview or test send. Nothing happens here; the real link in a sent email unsubscribes that one person.'));
   if (req.method === 'GET') {
     return res.send(page('Unsubscribe', 'Stop receiving marketing email from Fatfish? Your project emails and replies are not affected.') + `<form method="post" action="/u/${encodeURIComponent(token)}"><button type="submit" style="font:inherit;padding:10px 18px;border-radius:8px;border:1px solid #1c1c18;background:#EBF212;cursor:pointer">Unsubscribe me</button></form>`);
   }
   let c;
-  try { c = await campaigns.unsubscribeByToken(token, { source: 'link', campaignId: req.query.c || null }); }
+  try { c = await campaigns.unsubscribeByToken(token, { source: 'link', campaignId: req.query.c || null, emailId: req.query.e || null }); }
   catch (e) { console.error('[unsubscribe] write failed', e.message); return res.status(500).send(page('Not done yet', 'We could not record this just now. Please try the link again in a minute, or reply to the email and we will take you off by hand.')); }
   if (!c) return res.status(404).send(page('Link not recognised', 'This unsubscribe link is not valid. Reply to the email and we will take you off by hand.'));
   return res.send(page('You are unsubscribed', `${c.email} will not get marketing email from Fatfish again.`));

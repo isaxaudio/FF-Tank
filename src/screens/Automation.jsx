@@ -7,6 +7,7 @@ import { Play, RefreshCw, Activity, DollarSign } from "lucide-react";
 import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
 import { workerStatus, recoverRun, retryFailed, runScheduler } from "../lib/automationApi.js";
+import { resumeEmail } from "../lib/campaigns.js";
 
 const JOBS = [
   { id: "scout", name: "Scout", desc: "Tavily scans for RFPs, venues and competitor intel. Haiku scores before insert.", schedule: "Daily 13:00 UTC (Vercel)" },
@@ -78,15 +79,16 @@ function DeliveryTab({ d, acting, decide }) {
       </div>
 
       <div style={tile()}>
-        <div style={{ ...TT.h4, color: TC.ink }}>Campaigns needing attention <span style={{ ...TT.caption, color: TC.muted }}>{(d.campaigns || []).length}</span></div>
-        {(d.campaigns || []).length === 0 && <div style={{ ...TT.caption, color: TC.muted, marginTop: 8 }}>Every campaign send finished cleanly.</div>}
+        <div style={{ ...TT.h4, color: TC.ink }}>Campaign emails needing attention <span style={{ ...TT.caption, color: TC.muted }}>{(d.campaigns || []).length}</span></div>
+        {(d.campaigns || []).length === 0 && <div style={{ ...TT.caption, color: TC.muted, marginTop: 8 }}>Every campaign email finished cleanly.</div>}
         {(d.campaigns || []).map(c => { const s = c.send_summary || {}; const left = (s.queued || 0) + (s.retryable_failure || 0) + (s.uncertain || 0); return (
           <div key={c.id} data-campaign-attention style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${TC.lineSoft}`, flexWrap: "wrap" }}>
             <div style={{ flex: 1, minWidth: 240 }}>
-              <div style={{ fontSize: 13, color: TC.ink }}>{c.name} <span style={pill(c.stale_lock ? "rust" : c.send_status === "sent" ? "evergreen" : "ember")}>{c.stale_lock ? "stuck: worker died mid-send" : c.send_status.replace(/_/g, " ")}</span></div>
-              <div style={{ ...TT.caption, color: TC.muted }}>{Object.entries(s).filter(([k]) => k !== "at").map(([k, n]) => `${n} ${k.replace(/_/g, " ")}`).join(" · ") || c.send_error || ""}</div>
+              <div style={{ fontSize: 13, color: TC.ink }}>{c.campaign_name ? `${c.campaign_name} · ` : ""}{c.name} <span style={pill(c.stale_lock ? "rust" : c.status === "sent" ? "evergreen" : c.status === "paused" ? "ember" : "ember")}>{c.stale_lock ? "stuck: worker died mid-send" : c.status.replace(/_/g, " ")}</span></div>
+              <div style={{ ...TT.caption, color: TC.muted }}>{Object.entries(s).filter(([k]) => k !== "at").map(([k, n]) => `${n} ${k.replace(/_/g, " ")}`).join(" · ") || c.pause_reason || c.migration_note || c.send_error || ""}</div>
             </div>
-            {(left > 0 || c.stale_lock) && <button onClick={() => decide(c.id, async () => { const r = await retryFailed(c.id); return `Retried ${r.sent}; ${r.failed || 0} failed again.`; })} disabled={!!acting} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }}>Retry unfinished</button>}
+            {c.status === "paused" && <button onClick={() => decide(c.id, async () => { const r = await resumeEmail(c.id); return `Resumed: now ${r.email.status.replace(/_/g, " ")}.`; })} disabled={!!acting} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }}>Resume</button>}
+            {(left > 0 || c.stale_lock) && c.status !== "paused" && <button onClick={() => decide(c.id, async () => { const r = await retryFailed(c.id); return `Retried ${r.sent}; ${r.failed || 0} failed again.`; })} disabled={!!acting} style={{ ...btn("secondary"), padding: "2px 10px", fontSize: 12 }}>Retry unfinished</button>}
           </div>
         ); })}
       </div>

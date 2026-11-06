@@ -5,6 +5,8 @@ preview are evidence for those environments only.
 
 ## Before deploying PR 1A + 1B code
 1. Apply migration 012 (additive, reversible): `node scripts/migrate.js up --to 012_delivery`. Old code keeps working on it.
+   For PR 2 also 013: `node scripts/migrate.js up --to 013_campaign_emails` (additive, reversible; legacy one-send campaigns
+   become one email each, nothing is enqueued). Apply it before deploying the PR 2 code; the old code keeps working on it.
 2. Vercel env: `RESEND_API_KEY`, `RESEND_FROM` (a sender on a verified domain), `RESEND_WEBHOOK_SECRET` (the Svix secret of
    the Resend webhook pointing at `https://ff-tank.vercel.app/api/index?service=resend-webhook`), `CRON_SECRET` (already set;
    also signs the Gmail OAuth state), optional `STATE_SECRET`, and `NODEJS_HELPERS=0` for exact webhook signatures.
@@ -28,8 +30,16 @@ preview are evidence for those environments only.
       `unsubscribes` has the row, and a dry run of the campaign no longer counts them.
    d. Send a test to an address that bounces (Resend's `bounced@resend.dev`): the row ends `permanent_failure` /
       bounced and the address lands in `unsubscribes`.
-8. Rollback: `npx vercel promote <previous production deployment>`; database: `node scripts/migrate.js down --to 011_newsletter_builder`
-   only if the new tables must go (rows in `sequence_step_runs` and `email_events` are lost; nothing else changes).
+7b. Campaign workspace (PR 2), after deploy: Outreach → Campaigns → a campaign → New email. Audience opens on
+   "Campaign members" with eligible / left-out counts; "Everyone subscribed" selects nobody until confirmed. Message:
+   the builder autosaves ("Saved vN"). Review: Approve, then an edit in Message turns the status back to Draft with a
+   notice. Internal test send from Review to your own address (synthetic recipient; the unsubscribe link opens the
+   "Test link" page). Schedule one email for a few minutes ahead to two internal addresses picked by hand; the tick
+   sends it; Results shows one row per person with its outcome. Automation → Email delivery lists any email that
+   finished with failures or is paused.
+8. Rollback: `npx vercel promote <previous production deployment>`; database: `node scripts/migrate.js down --to 012_delivery`
+   drops the PR 2 tables (campaign emails, versions, lists and frozen audiences are lost; deliveries keep their campaign);
+   `down --to 011_newsletter_builder` also drops 012's (`sequence_step_runs`, `email_events`). Nothing else changes.
 
 ## Known limits to state plainly
 - Exact raw-byte webhook verification needs `NODEJS_HELPERS=0`; without it the handler verifies the re-serialised JSON and
