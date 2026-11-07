@@ -329,7 +329,7 @@ run either on its own. A person links every booking.
 - **Reply detection.** `replies.classify`: bounce (mailer-daemon / delivery status), auto (Auto-Submitted,
   Precedence, X-Autoreply, out-of-office subjects), else human. The read budget rotates across accounts, leftovers
   flow on; `oldest_unchecked` is reported. Replies are stamped with the contact, thread, account and account owner.
-- **Campaigns.** `campaign_sends.outcome` (queued, accepted, delivered, suppressed, retryable_failure,
+- **Campaigns** (per campaign email since PR 2, see below). `campaign_sends.outcome` (queued, accepted, delivered, suppressed, retryable_failure,
   permanent_failure, uncertain) is tracked apart from the engagement `status`; `attempts`, `attempt_log`,
   `next_attempt_at`, `idempotency_key` are kept per recipient. Each Resend batch carries an `Idempotency-Key`
   derived from its rows, so an interrupted or uncertain batch replays without duplicates. The campaign takes
@@ -346,6 +346,45 @@ run either on its own. A person links every booking.
   for sends that do not exist yet are kept and applied once the row appears (`reconcileEvents`, and the tick's
   `applyPendingEvents`). An unsubscribe write that fails answers "Not done yet" instead of claiming success.
 - **Tests.** `test/delivery.test.cjs` (in-memory PostgREST in `test/fakerest.cjs`, Gmail and Resend stubbed).
+
+## Campaign workspace (PR 2, migration 013)
+A campaign (`campaigns`: a trade show, a programme, a season) holds several emails (`campaign_emails`: invitation,
+reminder, recap, follow-up), each with its own audience rule, versioned content (`campaign_email_versions`, one row per
+save), an approval that freezes one version plus the resolved audience (`approved_version`, `audience_snapshot`), a
+schedule in a named time zone, and its deliveries (`campaign_sends.campaign_email_id`; one send per person per email,
+so one campaign reaches the same person with each email). Legacy one-send campaigns were migrated to one "Email 1" row
+each (`legacy`, `migration_note`); a campaign that was scheduled or mid-send arrived `paused`, never re-enqueued.
+- **Screens.** Outreach → Campaigns → a campaign → Emails → New email / open one: `src/components/CampaignWorkspace.jsx`
+  with the steps Audience · Message · Review · Results (Results once scheduled or sent). One primary action per step.
+- **Audience** (`audience` jsonb): mode `members` (default: eligible members of the campaign, a company member brings in
+  its contacts), `selection` (contact ids), `segment` (filters: lists, lifecycle, lead status, source, company kind,
+  vertical, industry, location, event type of open deals, open deals, touched/added within, owner, another campaign's
+  members) or `all_subscribers` (needs `confirmed: true`; opening an empty campaign never selects everyone).
+  `service=campaign-audience` (`lib/server/campaigns.cjs resolveAudience`) answers selected / eligible / left-out counts
+  with reasons and sample names: no_email, merged, unknown (no consent: an import never grants it), unsubscribed,
+  suppressed, duplicate address, recent_contact (`frequency_days`), excluded by hand (`exclude_ids`).
+- **Named lists.** `contact_lists` (kind list or segment) + `contact_list_members`; migration 013 turned every Monday
+  list name in `contacts.source_detail` into a list with its members.
+- **Message.** The block builder runs embedded (`NewsletterBuilder` props `embedded`, `onPersist`, `onTest`); saves go
+  through `src/lib/autosave.js` to `service=campaign-email` action `save` with the editor's `version`: one conditional
+  UPDATE, so a stale editor gets 409 `stale` and the banner offers Reload; edits typed during a save go out next. A save
+  after approval clears the approval and the schedule (`approval_cleared`). Tokens support fallbacks
+  (`{{first_name|there}}`); previews and tests use `/u/test`, a link that unsubscribes nobody.
+- **Review.** Checklist (audience, approved version, sender domain status via Resend `sender-status`, reply-to, postal
+  address, unsubscribe link, recent-contact limit, owner, internal test on this version, send time + zone), preview as
+  one of the eligible people, test send to internal addresses (synthetic recipient), Approve (freezes version +
+  audience, requires eligible > 0), Schedule / Send now (require approval on the latest version), Withdraw approval.
+- **Delivery.** `sendEmail` uses the frozen `audience_snapshot.contact_ids` only; consent, suppressions and the
+  recent-contact limit are re-checked before every batch (`dropNow`, outcome `suppressed` with the reason in
+  `attempt_log`); a retry re-uses the email's own rows, never the audience; `pause` stops at the next batch boundary
+  (`paused`, remaining rows `queued`), `resume` turns it into `finished_with_failures` for a retry. `runDue` sends
+  scheduled emails and retries unfinished ones on the tick; `worker-status` lists emails needing attention.
+- **Services.** `campaign-email` (actions create, save, approve, unapprove, schedule, unschedule, pause, resume,
+  duplicate, delete, sender-status), `campaign-audience`, `campaign-send` (`emailId`, `version`, `test`, `retry`, `?dry=1`).
+- **Tests.** `test/campaign-workspace.test.cjs` (acceptance: several emails to one person, empty campaign never selects
+  everyone, stale save blocks dispatch, edit after approval, unsubscribe after scheduling excluded at delivery, pause),
+  `test/autosave.test.mjs`, `test/email-render.test.mjs` (client-safe HTML on fixtures); `scripts/verify-pr2.mjs` drives
+  the workspace headless at 1440 and 390 px against the local preview (needs migration 013).
 
 ## Newsletter builder (CRM rebuild step 10, see CRM-PLAN.md)
 Outreach → Templates → New newsletter opens `src/components/NewsletterBuilder.jsx`; the model and the email-safe HTML

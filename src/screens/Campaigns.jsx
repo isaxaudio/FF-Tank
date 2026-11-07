@@ -3,11 +3,11 @@
 // points at its primary campaign. Lives as a tab under Prospecting until the Outreach area exists.
 import React, { useEffect, useState } from "react";
 import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
-import { Plus, X, Building2 } from "lucide-react";
-import { listCampaigns, createCampaign, updateCampaign, membersOf, addMember, setMemberStatus } from "../lib/campaigns.js";
+import { Plus, X, Building2, Mail, Copy, Trash2 } from "lucide-react";
+import { listCampaigns, createCampaign, updateCampaign, membersOf, addMember, setMemberStatus, emailsOf, createEmail, duplicateEmail, deleteEmail, EMAIL_STATUS_LABEL, EMAIL_STATUS_TONE, inZone } from "../lib/campaigns.js";
 import { CAMPAIGN_KINDS, CAMPAIGN_KIND_LABEL, CAMPAIGN_KIND_TONE, CAMPAIGN_STATUS, MEMBER_STATUS, LIFECYCLE_LABEL, LIFECYCLE_TONE, ago } from "../lib/status.js";
 import CompanyPicker from "../components/CompanyPicker.jsx";
-import CampaignEmail from "../components/CampaignEmail.jsx";
+import CampaignWorkspace from "../components/CampaignWorkspace.jsx";
 
 const money = n => (n == null || n === "" ? "—" : "$" + Math.round(Number(n)).toLocaleString());
 const day = d => (d ? String(d).slice(0, 10) : "—");
@@ -20,6 +20,7 @@ export default function Campaigns({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [workspace, setWorkspace] = useState(null);   // { emailId, step } while an email is open
   const [err, setErr] = useState("");
 
   async function load() {
@@ -30,6 +31,7 @@ export default function Campaigns({ onNavigate }) {
   useEffect(() => { Promise.resolve().then(load); }, []);
   const current = rows.find(r => r.id === selected);
 
+  if (workspace && current) return <CampaignWorkspace key={workspace.emailId} campaign={current} emailId={workspace.emailId} initialStep={workspace.step || null} onClose={() => { setWorkspace(null); load(); }} onChanged={load} />;
   return (
     <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
       <div style={{ flex: 1, overflowY: "auto", padding: "18px 24px 24px", minWidth: 0 }}>
@@ -66,7 +68,7 @@ export default function Campaigns({ onNavigate }) {
           {!loading && rows.length === 0 && <div style={{ padding: 16, color: TC.muted, fontSize: 13 }}>No campaigns yet. Add the next trade show here before it starts so every badge scan lands in it.</div>}
         </div>
       </div>
-      {current && <CampaignPanel key={current.id} campaign={current} onClose={() => setSelected(null)} onChanged={load} onNavigate={onNavigate} />}
+      {current && <CampaignPanel key={current.id} campaign={current} onClose={() => setSelected(null)} onChanged={load} onNavigate={onNavigate} onOpenEmail={(emailId, step = null) => setWorkspace({ emailId, step })} />}
     </div>
   );
 }
@@ -99,7 +101,7 @@ function NewCampaignForm({ onDone, onCancel }) {
   );
 }
 
-function CampaignPanel({ campaign: c, onClose, onChanged, onNavigate }) {
+function CampaignPanel({ campaign: c, onClose, onChanged, onNavigate, onOpenEmail }) {
   const [members, setMembers] = useState([]);
   const [adding, setAdding] = useState(false);
   const [pick, setPick] = useState(null);
@@ -146,7 +148,7 @@ function CampaignPanel({ campaign: c, onClose, onChanged, onNavigate }) {
         </div>
         {roi != null && <div style={{ ...TT.caption, color: TC.muted }}>Open pipeline minus cost: <b style={{ color: roi >= 0 ? TC.ink : TC.criticalInk, fontWeight: 450 }}>{money(roi)}</b>. Booked value is counted only for deals linked to a Flex project.</div>}
 
-        <CampaignEmail key={`${c.id}-${c.send_status}-${c.updated_at}`} campaign={c} onChanged={onChanged} onNavigate={onNavigate} />
+        <CampaignEmails campaign={c} onOpen={onOpenEmail} onChanged={onChanged} />
 
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -176,6 +178,42 @@ function CampaignPanel({ campaign: c, onClose, onChanged, onNavigate }) {
           {members.length > 200 && <div style={{ ...TT.caption, color: TC.muted, marginTop: 6 }}>Showing 200 of {members.length}.</div>}
         </div>
       </div>
+    </div>
+  );
+}
+
+// The emails inside a campaign: one row each with its status, schedule and delivery counts; open one in the
+// workspace, start a new one, duplicate or delete a draft.
+function CampaignEmails({ campaign: c, onOpen, onChanged }) {
+  const [emails, setEmails] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [err, setErr] = useState("");
+  async function load() { try { setEmails((await emailsOf(c.id)) || []); } catch (e) { setErr(e.message); } }
+  useEffect(() => { Promise.resolve().then(load); }, [c.id, c.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function run(kind, fn) { setBusy(kind); setErr(""); try { await fn(); await load(); onChanged?.(); } catch (e) { setErr(e.message); } setBusy(""); setConfirmDelete(null); }
+  const summary = e => { const s = e.send_summary || {}; return Object.entries(s).filter(([k]) => k !== "at").map(([k, n]) => `${n} ${k.replace(/_/g, " ")}`).join(" · "); };
+  return (
+    <div data-campaign-emails>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <div style={label}>Emails · {emails?.length ?? "…"}</div>
+        <button data-new-email disabled={busy !== ""} onClick={() => run("new", async () => { const e = await createEmail(c.id, null); onOpen(e.id, "audience"); })} style={{ ...btn("primary"), padding: "2px 10px", fontSize: 12, marginLeft: "auto" }}><Plus size={14} strokeWidth={1.5} /> New email</button>
+      </div>
+      {err && <div style={{ ...pill("rust"), marginBottom: 6 }}>{err}</div>}
+      {emails && emails.length === 0 && <div style={{ ...TT.caption, color: TC.muted }}>No emails yet. One campaign can hold an invitation, a reminder, a recap and a follow-up, each with its own audience and schedule.</div>}
+      {(emails || []).map(e => (
+        <div key={e.id} data-campaign-email={e.name} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${TC.lineSoft}`, flexWrap: "wrap" }}>
+          <Mail size={14} strokeWidth={1.5} style={{ color: TC.sub, flexShrink: 0 }} />
+          <button onClick={() => onOpen(e.id)} style={{ flex: 1, minWidth: 160, textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
+            <div style={{ ...TT.body2Med, color: TC.ink, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>{e.name} <span style={pill(EMAIL_STATUS_TONE[e.status] || "sand")}>{EMAIL_STATUS_LABEL[e.status] || e.status}</span>{e.approved_version != null && e.status !== "sent" ? <span style={pill("outline")}>v{e.approved_version} approved</span> : null}</div>
+            <div style={{ ...TT.caption, color: TC.muted }}>{e.status === "scheduled" ? `for ${inZone(e.scheduled_at, e.timezone)}` : e.sent_at ? `started ${ago(e.sent_at)}` : e.version ? `v${e.version} · edited ${ago(e.updated_at)}` : "nothing written yet"}{summary(e) ? ` · ${summary(e)}` : ""}{e.audience_snapshot?.count != null && !e.sent_at ? ` · ${e.audience_snapshot.count} people` : ""}</div>
+          </button>
+          <button title="Duplicate" disabled={busy !== ""} onClick={() => run("dup", () => duplicateEmail(e.id))} style={{ ...btn("ghost"), padding: "2px 6px" }}><Copy size={13} strokeWidth={1.5} /></button>
+          {["draft", "approved", "paused"].includes(e.status) && !e.sent_at && (confirmDelete === e.id ? (
+            <span data-confirm-delete style={{ display: "inline-flex", gap: 4, alignItems: "center", ...TT.caption, color: TC.ink }}>Delete?<button data-confirm-delete-yes onClick={() => run("del", () => deleteEmail(e.id))} style={{ ...btn("danger"), padding: "2px 8px", fontSize: 12 }}>Delete</button><button onClick={() => setConfirmDelete(null)} style={{ ...btn("tertiary"), padding: "2px 8px", fontSize: 12 }}>Keep</button></span>
+          ) : <button title="Delete draft" data-delete-email disabled={busy !== ""} onClick={() => setConfirmDelete(e.id)} style={{ ...btn("ghost"), padding: "2px 6px" }}><Trash2 size={13} strokeWidth={1.5} /></button>)}
+        </div>
+      ))}
     </div>
   );
 }
