@@ -14,10 +14,11 @@ export function createAutosave({ save, delay = 1200, version = null, onState = n
     if (!error || error.code !== 'stale') { error = null; schedule(); }
     emit();
   }
-  // Send what is pending now (or wait for the save in flight, then send what arrived meanwhile).
+  // Send what is pending now (or wait for the save in flight, then send what arrived meanwhile). A save that finishes
+  // may start the next one for the edits made during it, so keep waiting while anything is in flight.
   async function flush() {
     if (timer) { timers.clear(timer); timer = null; }
-    if (inFlight) { await inFlight; return pending ? flush() : state(); }
+    while (inFlight) await inFlight;
     if (!pending || (error && error.code === 'stale')) return state();
     const batch = pending; pending = null;
     inFlight = (async () => {

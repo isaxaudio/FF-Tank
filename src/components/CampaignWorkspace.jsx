@@ -367,14 +367,14 @@ function ReviewStep({ campaign, email, content, save, flush, reload, onChanged, 
 
   return (
     <div style={{ flex: 1, overflow: "auto", padding: phone ? 12 : 24 }}>
-      <div style={{ display: "grid", gridTemplateColumns: phone ? "1fr" : "minmax(0, 1fr) minmax(320px, 440px)", gap: 16, maxWidth: 1180 }}>
-        <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: phone ? "minmax(0, 1fr)" : "minmax(0, 1fr) minmax(320px, 440px)", gap: 16, maxWidth: 1180 }}>
+        <div style={{ display: "grid", gap: 12, alignContent: "start", minWidth: 0 }}>
           <div style={{ ...TT.h4, color: TC.ink }}>Review</div>
           <div data-review-checklist style={tile({ padding: 0 })}>
             {rows.map(([l, v, s, go]) => (
               <div key={l} data-review-row={l.toLowerCase().replace(/[^a-z]+/g, "-")} data-review-state={s} style={{ display: "flex", gap: 10, alignItems: "center", padding: "9px 14px", borderBottom: `1px solid ${TC.lineSoft}` }}>
                 {mark(s)}
-                <span style={{ ...TT.caption, color: TC.muted, width: 128, flexShrink: 0 }}>{l}</span>
+                <span style={{ ...TT.caption, color: TC.muted, width: phone ? 92 : 128, flexShrink: 0 }}>{l}</span>
                 <span style={{ ...TT.body2, color: TC.ink, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{v}</span>
                 {go && !live && <button onClick={go} style={{ ...btn("tertiary"), padding: "2px 8px", fontSize: 12 }}>Change</button>}
               </div>
@@ -390,7 +390,7 @@ function ReviewStep({ campaign, email, content, save, flush, reload, onChanged, 
               {!approved ? (
                 <>
                   <div style={{ ...TT.body2, color: TC.sub }}>{save.dirty || save.saving ? "Waiting for the last edit to save…" : save.error ? "Fix the save error above first." : aud && !aud.eligible ? "Nobody is eligible yet: change the audience." : !content?.subject || !content?.body ? "Write the message first." : `Approving freezes v${email.version} and today's ${aud?.eligible?.toLocaleString() || ""} eligible people. Any later edit asks for a new review.`}</div>
-                  <button data-approve disabled={!canApprove || busy !== ""} onClick={() => act("approve", async () => { const r = await approveEmail(email.id, email.version); return `Approved v${email.version} for ${r.audience.eligible.toLocaleString()} people.`; })} style={btn("primary")}>{busy === "approve" ? "Approving…" : `Approve v${email.version || 0}`}</button>
+                  <button data-approve disabled={!canApprove || busy !== ""} onClick={() => act("approve", async () => { const r = await approveEmail(email.id, email.version); setNotice(""); return `Approved v${email.version} for ${r.audience.eligible.toLocaleString()} people.`; })} style={btn("primary")}>{busy === "approve" ? "Approving…" : `Approve v${email.version || 0}`}</button>
                 </>
               ) : (
                 <>

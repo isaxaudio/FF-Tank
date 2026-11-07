@@ -64,3 +64,16 @@ test('flush sends immediately (leaving the editor), and does nothing when there 
   a.change({ name: 'Reminder' }); const s = await a.flush();
   assert.equal(saves.length, 1); assert.equal(timers.size(), 0); assert.equal(s.dirty, false); assert.equal(s.version, 1);
 });
+
+test('flush() called while a timer-started save is in flight resolves only after the edits made during that save are saved too', async () => {
+  const timers = fakeTimers(); const saves = []; const releases = [];
+  const a = createAutosave({ save: (patch, version) => new Promise(res => { saves.push({ patch, version }); releases.push(() => res({ version: version + 1 })); }), version: 1, timers, delay: 100 });
+  a.change({ audience: { mode: 'all_subscribers' } }); timers.tick(); await flushMicro();   // save 1 in flight
+  a.change({ audience: { mode: 'members' } });                                              // changed during the save
+  let settled = null; const p = a.flush().then(s => { settled = s; return s; });             // "Continue" pressed now
+  releases[0](); await flushMicro(); await flushMicro();
+  assert.equal(settled, null, 'flush must not resolve while the second save (members) is still in flight');
+  assert.equal(saves.length, 2); assert.deepEqual(saves[1].patch, { audience: { mode: 'members' } }); assert.equal(saves[1].version, 2);
+  releases[1](); const s = await p;
+  assert.equal(s.version, 3); assert.equal(s.dirty, false); assert.equal(s.saving, false);
+});

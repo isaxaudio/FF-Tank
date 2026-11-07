@@ -39,6 +39,13 @@ function test(row, { col, expr }) {
 }
 const matches = (row, filters) => filters.every(f => f.or ? f.or.some(x => test(row, x)) : test(row, f));
 
+// Tables whose columns are checked on writes (the real PostgREST answers PGRST204 for an unknown column); keep in step
+// with migrations/013_campaign_emails.up.sql.
+const COLUMNS = {
+  campaign_emails: 'id campaign_id name position status email_template_id subject preheader from_name from_email reply_to postal_address audience frequency_days version approved_version approved_at approved_by audience_snapshot scheduled_at timezone test_sent_at test_version sent_at send_error send_summary send_lock_until send_lock_by paused_at pause_reason legacy migration_note owner created_by created_at updated_at'.split(' '),
+  campaign_email_versions: 'id campaign_email_id version subject preheader body format design from_name from_email reply_to postal_address audience created_by created_at'.split(' '),
+};
+const unknownColumn = (t, b) => COLUMNS[t] ? Object.keys(b).find(k => !COLUMNS[t].includes(k)) : null;
 class FakeRest {
   constructor(tables = {}) { this.tables = {}; for (const [t, rows] of Object.entries(tables)) this.tables[t] = rows.map(r => ({ ...r })); this.log = []; this.rpc = {}; }
   table(t) { return (this.tables[t] ||= []); }
@@ -77,6 +84,7 @@ class FakeRest {
       const bodies = Array.isArray(init.body ? JSON.parse(init.body) : {}) ? JSON.parse(init.body) : [JSON.parse(init.body || '{}')];
       const out = [];
       for (const b of bodies) {
+        const bad = unknownColumn(t, b); if (bad) return { status: 400, json: { code: 'PGRST204', message: `Could not find the '${bad}' column of '${t}' in the schema cache` } };
         const key = q.onConflict || (t === 'activities' && b.external_id ? 'source,external_id' : t === 'unsubscribes' ? 'email' : t === 'email_events' ? 'provider,event_id' : t === 'sequence_step_runs' ? 'enrollment_id,position' : t === 'job_state' ? 'job' : t === 'gmail_accounts' ? 'email' : t === 'campaign_email_versions' ? 'campaign_email_id,version' : t === 'contact_list_members' ? 'list_id,contact_id' : t === 'contact_lists' ? 'name' : null);
         const dup = key ? this.table(t).find(r => key.split(',').every(k => String(r[k]).toLowerCase() === String(b[k]).toLowerCase())) : null;
         if (dup && /ignore-duplicates/.test(prefer)) continue;
@@ -88,6 +96,7 @@ class FakeRest {
     }
     if (method === 'PATCH') {
       const b = JSON.parse(init.body || '{}'); const hit = this.table(t).filter(r => matches(r, q.filters));
+      const bad = unknownColumn(t, b); if (bad) return { status: 400, json: { code: 'PGRST204', message: `Could not find the '${bad}' column of '${t}' in the schema cache` } };
       for (const r of hit) Object.assign(r, b);
       return { status: 200, json: /return=minimal/.test(prefer) ? null : hit.map(r => this.project(t, r, q.select)) };
     }

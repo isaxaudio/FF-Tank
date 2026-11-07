@@ -53,7 +53,7 @@ for (const c of contacts) await post('campaign_members', { campaign_id: campaign
 
 const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--no-first-run', '--window-size=1440,900'] });
 const page = await browser.newPage(); await page.setViewport({ width: 1440, height: 900 });
-page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 200)); });
+page.on('console', m => { if (m.type() === 'error' && !/status of 409/.test(m.text())) consoleErrors.push(m.text().slice(0, 200)); });   // the stale-save section provokes one 409 on purpose
 page.on('pageerror', e => consoleErrors.push('pageerror: ' + String(e).slice(0, 200)));
 page.on('response', r => { if (r.status() >= 500) consoleErrors.push(`HTTP ${r.status()} ${r.url().slice(0, 120)}`); });
 const shot = name => page.screenshot({ path: `${OUT}/${name}.png` });
@@ -67,8 +67,10 @@ const nav = async l => { await page.evaluate(lbl => { const it = [...document.qu
 const tab = async name => { await page.evaluate(t => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.trim() === t && e.style.borderBottom); b && b.click(); }, name); await sleep(600); };
 const click = sel => page.evaluate(s => { const el = document.querySelector(s); if (!el) return false; el.click(); return true; }, sel);
 const clickText = (sel, t) => page.evaluate((s, tx) => { const el = [...document.querySelectorAll(s)].find(e => e.textContent.trim().startsWith(tx)); if (!el) return false; el.click(); return true; }, sel, t);
-const setInput = async (sel, value) => { await page.focus(sel); await page.keyboard.down('Meta'); await page.keyboard.press('a'); await page.keyboard.up('Meta'); await page.keyboard.press('Backspace'); if (value) await page.type(sel, value); };
-const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+const setInput = async (sel, value) => { await page.focus(sel); await page.$eval(sel, el => el.select()); await page.keyboard.press('Backspace'); if (value) await page.type(sel, value); };   // (Meta+A does not select in headless Chrome)
+// Widest overflow anywhere: the document, plus any element whose right edge passes the viewport (a scrollable step
+// container hides that from the document's scrollWidth).
+const overflow = () => page.evaluate(() => { const vw = document.documentElement.clientWidth; let o = document.documentElement.scrollWidth - vw; for (const el of document.querySelectorAll('[data-workspace] *')) { const r = el.getBoundingClientRect(); if (r.width && r.right - vw > o) o = Math.round(r.right - vw); } return o; });
 const emailRow = async () => (await get(`campaign_emails?campaign_id=eq.${campaign.id}&select=*&order=position.asc`))[0] || null;
 
 try {
@@ -113,6 +115,7 @@ try {
   check('the block builder opens embedded (no back button of its own)', await waitSel('[data-builder]') && !(await page.$('[data-builder-back]')));
   await setInput('[data-from-email]', 'news@example.test'); await setInput('[data-reply-to]', login.email); await setInput('[data-postal]', '123 Main St, Salt Lake City, UT');
   await setInput('[data-builder-name]', `${TAG} Invitation`);
+  await click('[data-panel="email"]'); await waitSel('[data-builder-subject]'); await setInput('[data-builder-subject]', `See you at {{event}}, {{first_name|there}}`);
   check('autosave: the editor reports saved', await waitFor(async () => (await attr('[data-save-state]', 'data-save-state')) === 'saved', 12000));
   const before = (await emailRow()).version;
   await setInput('[data-builder-name]', `${TAG} Invite`); await sleep(1300);   // just past the builder's own debounce: a save is in flight
@@ -126,7 +129,7 @@ try {
 
   // ---- 7. Review: checklist, approve, edit after approval, schedule, test send
   check('the checklist shows audience, message, sender, reply-to, postal address, unsubscribe, limit, owner, test, send time', await waitSel('[data-review-checklist]') && (await page.$$('[data-review-row]')).length === 10);
-  check('audience row ok, internal test row warns, send time warns', (await attr('[data-review-row="audience"]', 'data-review-state')) === 'ok' && (await attr('[data-review-row="internal-test"]', 'data-review-state')) === 'warn' && (await attr('[data-review-row="send-time"]', 'data-review-state')) === 'warn');
+  check('audience row ok, internal test row warns, send time warns', await waitFor(async () => (await attr('[data-review-row="audience"]', 'data-review-state')) === 'ok', 15000) && (await attr('[data-review-row="internal-test"]', 'data-review-state')) === 'warn' && (await attr('[data-review-row="send-time"]', 'data-review-state')) === 'warn');
   check('the preview renders the recipient and the test unsubscribe link', await waitFor(async () => (await page.evaluate(() => document.querySelector('[data-preview]')?.getAttribute('srcdoc') || '')).includes('/u/test')) && (await text('[data-preview-as]')).includes(`${TAG} Ada`));
   await shot('03-review-desktop');
   check('Approve is enabled once everything is saved', await waitFor(async () => !(await page.evaluate(() => document.querySelector('[data-approve]')?.disabled ?? true))));
@@ -143,7 +146,7 @@ try {
   await waitFor(async () => !(await page.evaluate(() => document.querySelector('[data-approve]')?.disabled ?? true)));
   await click('[data-approve]'); await waitText('Ready', 8000, '[data-email-status]');
   const at = new Date(Date.now() + 3600e3); const p = n => String(n).padStart(2, '0');
-  await page.evaluate(v => { const el = document.querySelector('[data-schedule-at]'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }, `${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())}T${p(at.getHours())}:${p(at.getMinutes())}`);
+  await page.evaluate(v => { const el = document.querySelector('[data-schedule-at]'); if (!el) return false; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }, `${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())}T${p(at.getHours())}:${p(at.getMinutes())}`);
   await click('[data-schedule]');
   check('scheduling stores the instant and the zone; Results opens', await waitFor(async () => { const e = await emailRow(); return e.status === 'scheduled' && !!e.scheduled_at && e.timezone === 'America/Denver'; }) && await waitFor(async () => !(await page.evaluate(() => document.querySelector('[data-step-tab="results"]')?.disabled))));
   await click('[data-step-tab="results"]'); await sleep(400);
@@ -181,6 +184,7 @@ try {
   check('phone: the workspace opens', await waitSel('[data-workspace]'));
   for (const s of ['audience', 'message', 'review']) {
     await click(`[data-step-tab="${s}"]`); await sleep(700);
+    if (s === 'review') await waitFor(async () => (await attr('[data-review-row="audience"]', 'data-review-state')) === 'ok', 15000);
     const ox = await overflow();
     check(`phone: ${s} step fits 390px without horizontal scroll`, ox <= 2, `overflow ${ox}px`);
     await shot(`05-${s}-phone`);
