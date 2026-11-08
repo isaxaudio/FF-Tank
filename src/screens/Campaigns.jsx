@@ -15,12 +15,14 @@ const label = { ...TT.label, marginBottom: 6, display: "block" };
 const th = { ...TT.tableHead, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${TC.line}`, background: TC.bg };
 const td = { fontSize: 13, lineHeight: "20px", color: TC.ink, padding: "9px 10px", borderBottom: `1px solid ${TC.lineSoft}`, verticalAlign: "top" };
 
-export default function Campaigns({ onNavigate }) {
+export default function Campaigns({ onNavigate, initialCampaignId = null, initialEmailId = null, initialStep = null }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [workspace, setWorkspace] = useState(null);   // { emailId, step } while an email is open
+  const [selected, setSelected] = useState(initialCampaignId);
+  const [workspace, setWorkspace] = useState(initialEmailId ? { emailId: initialEmailId, step: initialStep } : null);   // { emailId, step } while an email is open
+  // The URL names the open campaign and email (/outreach/campaigns/<id>/emails/<id>?step=), so links can be shared.
+  const go = (campaignId, emailId = null, step = null) => onNavigate?.("outreach", { tab: "campaigns", ...(campaignId ? { campaignId } : {}), ...(emailId ? { emailId } : {}), ...(step ? { step } : {}) });
   const [err, setErr] = useState("");
 
   async function load() {
@@ -31,7 +33,7 @@ export default function Campaigns({ onNavigate }) {
   useEffect(() => { Promise.resolve().then(load); }, []);
   const current = rows.find(r => r.id === selected);
 
-  if (workspace && current) return <CampaignWorkspace key={workspace.emailId} campaign={current} emailId={workspace.emailId} initialStep={workspace.step || null} onClose={() => { setWorkspace(null); load(); }} onChanged={load} />;
+  if (workspace && current) return <CampaignWorkspace key={workspace.emailId} campaign={current} emailId={workspace.emailId} initialStep={workspace.step || null} onClose={() => { setWorkspace(null); go(current.id); load(); }} onChanged={load} />;
   return (
     <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
       <div style={{ flex: 1, overflowY: "auto", padding: "18px 24px 24px", minWidth: 0 }}>
@@ -49,7 +51,7 @@ export default function Campaigns({ onNavigate }) {
             <thead><tr><th style={th}>Campaign</th><th style={th}>Kind</th><th style={th}>Status</th><th style={th}>Dates</th><th style={th}>Cost</th><th style={th}>Members</th><th style={th}>Responded</th><th style={th}>Deals</th><th style={th}>Booked</th><th style={th}>Open value</th></tr></thead>
             <tbody>
               {rows.map(c => (
-                <tr key={c.id} onClick={() => setSelected(c.id)} style={{ cursor: "pointer", background: selected === c.id ? TC.selected : "transparent" }}>
+                <tr key={c.id} data-campaign-row={c.id} onClick={() => { setSelected(c.id); go(c.id); }} style={{ cursor: "pointer", background: selected === c.id ? TC.selected : "transparent" }}>
                   <td style={{ ...td, fontWeight: 450 }}>{c.name}{c.location ? <div style={{ ...TT.meta, color: TC.muted, fontWeight: 400 }}>{c.location}</div> : null}</td>
                   <td style={td}><span style={pill(CAMPAIGN_KIND_TONE[c.kind] || "sand")}>{CAMPAIGN_KIND_LABEL[c.kind] || c.kind}</span></td>
                   <td style={td}><span style={pill(c.status === "active" ? "evergreen" : c.status === "planned" ? "ocean" : "outline")}>{c.status}</span></td>
@@ -68,7 +70,7 @@ export default function Campaigns({ onNavigate }) {
           {!loading && rows.length === 0 && <div style={{ padding: 16, color: TC.muted, fontSize: 13 }}>No campaigns yet. Add the next trade show here before it starts so every badge scan lands in it.</div>}
         </div>
       </div>
-      {current && <CampaignPanel key={current.id} campaign={current} onClose={() => setSelected(null)} onChanged={load} onNavigate={onNavigate} onOpenEmail={(emailId, step = null) => setWorkspace({ emailId, step })} />}
+      {current && <CampaignPanel key={current.id} campaign={current} onClose={() => { setSelected(null); go(null); }} onChanged={load} onNavigate={onNavigate} onOpenEmail={(emailId, step = null) => { setWorkspace({ emailId, step }); go(current.id, emailId, step); }} />}
     </div>
   );
 }

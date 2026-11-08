@@ -34,3 +34,13 @@ export async function bulkAddToCampaign(campaign_id, rows, field = "company_id")
   }
   return { added: created.length, skipped: rows.length - created.length, undo: async () => { for (const id of created) await db.delete("campaign_members", id); } };
 }
+
+// Patch every row that matches the list's conditions (the "all matching" selection), not just the visible page.
+// There is no undo for this one: the previous values were never loaded. The caller passes the PostgREST filter
+// params the list is using; with no condition at all the patch is still bounded to rows with an id.
+export async function bulkPatchWhere(table, filters, patch) {
+  const where = { ...(filters || {}) };
+  if (!Object.keys(where).length) where.id = "not.is.null";
+  await db.updateWhere(table, where, { ...patch, updated_at: new Date().toISOString() });
+  return null;
+}

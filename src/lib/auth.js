@@ -1,10 +1,11 @@
 // src/lib/auth.js — Supabase Auth (GoTrue) over plain fetch. No supabase-js, by project convention.
 // Session lives in localStorage under "ffSession". Access tokens are refreshed on demand.
-const URL_ = (import.meta.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
-const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const ENV = import.meta.env || {};   // undefined under node (tests import these modules)
+const URL_ = (ENV.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+const ANON = ENV.VITE_SUPABASE_ANON_KEY || "";
 const KEY = "ffSession";
 
-function read() { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; } }
+function read() { try { return typeof localStorage === "undefined" ? null : JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; } }
 function write(s) { if (s) localStorage.setItem(KEY, JSON.stringify(s)); else localStorage.removeItem(KEY); }
 
 async function gotrue(path, body, token, method = "POST") {

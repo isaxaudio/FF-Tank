@@ -13,6 +13,8 @@ import Deals from "./screens/Deals.jsx";
 import Reports from "./screens/Reports.jsx";
 import Automation from "./screens/Automation.jsx";
 import CommandBar from "./components/CommandBar.jsx";
+import { currentRoute, navigate as routeTo, onRouteChange, currentSearch } from "./lib/router.js";
+import { loadSettings } from "./lib/settings.js";
 import { inputStyle, btn } from "./tokens.js";
 import { Home as IcHome, Building2, Users, Send, Bot, Settings as IcSettings, Kanban, PieChart, LogOut, Search as IcSearch } from "lucide-react";
 const FONT = TF.sans;
@@ -1440,8 +1442,11 @@ function PasswordCard() {
 }
 
 function FFTank({ onSignOut }) {
-  const [activeId, setActiveId] = useState("today");
-  const [navParams, setNavParams] = useState({});
+  // The URL is the source of truth for the screen and the open record (src/lib/router.js); Back and Forward
+  // restore it, a shared link opens it, and the list screens keep their filters in its query string.
+  const [route, setRoute] = useState(() => currentRoute());
+  const activeId = route.screen, navParams = route.params;
+  useEffect(() => onRouteChange(setRoute), []);
   const [showSettings, setShowSettings] = useState(false);
   const [senders, setSenders] = useState(null);
   useEffect(() => { const open = () => setShowSettings(true); window.addEventListener("ff:open-settings", open); return () => window.removeEventListener("ff:open-settings", open); }, []);
@@ -1453,7 +1458,10 @@ function FFTank({ onSignOut }) {
   const navTo = (id, params = {}) => {
     const alias = NAV_ALIAS[id];
     if (alias) { id = alias[0]; params = { ...(alias[1] || {}), ...params }; }
-    setNavParams(params); setActiveId(id);
+    // Opening a record from a list keeps the list's query so Back returns to the same filtered page.
+    const keepSearch = id === route.screen && (params.dealId || params.contactId || params.companyId || params.campaignId || Object.keys(params).length === 0) ? currentSearch() : "";
+    routeTo(id, params, keepSearch);
+    setRoute({ screen: id, params, search: keepSearch });
   };
   const setSetting = (key, value) => { setSettings(s => ({ ...s, [key]: value })); localStorage.setItem(key, value); };
   const { apolloKey, flexApiKey } = settings;
@@ -1478,6 +1486,11 @@ function FFTank({ onSignOut }) {
           input, select, textarea { font-size: 16px !important; }
         }
         .ff-pulse { animation: ffpulse 2s ease-in-out infinite; }
+        .ff-linkbtn { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+        .ff-name.ff-linkbtn:hover { text-decoration: underline; }
+        :focus-visible { outline: 2px solid ${TC.action}; outline-offset: 2px; border-radius: 4px; }
+        button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 2px solid ${TC.action}; outline-offset: 1px; }
+        @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
         .ff-inline:hover { background: ${TC.hover}; }
         .ff-inline:hover .ff-inline-pen { opacity: 1 !important; }
         .ff-row:hover td { background: ${TC.hover} !important; }
@@ -1551,14 +1564,14 @@ function FFTank({ onSignOut }) {
             </div>
           </div>
           {NAV.map(item => { const on = activeId === item.id; const Icon = item.icon; const badge = item.id === "prospecting" ? scoutSignalCount : null; return (
-            <div key={item.id} onClick={() => navTo(item.id)}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 1, background: on ? TC.navSelected : "transparent", color: on ? TC.ink : TC.sub, transition: "background 120ms ease" }}
+            <a key={item.id} href={`/${item.id}`} data-nav={item.id} aria-current={on ? "page" : undefined} onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); navTo(item.id); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 1, background: on ? TC.navSelected : "transparent", color: on ? TC.ink : TC.sub, transition: "background 120ms ease", textDecoration: "none" }}
               onMouseEnter={e => { if (!on) e.currentTarget.style.background = TC.navHover; }}
               onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
               <Icon size={16} strokeWidth={1.5} style={{ flexShrink: 0, color: on ? TC.ink : TC.sub }} />
               <span style={{ flex: 1, fontSize: 13, lineHeight: "20px", fontWeight: on ? 450 : 400 }}>{item.label}</span>
               {badge ? <span style={{ fontSize: 12, color: TC.muted }}>{badge > 999 ? `${(badge / 1000).toFixed(1)}k` : badge}</span> : null}
-            </div>
+            </a>
           ); })}
           <div onClick={() => navTo("automation")} style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, cursor: "pointer", color: activeId === "automation" ? TC.ink : TC.sub, background: activeId === "automation" ? TC.navSelected : "transparent" }}>
             <Bot size={16} strokeWidth={1.5} /><span style={{ fontSize: 13, lineHeight: "20px" }}>Automation</span>
@@ -1573,9 +1586,9 @@ function FFTank({ onSignOut }) {
           ) : activeId === "companies" ? (
             <Companies key={navParams.review ? "review" : navParams.companyId || (navParams.new ? "new" : "list")} initialReview={!!navParams.review} initialCompanyId={navParams.companyId || null} initialNew={!!navParams.new} onNavigate={navTo} />
           ) : activeId === "outreach" ? (
-            <Prospecting key={`${navParams.tab || "handoff"}-${navParams.templateId || navParams.new || ""}`} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView }} db={db} legacyProps={{ sequenceId: navParams.sequenceId || null, templateId: navParams.templateId || null, newTemplate: navParams.new || null }} onNavigate={navTo} />
+            <Prospecting key={`${navParams.tab || "handoff"}-${navParams.templateId || navParams.new || ""}-${navParams.campaignId || ""}-${navParams.emailId || ""}`} initialTab={navParams.tab || "handoff"} views={{ Handoff: LeadHandoffView }} db={db} legacyProps={{ sequenceId: navParams.sequenceId || null, templateId: navParams.templateId || null, newTemplate: navParams.new || null, campaignId: navParams.campaignId || null, emailId: navParams.emailId || null, step: navParams.step || null }} onNavigate={navTo} />
           ) : activeId === "deals" ? (
-            <Deals key={navParams.review ? "review" : navParams.dealId || (navParams.new ? "new" : "all")} initialDealId={navParams.dealId || null} initialNew={!!navParams.new} initialReview={!!navParams.review} onNavigate={navTo} />
+            <Deals key={navParams.review ? "review" : navParams.rebooking ? "rebooking" : navParams.dealId || (navParams.new ? "new" : "all")} initialDealId={navParams.dealId || null} initialNew={!!navParams.new} initialReview={!!navParams.review} initialRebooking={!!navParams.rebooking} onNavigate={navTo} />
           ) : activeId === "reports" ? (
             <Reports views={{ Flex: FlexView }} db={db} legacyProps={{ flexApiKey, apolloKey }} onNavigate={navTo} />
           ) : activeId === "automation" ? (
@@ -1588,9 +1601,9 @@ function FFTank({ onSignOut }) {
 
       <div className="ff-tab-bar" style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 56, background: TC.card, borderTop: `1px solid ${TC.line}`, zIndex: 50, alignItems: "center", justifyContent: "space-around", padding: "0 4px" }}>
         {NAV.map(item => { const Icon = item.icon; const on = activeId === item.id; return (
-          <div key={item.id} onClick={() => navTo(item.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 10px", borderRadius: 8, cursor: "pointer", color: on ? TC.ink : TC.muted, background: on ? TC.navSelected : "transparent" }}>
+          <a key={item.id} href={`/${item.id}`} data-tab={item.id} aria-current={on ? "page" : undefined} onClick={e => { e.preventDefault(); navTo(item.id); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 10px", borderRadius: 8, cursor: "pointer", color: on ? TC.ink : TC.muted, background: on ? TC.navSelected : "transparent", textDecoration: "none" }}>
             <Icon size={18} strokeWidth={1.5} /><span style={{ fontSize: 10, fontWeight: on ? 450 : 400 }}>{item.label}</span>
-          </div>
+          </a>
         ); })}
       </div>
     </div>
@@ -1602,6 +1615,7 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
     auth.token();
+    loadSettings();   // the business time zone and rebooking lead times (defaults until migration 014)
     const t = setInterval(() => auth.token(), 10 * 60 * 1000);
     // Sequences: this browser's Gmail token is registered for the scheduler, and an open tab ticks the
     // scheduler at most every 15 minutes so steps go out even when no cron is running.

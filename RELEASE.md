@@ -7,6 +7,10 @@ preview are evidence for those environments only.
 1. Apply migration 012 (additive, reversible): `node scripts/migrate.js up --to 012_delivery`. Old code keeps working on it.
    For PR 2 also 013: `node scripts/migrate.js up --to 013_campaign_emails` (additive, reversible; legacy one-send campaigns
    become one email each, nothing is enqueued). Apply it before deploying the PR 2 code; the old code keeps working on it.
+   For PR 3 also 014: `node scripts/migrate.js up --to 014_sales_ux` (additive, reversible; deal columns, deal_productions,
+   deal_series, saved_views, rebooking_reviews, app_settings; existing Flex-linked deals get one production each). Apply it
+   BEFORE promoting the PR 3 code: the Deals screen reads `deal_productions` and `deal_series`, so the PR 3 build fails
+   on a database without 014. The PR 2 code keeps working on 014.
 2. Vercel env: `RESEND_API_KEY`, `RESEND_FROM` (a sender on a verified domain), `RESEND_WEBHOOK_SECRET` (the Svix secret of
    the Resend webhook pointing at `https://ff-tank.vercel.app/api/index?service=resend-webhook`), `CRON_SECRET` (already set;
    also signs the Gmail OAuth state), optional `STATE_SECRET`, and `NODEJS_HELPERS=0` for exact webhook signatures.
@@ -37,7 +41,16 @@ preview are evidence for those environments only.
    "Test link" page). Schedule one email for a few minutes ahead to two internal addresses picked by hand; the tick
    sends it; Results shows one row per person with its outcome. Automation → Email delivery lists any email that
    finished with failures or is paused.
-8. Rollback: `npx vercel promote <previous production deployment>`; database: `node scripts/migrate.js down --to 012_delivery`
+7c. Sales screens (PR 3), after deploy, the AE story: open a deal link on a phone (`/deals/<id>`): the header shows the
+   event date and venue apart from the expected close and decision deadline, the buyer, the owner, the next action and
+   the value; Call → log a call; Task → add the next step; Back returns to the list with the same filters. Deals →
+   Forecast: a deal with a January close and a May event counts in January and sits on May's production calendar.
+   Today: Mine / Unassigned / Everyone show different work; a reply stays until an email goes out in its thread or
+   Handled is pressed. Deals → Rebooking: recommendations cite their reasons; Assign records who owns it. Lists: sort
+   a column, select a row, then "Select all N matching"; a saved view appears for everyone when marked Shared.
+8. Rollback: `npx vercel promote <previous production deployment>`; database: `node scripts/migrate.js down --to 013_campaign_emails`
+   drops the PR 3 tables and columns (saved views, productions, series, rebooking decisions and the new deal dates are lost);
+   `down --to 012_delivery`
    drops the PR 2 tables (campaign emails, versions, lists and frozen audiences are lost; deliveries keep their campaign);
    `down --to 011_newsletter_builder` also drops 012's (`sequence_step_runs`, `email_events`). Nothing else changes.
 

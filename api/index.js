@@ -6,6 +6,7 @@ const campaigns = require('../lib/server/campaigns.cjs');
 const replies = require('../lib/server/replies.cjs');
 const flexjobs = require('../lib/server/flexjobs.cjs');
 const worker = require('../lib/server/worker.cjs');
+const sales = require('../lib/server/sales.cjs');
 const { wrap, signedBody } = require('../lib/server/http.cjs');
 
 // ─── Anthropic shared headers ─────────────────────────────────────────────────
@@ -111,7 +112,7 @@ const logRun = (handler, provider, model, inT, outT, durationMs, success) => {
 const PUBLIC_SERVICES = new Set(['gmail-auth', 'resend-webhook', 'unsubscribe']);
 const SERVICES = ['apollo', 'tavily', 'supabase', 'qualify', 'flex-analyze', 'flex-sync', 'flex-intel', 'flex-lookalike', 'lookalike-engine',
   'gmail-draft', 'gmail-send', 'gmail-auth', 'gmail-connect', 'gmail-accounts', 'sequence-run', 'reply-check', 'flex-candidates',
-  'campaign-send', 'campaign-audience', 'campaign-email', 'template-test', 'resend-webhook', 'unsubscribe', 'worker-status', 'worker-recover', 'send-lead', 'enrich-lead', 'vps',
+  'campaign-send', 'campaign-audience', 'campaign-email', 'template-test', 'today-feed', 'rebooking', 'app-settings', 'resend-webhook', 'unsubscribe', 'worker-status', 'worker-recover', 'send-lead', 'enrich-lead', 'vps',
   'sales-notes', 'apollo-company', 'apollo-person', 'flex-probe', 'exa', 'firecrawl', 'draft-outreach'];
 
 module.exports = wrap(async (req, res) => {
@@ -142,6 +143,9 @@ module.exports = wrap(async (req, res) => {
       case 'campaign-send':     return await handleCampaignSend(req, res);
       case 'campaign-audience': return await handleCampaignAudience(req, res);
       case 'campaign-email':    return await handleCampaignEmail(req, res);
+      case 'today-feed':        return await handleTodayFeed(req, res);
+      case 'rebooking':         return await handleRebooking(req, res);
+      case 'app-settings':      return await handleAppSettings(req, res);
       case 'template-test':     return await handleTemplateTest(req, res);
       case 'resend-webhook':    return await handleResendWebhook(req, res);
       case 'unsubscribe':       return await handleUnsubscribe(req, res);
@@ -1425,6 +1429,37 @@ async function handleCampaignAudience(req, res) {
     const out = await campaigns.resolveAudience({ campaignId: req.body?.campaignId || null, audience: req.body?.audience || { mode: 'members' }, frequencyDays: req.body?.frequencyDays || 0, excludeEmailId: req.body?.emailId || null });
     return res.json(out);
   } catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code || null }); }
+}
+// The day's work for one person (PR 3): replies waiting, overdue promises, upcoming decisions. The owner scope is
+// applied in the queries, before any limit. Marking a reply handled is the explicit resolution.
+async function handleTodayFeed(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireUser(req, res))) return;
+  const b = req.body || {}; const me = userEmail(req);
+  try {
+    if (b.action === 'handle-reply') return res.json({ activity: await sales.handleReply({ activityId: b.activityId, actor: me, note: b.note || null }) });
+    const scope = ['mine', 'unassigned', 'everyone'].includes(b.scope) ? b.scope : 'mine';
+    return res.json(await sales.todayFeed({ me, scope, horizonDays: Math.min(60, Math.max(1, Number(b.horizonDays) || 14)) }));
+  } catch (e) { return res.status(e.status || 500).json({ error: e.message }); }
+}
+// The rebooking review queue (PR 3): recommendations with their citations, and the decisions a person records.
+async function handleRebooking(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireUser(req, res))) return;
+  const b = req.body || {}; const me = userEmail(req);
+  try {
+    if (!b.action || b.action === 'list') return res.json(await sales.rebookingList({}));
+    return res.json({ review: await sales.rebookingDecide({ action: b.action, rec: b.rec || {}, actor: me, assigned_to: b.assigned_to || null, due_date: b.due_date || null, note: b.note || null, snooze_until: b.snooze_until || null, deal_id: b.deal_id || null }) });
+  } catch (e) { return res.status(e.status || 500).json({ error: e.message }); }
+}
+async function handleAppSettings(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await requireUser(req, res))) return;
+  const b = req.body || {}; const me = userEmail(req);
+  try {
+    if (b.action === 'save') return res.json(await sales.saveSettings({ key: b.key, value: b.value, actor: me }));
+    return res.json(await sales.settings());
+  } catch (e) { return res.status(e.status || 500).json({ error: e.message }); }
 }
 // Resend → FF Tank. Signed by Svix over the exact request bytes: with NODEJS_HELPERS=0 (lib/server/http.cjs)
 // those bytes are what is verified; with Vercel's helpers on, the parsed body re-serialised is the best

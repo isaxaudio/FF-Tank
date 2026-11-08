@@ -23,7 +23,7 @@ export default function Prospecting({ initialTab = "handoff", views = {}, db: le
         <div style={{ ...TT.h4, color: TC.ink, paddingBottom: 12 }}>Outreach</div>
         <div style={{ display: "flex", gap: 2 }}>
           {TABS.map(([id, l]) => (
-            <button key={id} onClick={() => setTab(id)} style={{ background: "none", border: "none", borderBottom: `2px solid ${tab === id ? TC.ink : "transparent"}`, padding: "6px 10px 12px", fontSize: 13, fontWeight: tab === id ? 450 : 400, color: tab === id ? TC.ink : TC.sub, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
+            <button type="button" key={id} data-outreach-tab={id} aria-selected={tab === id} role="tab" onClick={() => { setTab(id); onNavigate?.("outreach", { tab: id }); }} style={{ background: "none", border: "none", borderBottom: `2px solid ${tab === id ? TC.ink : "transparent"}`, padding: "6px 10px 12px", fontSize: 13, fontWeight: tab === id ? 450 : 400, color: tab === id ? TC.ink : TC.sub, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
           ))}
         </div>
       </div>
@@ -31,7 +31,7 @@ export default function Prospecting({ initialTab = "handoff", views = {}, db: le
         {tab === "handoff" && Handoff && <Handoff db={legacyDb} />}
         {tab === "signals" && <SignalsTable onNavigate={onNavigate} legacyProps={legacyProps} />}
         {tab === "sequences" && <Sequences onNavigate={onNavigate} initialId={legacyProps.sequenceId || null} />}
-        {tab === "campaigns" && <Campaigns onNavigate={onNavigate} />}
+        {tab === "campaigns" && <Campaigns onNavigate={onNavigate} initialCampaignId={legacyProps.campaignId || null} initialEmailId={legacyProps.emailId || null} initialStep={legacyProps.step || null} />}
         {tab === "templates" && <Templates initialTemplateId={legacyProps.templateId || null} initialNew={legacyProps.newTemplate || null} />}
       </div>
     </div>

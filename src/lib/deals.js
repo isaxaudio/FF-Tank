@@ -5,6 +5,7 @@
 import { db } from "./db.js";
 import { auth } from "./auth.js";
 import { logActivity } from "./activities.js";
+import { today as todayIn } from "./time.js";
 
 export const STAGES = ["prospect", "contacted", "qualified", "proposal", "negotiation", "booked", "lost"];
 export const STAGE_LABEL = { prospect: "Prospect", contacted: "Contacted", qualified: "Qualified", proposal: "Proposal", negotiation: "Negotiation", booked: "Booked", lost: "Lost" };
@@ -29,8 +30,8 @@ export const weighted = d => (Number(d.amount_estimate || 0) * (d.probability ??
 
 const me = () => auth.user()?.email || "user";
 
-export async function createDeal({ company_id, name, stage = "prospect", owner, amount_estimate, expected_event_date, event_type, next_action, next_action_due, source, source_detail, opportunity_id, signal_id, primary_contact_id, primary_campaign_id, deal_type, notes }) {
-  const rows = await db.insert("deals", { company_id, name, stage, owner: owner || me(), amount_estimate: amount_estimate ?? null, expected_event_date: expected_event_date || null, event_type: event_type || null, next_action: next_action || null, next_action_due: next_action_due || null, source: source || null, source_detail: source_detail || null, opportunity_id: opportunity_id || null, signal_id: signal_id || null, primary_contact_id: primary_contact_id || null, primary_campaign_id: primary_campaign_id || null, deal_type: deal_type || "new", notes: notes || null, created_by: me() });
+export async function createDeal({ company_id, name, stage = "prospect", owner, amount_estimate, expected_event_date, expected_close_date, decision_deadline, venue, city, service_scope, event_type, next_action, next_action_due, source, source_detail, opportunity_id, signal_id, primary_contact_id, primary_campaign_id, deal_type, notes, series_id }) {
+  const rows = await db.insert("deals", { company_id, name, stage, owner: owner || me(), amount_estimate: amount_estimate ?? null, expected_event_date: expected_event_date || null, expected_close_date: expected_close_date || null, decision_deadline: decision_deadline || null, venue: venue || null, city: city || null, service_scope: service_scope || null, event_type: event_type || null, next_action: next_action || null, next_action_due: next_action_due || null, source: source || null, source_detail: source_detail || null, opportunity_id: opportunity_id || null, signal_id: signal_id || null, primary_contact_id: primary_contact_id || null, primary_campaign_id: primary_campaign_id || null, deal_type: deal_type || "new", notes: notes || null, series_id: series_id || null, created_by: me() });
   const deal = rows[0];
   await db.insert("deal_stage_history", { deal_id: deal.id, from_stage: null, to_stage: stage, changed_by: me(), note: "created" });
   await logActivity({ type: opportunity_id || signal_id ? "promoted" : "stage_change", company_id, deal_id: deal.id, opportunity_id: opportunity_id || null, contact_id: primary_contact_id || null, subject: opportunity_id || signal_id ? `Promoted to deal: ${name}` : `Deal created: ${name}`, body: [source, source_detail].filter(Boolean).join(" · ") || null, metadata: { stage } });
@@ -117,7 +118,7 @@ export async function flexCandidatesFor(deal) {
 
 // Next-activity state for a deal, as Pipedrive shows it: the earliest open task or the next action
 // due, in four states. overdue (red), today (green), none (yellow: nothing is scheduled), future (grey).
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => todayIn();
 export function nextActivity(deal, tasks = []) {
   const t = todayStr();
   const dated = tasks.filter(x => x.due_date).sort((a, b) => a.due_date.localeCompare(b.due_date));
@@ -140,3 +141,20 @@ export function byNextActivity(a, b) {
 export function listDeals(filters = {}) {
   return db.selectAll("deals", { select: "*,companies(id,name,domain,kind,tier,lifecycle_stage),contacts(id,name,email),campaigns(id,name,kind)", order: "updated_at.desc", ...filters });
 }
+
+// ---- productions and series (migration 014) -----------------------------------------------------------------
+// One sales commitment can cover several productions; each production has its own date, venue and Flex project.
+export const PRODUCTION_STATUS = ["planned", "confirmed", "delivered", "cancelled"];
+export const PRODUCTION_LABEL = { planned: "Planned", confirmed: "Confirmed", delivered: "Delivered", cancelled: "Cancelled" };
+export function listProductions(deal_id) { return db.select("deal_productions", { deal_id: `eq.${deal_id}`, select: "*", order: "event_date.asc.nullslast,created_at.asc" }); }
+export async function addProduction(deal_id, { name = null, event_date = null, event_end_date = null, venue = null, city = null, budget_estimate = null, flex_project_id = null, status = "planned", notes = null }) {
+  const rows = await db.insert("deal_productions", { deal_id, name, event_date: event_date || null, event_end_date: event_end_date || null, venue, city, budget_estimate: budget_estimate ?? null, flex_project_id: flex_project_id || null, status, notes, created_by: me() });
+  return rows?.[0] || null;
+}
+export function updateProduction(id, patch) { return db.update("deal_productions", id, { ...patch, updated_at: new Date().toISOString() }); }
+export function removeProduction(id) { return db.delete("deal_productions", id); }
+export function listSeries() { return db.select("deal_series", { select: "id,name,cadence,notes", order: "name.asc" }); }
+export async function createSeries({ name, cadence = null, notes = null }) { const rows = await db.insert("deal_series", { name: name.trim(), cadence, notes, created_by: me() }); return rows?.[0] || null; }
+export function dealsInSeries(series_id) { return db.select("deals", { series_id: `eq.${series_id}`, select: "id,name,stage,expected_event_date,expected_close_date,amount_estimate,city,companies(id,name)", order: "expected_event_date.asc.nullslast" }); }
+// The deal's buyer: the primary contact's role, or the first decision maker.
+export function buyerOf(roles = []) { return roles.find(r => r.is_primary) || roles.find(r => r.role === "decision_maker") || roles[0] || null; }
