@@ -22,6 +22,7 @@ import InlineField from "../components/InlineField.jsx";
 import Timeline from "../components/Timeline.jsx";
 import { NewContactForm } from "./People.jsx";
 import { NewDealForm } from "./Deals.jsx";
+import { useOwners } from "../lib/owners.js";
 
 const money = n => (n == null ? "—" : "$" + Math.round(Number(n)).toLocaleString());
 const day = d => (d ? String(d).slice(0, 10) : "—");
@@ -54,11 +55,6 @@ const SPEC = {
   defaultSort: "name.asc",
   map: r => { const fc = r.flex_clients || []; return { ...r, revenue: fc.reduce((s, f) => s + Number(f.total_revenue || 0), 0), events: fc.reduce((s, f) => s + Number(f.total_events || 0), 0), lastEvent: fc.map(f => f.last_event_date).filter(Boolean).sort().pop() || null }; },
 };
-function useOwners() {
-  const [rows, setRows] = useState([]);
-  useEffect(() => { Promise.resolve().then(async () => { try { const r = await db.select("companies", { select: "owner", owner: "not.is.null", limit: 1000 }); setRows([...new Set((r || []).map(x => x.owner))].sort()); } catch { setRows([]); } }); }, []);
-  return rows;
-}
 
 export default function Companies({ initialReview = false, initialCompanyId = null, initialNew = false, onNavigate }) {
   const [state, setState] = useUrlState(DEFAULT);
@@ -69,7 +65,7 @@ export default function Companies({ initialReview = false, initialCompanyId = nu
   const [busy, setBusy] = useState(false);
   const [campaigns, setCampaigns] = useState([]);
   const personal = useSavedViews("companies");
-  const owners = useOwners();
+  const owners = useOwners("companies");
   const list = useServerList({ spec: SPEC, state, page: state.page, sort: state.sort || null, enabled: !initialCompanyId && !initialReview, refresh });
   useEffect(() => { if (list.pastEnd) setState(s => ({ ...s, page: 1 })); }, [list.pastEnd]); // eslint-disable-line react-hooks/exhaustive-deps
   const counts = useViewCounts(SPEC, BUILTIN, DEFAULT, refresh);

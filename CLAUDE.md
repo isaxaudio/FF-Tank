@@ -422,6 +422,17 @@ whatever `limit` says (the Flex mirror has 2000+ projects): server code that nee
 `getAll` (sales.cjs) / `selectAll` (campaigns.cjs), and `test/fakerest.cjs` enforces the same cap.
 A `/deals` link that carries list filters opens the list even if this browser last used Forecast or Board.
 
+## Team and password reset (PR 3b)
+`app_settings.team` (saved through `app-settings`, validated in `sales.cjs normalizeTeam`: lower-cased, de-duplicated
+emails, at most 50) lists who may own records. `src/lib/owners.js useOwners(table)` is the one owner list for facets and
+pickers: the team, the signed-in user, plus owners already on rows of that table (legacy values stay findable).
+Settings → Team edits it (`TeamCard`, `[data-team-card]`, `[data-team-member=email]`). Access is still a Supabase user
+account created in the dashboard; see RELEASE.md "Adding a person". Password reset: Login → "Forgot password?" calls
+`auth.requestReset` (GoTrue `/recover` with `redirect_to` = the app origin, which must be on Supabase's redirect
+allow-list); the link lands with the session in the URL hash, `auth.sessionFromHash()` stores it and App shows
+`ResetPasswordScreen` (`[data-reset-password]`) when `type=recovery`; a hash error is shown on the login screen.
+`scripts/verify-team.mjs` drives both headless. `docs/ae-walkthrough.md` is the AE tour.
+
 Design: working text is 14px (body2, table cells, inputs, buttons); captions and pills stay 12. Real `<button>`s and
 `<a>`s everywhere (`.ff-linkbtn` for link-styled buttons), labelled facets (`aria-label`), visible `:focus-visible`
 rings. Record pages on a phone show Call · Note · Task · Email. Verification: `scripts/verify-pr3.mjs` (needs

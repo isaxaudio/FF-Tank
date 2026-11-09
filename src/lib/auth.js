@@ -42,6 +42,35 @@ export const auth = {
       return null;
     }
   },
+  // Forgot password: Supabase emails a recovery link (POST /auth/v1/recover). The link lands on `redirectTo`
+  // with the session in the URL hash; sessionFromHash() below picks it up. The redirect must be on the
+  // project's allow-list (Supabase → Authentication → URL configuration), else Supabase falls back to the Site URL.
+  async requestReset(email, redirectTo) {
+    const to = redirectTo || (typeof window !== "undefined" ? `${window.location.origin}/` : "");
+    await gotrue(`recover?redirect_to=${encodeURIComponent(to)}`, { email });
+    return true;
+  },
+  // A session delivered in the URL hash (#access_token=…&refresh_token=…&type=recovery|magiclink|signup), or an
+  // error (#error=…&error_code=otp_expired&error_description=…). Stores the session, clears the hash and returns
+  // { type } or { error } or null when the hash carries neither.
+  sessionFromHash() {
+    if (typeof window === "undefined") return null;
+    const raw = window.location.hash.replace(/^#/, ""); if (!raw) return null;
+    const p = new URLSearchParams(raw);
+    if (!p.get("access_token") && !p.get("error")) return null;
+    const clear = () => { try { window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search); } catch { /* ignore */ } };
+    if (p.get("error")) { clear(); return { error: p.get("error_description") || p.get("error_code") || p.get("error") }; }
+    store({ access_token: p.get("access_token"), refresh_token: p.get("refresh_token"), expires_in: Number(p.get("expires_in") || 3600), user: null });
+    clear();
+    return { type: p.get("type") || "unknown" };
+  },
+  // The signed-in user's record, when the stored session has none yet (a session that came from a URL hash).
+  async loadUser() {
+    const t = await auth.token(); if (!t) return null;
+    const user = await gotrue("user", null, t, "GET").catch(() => null);
+    const s = read(); if (s && user) write({ ...s, user });
+    return user;
+  },
   // Change the signed-in user's password (Supabase: PUT /auth/v1/user with the access token).
   async updatePassword(password) {
     const t = await auth.token(); if (!t) throw new Error("Not signed in");

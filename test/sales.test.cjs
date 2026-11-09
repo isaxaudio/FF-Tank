@@ -189,6 +189,12 @@ test('hub: today-feed and rebooking need a signed-in user, record decisions, and
   assert.equal(res.statusCode, 400);
   res = await call('app-settings', { action: 'save', key: 'rebooking', value: { lead_days: 180 } });
   assert.equal(res.statusCode, 200); assert.equal(res.body.rebooking.lead_days, 180);
+  res = await call('app-settings', { action: 'save', key: 'team', value: ['Isaac@Example.test ', 'taylor@example.test', 'isaac@example.test'] });
+  assert.equal(res.statusCode, 200); assert.deepEqual(res.body.team, ['isaac@example.test', 'taylor@example.test'], 'lower-cased, trimmed, de-duplicated');
+  res = await call('app-settings', { action: 'save', key: 'team', value: ['not an email'] });
+  assert.equal(res.statusCode, 400);
+  res = await call('app-settings', {});
+  assert.deepEqual(res.body.team, ['isaac@example.test', 'taylor@example.test'], 'the team is part of the settings every client loads');
 });
 
 test('rebookingList pages the Flex mirror: a client whose shows sort past the 1000-row cap is still recommended', async () => {
