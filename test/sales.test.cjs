@@ -190,3 +190,27 @@ test('hub: today-feed and rebooking need a signed-in user, record decisions, and
   res = await call('app-settings', { action: 'save', key: 'rebooking', value: { lead_days: 180 } });
   assert.equal(res.statusCode, 200); assert.equal(res.body.rebooking.lead_days, 180);
 });
+
+test('rebookingList pages the Flex mirror: a client whose shows sort past the 1000-row cap is still recommended', async () => {
+  const f = rebookFixture();
+  // 1,100 older projects of other clients sort before Acme's shows; one unpaged GET would never see Acme's.
+  const filler = []; for (let i = 0; i < 1100; i++) filler.push({ flex_id: `old-${i}`, client_name: `Old client ${i % 50}`, event_type: 'Quote', event_date: '2019-01-01', budget_estimate: 100 });
+  const db = new FakeRest({ app_settings: [{ key: 'timezone', value: 'America/Denver' }], tasks: [], deals: f.deals, activities: [], email_messages: [], flex_clients: f.clients, flex_projects: [...filler, ...f.projects], companies: f.companies.map(c => ({ ...c, merged_into_id: null })), rebooking_reviews: [] });
+  global.fetch = stubFetch([restRoute(db)]);
+  const out = await sales.rebookingList({ now: new Date('2026-11-08T17:00:00Z').getTime() });
+  assert.ok(out.recommendations.some(r => r.company_name === 'Acme Events'), out.recommendations.map(r => r.company_name).join(',') || 'nothing recommended');
+  const projectGets = db.log.filter(l => l.method === 'GET' && l.table === 'flex_projects');
+  assert.ok(projectGets.length >= 2 && projectGets.every(l => /limit=1000/.test(l.query)), 'flex_projects is read in pages of 1000');
+});
+
+test('recommend: a yearly show that already came around again is anchored on the newest occurrence, never on a stale one', () => {
+  const f = rebookFixture();
+  f.clients = [{ id: 'fc9', name: 'Farm City', company_id: 'co9' }];
+  f.companies = [{ id: 'co9', name: 'Farm City', owner: null, last_touch_at: null }];
+  f.deals = [];
+  // Three July shows; today is Nov 8, 2026. The 2025 show's "next" (Jul 2026) happened (Jul 11, 2026), so the only
+  // recommendation is for Jul 2027, anchored on the 2026 show (its 270-day window opened mid-October).
+  f.projects = [flex('f1', 'Farm City', '2024-07-13'), flex('f2', 'Farm City', '2025-07-12'), flex('f3', 'Farm City', '2026-07-11')];
+  const recs = sales.recommend(f);
+  assert.deepEqual(recs.map(r => [r.anchor_project_id, r.next_expected]), [['f3', '2027-07-11']]);
+});

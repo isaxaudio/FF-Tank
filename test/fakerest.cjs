@@ -5,6 +5,7 @@
 // Conditional PATCHes are applied row by row and synchronously, so two "workers" interleaving on the same
 // row see exactly what Postgres would make them see: one wins, the other gets zero rows back.
 const crypto = require('node:crypto');
+const MAX_ROWS = 1000; // Supabase's default max-rows
 
 function parseQuery(qs) {
   const out = { filters: [], select: '*', order: null, limit: null, offset: 0, onConflict: null };
@@ -77,7 +78,8 @@ class FakeRest {
     if (method === 'GET') {
       let rows = this.table(t).filter(r => matches(r, q.filters));
       if (q.order) { const [col, dir, nulls] = q.order.split('.'); rows.sort((a, b) => { const x = a[col], y = b[col]; if (x == null && y == null) return 0; if (x == null) return nulls === 'nullsfirst' ? -1 : 1; if (y == null) return nulls === 'nullsfirst' ? 1 : -1; return (x < y ? -1 : x > y ? 1 : 0) * (dir === 'desc' ? -1 : 1); }); }
-      rows = rows.slice(q.offset, q.limit != null ? q.offset + q.limit : undefined);
+      // Supabase answers at most max-rows (1000) per request whatever `limit` asks; callers must page (limit/offset or Range).
+      rows = rows.slice(q.offset, q.offset + Math.min(q.limit != null ? q.limit : MAX_ROWS, MAX_ROWS));
       // Prefer: count=exact answers with Content-Range (`from-to/total`), and a Range header pages the rows,
       // as PostgREST does; db.page and the server's count() read the header.
       const total = rows.length; let out = rows; let from = 0, to = Math.max(0, total - 1);

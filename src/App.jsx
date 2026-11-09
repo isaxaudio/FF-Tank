@@ -1490,6 +1490,7 @@ function FFTank({ onSignOut }) {
         .ff-name.ff-linkbtn:hover { text-decoration: underline; }
         :focus-visible { outline: 2px solid ${TC.action}; outline-offset: 2px; border-radius: 4px; }
         button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 2px solid ${TC.action}; outline-offset: 1px; }
+        button:focus:not(:focus-visible), select:focus:not(:focus-visible), [tabindex]:focus:not(:focus-visible) { outline: none; }
         @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
         .ff-inline:hover { background: ${TC.hover}; }
         .ff-inline:hover .ff-inline-pen { opacity: 1 !important; }

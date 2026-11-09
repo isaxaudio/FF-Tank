@@ -417,7 +417,10 @@ Rebooking review (`api rebooking`, `/deals/rebooking`): recommendations from pas
 each, cadence inferred from the client's history), the lead window (`app_settings.rebooking.lead_days`), relationship
 inactivity and the absence of an open deal near the expected date; each cites its reasons. Decisions (assign, snooze,
 dismiss, done) are rows in `rebooking_reviews`; creating the deal is an explicit step on the recommendation.
-Contact role changes are not tracked yet and the reasons say so.
+Contact role changes are not tracked yet and the reasons say so. Supabase answers at most 1000 rows per request
+whatever `limit` says (the Flex mirror has 2000+ projects): server code that needs a whole table pages with
+`getAll` (sales.cjs) / `selectAll` (campaigns.cjs), and `test/fakerest.cjs` enforces the same cap.
+A `/deals` link that carries list filters opens the list even if this browser last used Forecast or Board.
 
 Design: working text is 14px (body2, table cells, inputs, buttons); captions and pills stay 12. Real `<button>`s and
 `<a>`s everywhere (`.ff-linkbtn` for link-styled buttons), labelled facets (`aria-label`), visible `:focus-visible`

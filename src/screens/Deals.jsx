@@ -89,7 +89,13 @@ const BUILTIN = [
 
 export default function Deals({ initialDealId = null, initialNew = false, initialReview = false, initialRebooking = false, onNavigate }) {
   const [state, setState] = useUrlState(DEFAULT);
-  const [view, setView] = useState(() => { try { return localStorage.getItem("ff:deals:view") || "board"; } catch { return "board"; } });
+  // The last view is remembered per browser, but a link that carries list filters (?owner=…&q=…) always opens a
+  // list: a shared URL must show what the sender saw, not whatever this browser last had open.
+  const [view, setView] = useState(() => {
+    let remembered = "board"; try { remembered = localStorage.getItem("ff:deals:view") || "board"; } catch { /* ignore */ }
+    const linked = typeof window !== "undefined" && window.location.search.length > 1;
+    return linked && !["list", "board"].includes(remembered) ? "list" : remembered;
+  });
   const [refresh, setRefresh] = useState(0);
   const [showNew, setShowNew] = useState(!!initialNew);
   const [toast, setToast] = useState(null);
@@ -700,7 +706,7 @@ function DealPage({ id, onBack, onChanged, onNavigate }) {
         <div data-deal-facts style={{ display: "grid", gridTemplateColumns: phone ? "1fr 1fr" : "repeat(6, minmax(0, 1fr))", gap: phone ? 10 : 14, marginTop: 14, ...tile({ padding: phone ? "10px 12px" : "12px 16px" }) }}>
           <Fact name="event" label="Event" hint="Event type, date and place: the production calendar">
             <InlineField value={d.event_type} onSave={v => patch({ event_type: v })} placeholder="type" style={{ display: "inline-block" }} />
-            <div style={{ ...TT.caption, color: TC.sub, display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}><InlineField type="date" value={d.expected_event_date} onSave={v => patch({ expected_event_date: v })} placeholder="date" /><span>·</span><InlineField value={[d.venue, d.city].filter(Boolean).join(", ")} onSave={v => { const [venue, ...rest] = String(v || "").split(","); patch({ venue: venue?.trim() || null, city: rest.join(",").trim() || null }); }} placeholder="venue, city" /></div>
+            <div style={{ ...TT.caption, color: TC.sub, display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}><InlineField type="date" value={d.expected_event_date} onSave={v => patch({ expected_event_date: v })} placeholder="date" render={v => v ? fmtDay(v) : null} /><span>·</span><InlineField value={[d.venue, d.city].filter(Boolean).join(", ")} onSave={v => { const [venue, ...rest] = String(v || "").split(","); patch({ venue: venue?.trim() || null, city: rest.join(",").trim() || null }); }} placeholder="venue, city" /></div>
           </Fact>
           <Fact name="buyer" label="Buyer" hint="The primary contact or the decision maker on this deal">
             {buyer ? <button type="button" className="ff-linkbtn" onClick={() => onNavigate?.("people", { contactId: buyer.contact_id })} style={{ color: TC.link, fontWeight: 450 }}>{buyer.contacts?.name || buyer.contacts?.email}</button> : <span style={{ color: TC.warnInk }}>none yet</span>}

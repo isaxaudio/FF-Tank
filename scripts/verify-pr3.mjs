@@ -151,6 +151,7 @@ try {
   await page.evaluate(t => { const b = [...document.querySelectorAll('button.ff-name')].find(x => x.textContent.includes(t)); b.click(); }, `${TAG} Spring`);
   check('opening the deal keeps the list query in the URL', await waitSel('[data-deal-facts]') && new RegExp(`^/deals/${dealA.id}\\?.*owner=me`).test(await url()), await url());
   check('the header shows the event (May) apart from the close (January) and the decision deadline', (await has(`May`, '[data-fact="event"]')) && (await has('Jan', '[data-fact="close"]')) && (await has('decision', '[data-fact="close"]')) && (await has('Maverik Center', '[data-fact="event"]')));
+  await waitText(`${TAG} Dana`, 8000, '[data-fact="buyer"]'); // the buyer comes with the deal's contacts, a second request after the deal itself
   check('the header names the buyer, the owner, the next action and the expected value', (await has(`${TAG} Dana`, '[data-fact="buyer"]')) && (await has('Decision maker', '[data-fact="buyer"]')) && (await has(login.email.split('@')[0], '[data-fact="owner"]')) && (await has('Send revised proposal', '[data-fact="next"]')) && (await has('$25,000', '[data-fact="value"]')));
   check('no "unknown close date" warning when the close date is set', !(await page.$('[data-close-unknown]')));
   // log a call through the composer
@@ -200,7 +201,12 @@ try {
 
   // ---- 10. saved view on the server
   await goto(`/deals?owner=me&q=${encodeURIComponent(TAG)}`); await waitSel('[data-save-view]');
-  await click('[data-save-view]'); await page.type('input[aria-label="View name"]', `${TAG} mine`); await page.keyboard.press('Enter');
+  // The button exists only while the current filters match no view (built-in or saved); the name field renders on click.
+  const diag = () => page.evaluate(() => ({ url: location.pathname + location.search, saveBtn: !!document.querySelector('[data-save-view]'), pressed: [...document.querySelectorAll('[data-view-tab][aria-pressed="true"]')].map(b => b.getAttribute('data-view-tab')) }));
+  let named = false;
+  for (let i = 0; i < 2 && !named; i++) { if (await click('[data-save-view]')) named = await waitSel('input[aria-label="View name"]', 4000); else await sleep(500); }
+  check('the filtered list offers "Save view" and opens the name field', named, JSON.stringify(await diag()));
+  if (named) { await page.type('input[aria-label="View name"]', `${TAG} mine`); await page.keyboard.press('Enter'); }
   check('a saved view lands in saved_views under the signed-in owner', await waitFor(async () => (await get(`saved_views?name=eq.${encodeURIComponent(TAG + ' mine')}&select=owner,state,shared`)).length === 1, 8000) && (await get(`saved_views?name=eq.${encodeURIComponent(TAG + ' mine')}&select=owner`))[0].owner === login.email);
 
   // ---- 11. the phone: a shared deal link at 390px

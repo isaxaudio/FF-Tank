@@ -135,4 +135,4 @@ export const btn = (kind = "ink") => {
   if (kind === "danger") return { ...base, background: rust[50], color: sand[0], border: "1px solid transparent" };
   return base;
 };
-export const inputStyle = (extra = {}) => ({ padding: "6px 10px", fontSize: 14, lineHeight: "20px", fontFamily: "inherit", color: c.ink, background: sand[0], border: `1px solid ${c.lineStrong}`, borderRadius: r.input, outline: "none", width: "100%", boxSizing: "border-box", ...extra });
+export const inputStyle = (extra = {}) => ({ padding: "6px 10px", fontSize: 14, lineHeight: "20px", fontFamily: "inherit", color: c.ink, background: sand[0], border: `1px solid ${c.lineStrong}`, borderRadius: r.input, width: "100%", boxSizing: "border-box", ...extra }); // no inline outline: the :focus-visible ring in App.jsx must win
