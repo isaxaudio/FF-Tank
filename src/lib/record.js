@@ -20,6 +20,7 @@ export function onAction(handler) { const h = e => handler(e.detail || {}); wind
 export function baseActions({ email = null } = {}) {
   return [
     { id: "note", label: "Add a note", keys: "n", run: () => fireAction("note") },
+    { id: "call", label: "Log a call", keys: "k", run: () => fireAction("call") },
     { id: "task", label: "Add a task", keys: "t", run: () => fireAction("task") },
     { id: "email", label: email ? `Email ${email}` : "Email (no address on this record)", keys: "c", disabled: !email, hint: email ? "Compose here and send through your Gmail" : "", run: () => { if (email) fireAction("email", { email }); } },
   ];

@@ -5,6 +5,7 @@
 // Conditional PATCHes are applied row by row and synchronously, so two "workers" interleaving on the same
 // row see exactly what Postgres would make them see: one wins, the other gets zero rows back.
 const crypto = require('node:crypto');
+const MAX_ROWS = 1000; // Supabase's default max-rows
 
 function parseQuery(qs) {
   const out = { filters: [], select: '*', order: null, limit: null, offset: 0, onConflict: null };
@@ -77,8 +78,15 @@ class FakeRest {
     if (method === 'GET') {
       let rows = this.table(t).filter(r => matches(r, q.filters));
       if (q.order) { const [col, dir, nulls] = q.order.split('.'); rows.sort((a, b) => { const x = a[col], y = b[col]; if (x == null && y == null) return 0; if (x == null) return nulls === 'nullsfirst' ? -1 : 1; if (y == null) return nulls === 'nullsfirst' ? 1 : -1; return (x < y ? -1 : x > y ? 1 : 0) * (dir === 'desc' ? -1 : 1); }); }
-      rows = rows.slice(q.offset, q.limit != null ? q.offset + q.limit : undefined);
-      return { status: 200, json: rows.map(r => this.project(t, r, q.select)) };
+      // Supabase answers at most max-rows (1000) per request whatever `limit` asks; callers must page (limit/offset or Range).
+      rows = rows.slice(q.offset, q.offset + Math.min(q.limit != null ? q.limit : MAX_ROWS, MAX_ROWS));
+      // Prefer: count=exact answers with Content-Range (`from-to/total`), and a Range header pages the rows,
+      // as PostgREST does; db.page and the server's count() read the header.
+      const total = rows.length; let out = rows; let from = 0, to = Math.max(0, total - 1);
+      const range = String(init.headers?.Range || init.headers?.range || '');
+      if (/^\d+-\d+$/.test(range)) { [from, to] = range.split('-').map(Number); out = rows.slice(from, to + 1); to = from + out.length - 1; }
+      const headers = /count=exact/.test(prefer) ? { 'content-range': `${out.length ? `${from}-${to}` : '*'}/${total}` } : {};
+      return { status: 200, json: out.map(r => this.project(t, r, q.select)), headers };
     }
     if (method === 'POST') {
       const bodies = Array.isArray(init.body ? JSON.parse(init.body) : {}) ? JSON.parse(init.body) : [JSON.parse(init.body || '{}')];
@@ -107,7 +115,7 @@ class FakeRest {
 
 // A route for test/helpers.cjs stubFetch: [matcher, responder].
 function restRoute(db) {
-  return [u => u.includes('/rest/v1/'), (url, init) => { const r = db.handle((init.method || 'GET').toUpperCase(), url, init); return r.json === null ? { status: r.status, text: '' } : { status: r.status, json: r.json }; }];
+  return [u => u.includes('/rest/v1/'), (url, init) => { const r = db.handle((init.method || 'GET').toUpperCase(), url, init); return r.json === null ? { status: r.status, text: '', headers: r.headers || {} } : { status: r.status, json: r.json, headers: r.headers || {} }; }];
 }
 
 module.exports = { FakeRest, restRoute };

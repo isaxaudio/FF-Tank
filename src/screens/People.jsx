@@ -1,7 +1,7 @@
 // src/screens/People.jsx — contacts: a list with saved views, selection and a preview pane, and the
 // contact record page (summary left, composer + focus + history centre). Marketing status and its
 // consent stay separate from lead status and lifecycle.
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
 import { Search, Plus, User, Building2, ExternalLink } from "lucide-react";
 import { db } from "../lib/db.js";
@@ -11,7 +11,9 @@ import { LIFECYCLE, LIFECYCLE_LABEL, LIFECYCLE_TONE, LEAD_STATUS, LEAD_STATUS_LA
 import { STAGE_LABEL, STAGE_TONE } from "../lib/deals.js";
 import { listCampaigns } from "../lib/campaigns.js";
 import { bulkPatch, bulkAddToCampaign } from "../lib/bulk.js";
-import { usePersonalViews, within } from "../lib/views.js";
+import { useSavedViews } from "../lib/views.js";
+import { useUrlState } from "../lib/urlState.js";
+import { useServerList, useViewCounts, listParams, filterParams, ownerFilter, eqFilter, sinceFilter } from "../lib/listQuery.js";
 import { setRecord, clearRecord, baseActions, fireAction } from "../lib/record.js";
 import { listSequences, enrollMany, liveEnrollmentFor, enrollmentHistory, pauseEnrollment, resumeEnrollment, exitEnrollment, ENROLL_LABEL, ENROLL_TONE, windowLabel } from "../lib/sequences.js";
 import { ListTable, ViewTabs, BulkBar, barBtn, barSelect, Toast, PreviewPane, usePreview, useSelection, Facet } from "../components/ListTable.jsx";
@@ -27,7 +29,7 @@ const day = d => (d ? String(d).slice(0, 10) : "—");
 const opts = (keys, labels) => keys.map(k => ({ value: k, label: labels ? labels[k] : k }));
 const label = { ...TT.label, marginBottom: 6, display: "block" };
 
-const DEFAULT = { q: "", owner: "all", lead: "all", lifecycle: "all", mkt: "all", added: "all" };
+const DEFAULT = { q: "", owner: "all", lead: "all", lifecycle: "all", mkt: "all", added: "all", page: 1, sort: "" };
 const BUILTIN = [
   { id: "all", label: "All", state: {} },
   { id: "mine", label: "My contacts", state: { owner: "me" } },
@@ -36,17 +38,12 @@ const BUILTIN = [
   { id: "recent", label: "Recently added", state: { added: "30" } },
 ];
 const SELECT = "id,name,title,email,phone,linkedin,company_id,lead_status,lifecycle_stage,marketing_status,owner,last_touch_at,source,source_detail,created_at,companies(id,name,lifecycle_stage)";
-
-function matches(r, s) {
-  const q = s.q.trim().toLowerCase();
-  if (q && !["name", "email", "title"].some(k => (r[k] || "").toLowerCase().includes(q)) && !(r.companies?.name || "").toLowerCase().includes(q)) return false;
-  if (s.owner === "me" ? r.owner !== me() : s.owner === "none" ? !!r.owner : s.owner !== "all" && r.owner !== s.owner) return false;
-  if (s.lead !== "all" && (r.lead_status || "new") !== s.lead) return false;
-  if (s.lifecycle !== "all" && (r.lifecycle_stage || "prospect") !== s.lifecycle) return false;
-  if (s.mkt !== "all" && (r.marketing_status || "unknown") !== s.mkt) return false;
-  if (s.added !== "all" && !within(r.created_at, Number(s.added))) return false;
-  return true;
-}
+// The list is one PostgREST request per page (src/lib/listQuery.js); the same conditions feed the tab counts.
+const SPEC = {
+  table: "contacts", select: SELECT, base: { merged_into_id: "is.null" }, search: ["name", "email", "title"],
+  filters: { owner: ownerFilter, lead: v => (v === "new" ? { or: "(lead_status.eq.new,lead_status.is.null)" } : eqFilter("lead_status")(v)), lifecycle: v => (v === "prospect" ? { or: "(lifecycle_stage.eq.prospect,lifecycle_stage.is.null)" } : eqFilter("lifecycle_stage")(v)), mkt: v => (v === "unknown" ? { or: "(marketing_status.eq.unknown,marketing_status.is.null)" } : eqFilter("marketing_status")(v)), added: sinceFilter("created_at") },
+  sortable: { company: "companies(name)" }, defaultSort: "name.asc",
+};
 
 function useCampaignOptions() {
   const [rows, setRows] = useState([]);
@@ -58,100 +55,103 @@ function useSequenceOptions() {
   useEffect(() => { Promise.resolve().then(async () => { try { setRows((await listSequences()).filter(s => s.status === "active" && s.sequence_steps.length > 0)); } catch { setRows([]); } }); }, []);
   return rows;
 }
+function useOwners() {
+  const [rows, setRows] = useState([]);
+  useEffect(() => { Promise.resolve().then(async () => { try { const r = await db.select("contacts", { select: "owner", owner: "not.is.null", limit: 1000 }); setRows([...new Set((r || []).map(x => x.owner))].sort()); } catch { setRows([]); } }); }, []);
+  return rows;
+}
 
 export default function People({ initialContactId = null, initialNew = false, onNavigate }) {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [state, setState] = useState({ ...DEFAULT });
-  const [openId, setOpenId] = useState(initialContactId);
+  const [state, setState] = useUrlState(DEFAULT);
+  const [refresh, setRefresh] = useState(0);
   const [showNew, setShowNew] = useState(!!initialNew);
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
-  const personal = usePersonalViews("people");
+  const personal = useSavedViews("people");
   const campaigns = useCampaignOptions();
   const sequences = useSequenceOptions();
-
-  async function load() {
-    setLoading(true); setErr("");
-    try { setRows((await db.selectAll("contacts", { select: SELECT, merged_into_id: "is.null", order: "name.asc.nullslast" })) || []); } catch (e) { setErr(e.message); }
-    setLoading(false);
-  }
-  useEffect(() => { Promise.resolve().then(load); }, []);
-
-  const visible = useMemo(() => rows.filter(r => matches(r, state)), [rows, state]);
-  const counts = useMemo(() => Object.fromEntries(BUILTIN.map(v => [v.id, rows.filter(r => matches(r, { ...DEFAULT, ...v.state })).length])), [rows]);
-  const owners = useMemo(() => [...new Set(rows.map(r => r.owner).filter(Boolean))].sort(), [rows]);
-  const sel = useSelection(visible);
-  const preview = usePreview(visible);
+  const owners = useOwners();
+  const list = useServerList({ spec: SPEC, state, page: state.page, sort: state.sort || null, enabled: !initialContactId, refresh });
+  useEffect(() => { if (list.pastEnd) setState(s => ({ ...s, page: 1 })); }, [list.pastEnd]); // eslint-disable-line react-hooks/exhaustive-deps
+  const counts = useViewCounts(SPEC, BUILTIN, DEFAULT, refresh);
+  const rows = list.rows;
+  const sel = useSelection(rows, "id", list.total);
+  const preview = usePreview(rows);
   const set = k => v => setState(s => ({ ...s, [k]: v }));
+  const reload = () => setRefresh(n => n + 1);
+  const openRow = r => onNavigate?.("people", { contactId: r.id });
 
+  async function rowsForBulk() {
+    if (!sel.isAll) return sel.selectedRows;
+    return db.selectAll("contacts", { ...filterParams(listParams(SPEC, state)), select: "id,name,email,company_id,owner,lead_status,marketing_status" });
+  }
   async function act(msg, fn) {
     setBusy(true);
-    try { const undo = await fn(); await load(); sel.clear(); setToast({ msg, undo: undo ? async () => { await undo(); await load(); } : null }); }
+    try { const undo = await fn(await rowsForBulk()); reload(); sel.clear(); setToast({ msg, undo: undo ? async () => { await undo(); reload(); } : null }); }
     catch (e) { setToast({ msg: `Failed: ${e.message}` }); }
     setBusy(false);
   }
   const n = sel.count;
   const addTo = async cid => {
     const cp = campaigns.find(c => c.id === cid); if (!cp) return;
-    await act(`Added to ${cp.name}`, async () => { const r = await bulkAddToCampaign(cid, sel.selectedRows, "contact_id"); setToast(null); return r.undo; });
+    await act(`Added to ${cp.name}`, async rows => { const r = await bulkAddToCampaign(cid, rows, "contact_id"); setToast(null); return r.undo; });
   };
   // Enroll the selection in a sequence; people without an address, unsubscribed, or already in one are skipped and named.
   const enrollIn = async sid => {
     const sq = sequences.find(s => s.id === sid); if (!sq) return;
     setBusy(true);
     try {
-      const r = await enrollMany({ ...sq, steps: sq.sequence_steps }, sel.selectedRows);
-      await load(); sel.clear();
+      const r = await enrollMany({ ...sq, steps: sq.sequence_steps }, await rowsForBulk());
+      reload(); sel.clear();
       const why = r.skipped.length ? ` Skipped ${r.skipped.length}: ${r.skipped.slice(0, 3).map(x => `${x.contact.name || "unnamed"} (${x.reason.replace(/\.$/, "").toLowerCase()})`).join(", ")}${r.skipped.length > 3 ? "…" : ""}.` : "";
-      setToast({ msg: `${r.enrolled.length} enrolled in ${sq.name}.${why}`, undo: r.enrolled.length ? async () => { await r.undo(); await load(); } : null });
+      setToast({ msg: `${r.enrolled.length} enrolled in ${sq.name}.${why}`, undo: r.enrolled.length ? async () => { await r.undo(); reload(); } : null });
     } catch (e) { setToast({ msg: `Failed: ${e.message}` }); }
     setBusy(false);
   };
 
-  if (openId) return <ContactPage key={openId} id={openId} onBack={() => setOpenId(null)} onNavigate={onNavigate} onChanged={load} />;
+  if (initialContactId) return <ContactPage key={initialContactId} id={initialContactId} onBack={() => onNavigate?.("people", {})} onNavigate={onNavigate} onChanged={reload} />;
 
   const cols = [
-    { key: "name", label: "Name", width: 220, name: true, render: r => r.name || <span style={{ color: TC.muted }}>unnamed</span> },
-    { key: "company", label: "Company", width: 180, render: r => r.companies ? <span onClick={e => { e.stopPropagation(); onNavigate?.("companies", { companyId: r.companies.id }); }} style={{ cursor: "pointer", color: TC.link }}>{r.companies.name}</span> : <span style={{ color: TC.faint }}>—</span> },
-    { key: "title", label: "Title", width: 170 },
-    { key: "email", label: "Email", width: 210 },
-    { key: "lead_status", label: "Lead status", width: 120, render: r => <span style={pill(LEAD_STATUS_TONE[r.lead_status] || "sand")}>{LEAD_STATUS_LABEL[r.lead_status] || "New"}</span> },
-    { key: "lifecycle_stage", label: "Lifecycle", width: 110, render: r => <span style={pill(LIFECYCLE_TONE[r.lifecycle_stage] || "ocean")}>{LIFECYCLE_LABEL[r.lifecycle_stage] || "Prospect"}</span> },
-    { key: "marketing_status", label: "Marketing", width: 120, render: r => <span style={pill(MKT_TONE[r.marketing_status] || "outline")}>{r.marketing_status || "unknown"}</span> },
-    { key: "owner", label: "Owner", width: 170, render: r => r.owner || <span style={{ color: TC.faint }}>unassigned</span> },
-    { key: "last_touch_at", label: "Last touch", width: 100, render: r => <span style={{ color: r.last_touch_at ? TC.ink : TC.faint }}>{r.last_touch_at ? ago(r.last_touch_at) : "never"}</span> },
-    { key: "created_at", label: "Added", width: 100, render: r => day(r.created_at) },
+    { key: "name", label: "Name", width: 220, name: true, sortable: true, render: r => r.name || <span style={{ color: TC.muted }}>unnamed</span> },
+    { key: "company", label: "Company", width: 180, sortable: "company", render: r => r.companies ? <button type="button" className="ff-linkbtn" onClick={e => { e.stopPropagation(); onNavigate?.("companies", { companyId: r.companies.id }); }} style={{ color: TC.link }}>{r.companies.name}</button> : <span style={{ color: TC.faint }}>—</span> },
+    { key: "title", label: "Title", width: 170, sortable: true },
+    { key: "email", label: "Email", width: 210, sortable: true },
+    { key: "lead_status", label: "Lead status", width: 120, sortable: true, render: r => <span style={pill(LEAD_STATUS_TONE[r.lead_status] || "sand")}>{LEAD_STATUS_LABEL[r.lead_status] || "New"}</span> },
+    { key: "lifecycle_stage", label: "Lifecycle", width: 110, sortable: true, render: r => <span style={pill(LIFECYCLE_TONE[r.lifecycle_stage] || "ocean")}>{LIFECYCLE_LABEL[r.lifecycle_stage] || "Prospect"}</span> },
+    { key: "marketing_status", label: "Marketing", width: 120, sortable: true, render: r => <span style={pill(MKT_TONE[r.marketing_status] || "outline")}>{r.marketing_status || "unknown"}</span> },
+    { key: "owner", label: "Owner", width: 150, sortable: true, render: r => r.owner ? r.owner.split("@")[0] : <span style={{ color: TC.faint }}>unassigned</span> },
+    { key: "last_touch_at", label: "Last touch", width: 100, sortable: true, render: r => <span style={{ color: r.last_touch_at ? TC.ink : TC.faint }}>{r.last_touch_at ? ago(r.last_touch_at) : "never"}</span> },
+    { key: "created_at", label: "Added", width: 100, sortable: true, render: r => day(r.created_at) },
   ];
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, background: TC.bg }}>
       <div style={{ padding: "16px 24px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div><div style={{ ...TT.h3, color: TC.ink }}>People</div><div style={{ ...TT.caption, color: TC.muted }}>{rows.length.toLocaleString()} contacts · {visible.length.toLocaleString()} in this view</div></div>
-          <button onClick={() => setShowNew(s => !s)} style={{ ...btn("primary"), marginLeft: "auto" }}><Plus size={16} strokeWidth={1.5} /> Contact</button>
+          <div><h1 style={{ ...TT.h3, color: TC.ink, margin: 0 }}>People</h1><div style={{ ...TT.caption, color: TC.muted }}>{counts.all != null ? `${counts.all.toLocaleString()} contacts` : ""}{list.total != null ? ` · ${list.total.toLocaleString()} in this view` : ""}</div></div>
+          <button type="button" data-new-contact onClick={() => setShowNew(s => !s)} style={{ ...btn("primary"), marginLeft: "auto" }}><Plus size={16} strokeWidth={1.5} /> Contact</button>
         </div>
         <div style={{ marginTop: 10 }}>
-          <ViewTabs builtin={BUILTIN} personal={personal.views} state={state} counts={counts} onPick={v => setState({ ...DEFAULT, ...v.state })} onSave={name => personal.save(name, state)} onRemove={personal.remove} />
+          <ViewTabs builtin={BUILTIN} personal={personal.views} state={state} counts={counts} onPick={v => setState({ ...DEFAULT, ...v.state })} onSave={(name, o) => personal.save(name, { ...state, page: 1 }, o)} onRemove={personal.remove} onShare={personal.setShared} onImport={async () => { const k = await personal.importBrowser(); setToast({ msg: `${k} view${k === 1 ? "" : "s"} moved to your account` }); }} />
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
-          <div style={{ position: "relative", width: 260 }}><Search size={16} strokeWidth={1.5} style={{ position: "absolute", left: 10, top: 8, color: TC.sub }} /><input value={state.q} onChange={e => set("q")(e.target.value)} placeholder="Search name, email, title, company" style={inputStyle({ paddingLeft: 32, padding: "4px 8px 4px 32px" })} /></div>
-          <Facet value={state.owner} onChange={set("owner")} options={[["all", "Any owner"], ["me", "Mine"], ["none", "No owner"], ...owners.map(o => [o, o])]} />
-          <Facet value={state.lead} onChange={set("lead")} options={[["all", "Any lead status"], ...LEAD_STATUS.map(k => [k, LEAD_STATUS_LABEL[k]])]} />
-          <Facet value={state.lifecycle} onChange={set("lifecycle")} options={[["all", "Any lifecycle"], ...LIFECYCLE.map(k => [k, LIFECYCLE_LABEL[k]])]} />
-          <Facet value={state.mkt} onChange={set("mkt")} options={[["all", "Any marketing"], ...MKT.map(k => [k, k])]} width={140} />
-          <Facet value={state.added} onChange={set("added")} options={[["all", "Added any time"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 90 days"]]} width={140} />
-          {JSON.stringify(state) !== JSON.stringify(DEFAULT) && <button onClick={() => setState({ ...DEFAULT })} style={{ ...btn("tertiary"), padding: "2px 8px", fontSize: 12, color: TC.sub }}>Reset</button>}
+          <div style={{ position: "relative", width: 260 }}><Search size={16} strokeWidth={1.5} style={{ position: "absolute", left: 10, top: 8, color: TC.sub }} aria-hidden /><input value={state.q} onChange={e => set("q")(e.target.value)} placeholder="Search name, email, title" aria-label="Search people" style={inputStyle({ padding: "4px 8px 4px 32px" })} /></div>
+          <Facet name="owner" title="Owner" value={state.owner} onChange={set("owner")} options={[["all", "Any owner"], ["me", "Mine"], ["none", "No owner"], ...owners.map(o => [o, o.split("@")[0]])]} />
+          <Facet name="lead" title="Lead status" value={state.lead} onChange={set("lead")} options={[["all", "Any lead status"], ...LEAD_STATUS.map(k => [k, LEAD_STATUS_LABEL[k]])]} />
+          <Facet name="lifecycle" title="Lifecycle" value={state.lifecycle} onChange={set("lifecycle")} options={[["all", "Any lifecycle"], ...LIFECYCLE.map(k => [k, LIFECYCLE_LABEL[k]])]} />
+          <Facet name="mkt" title="Marketing status" value={state.mkt} onChange={set("mkt")} options={[["all", "Any marketing"], ...MKT.map(k => [k, k])]} width={140} />
+          <Facet name="added" title="Added" value={state.added} onChange={set("added")} options={[["all", "Added any time"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 90 days"]]} width={140} />
+          {JSON.stringify({ ...state, page: 1, sort: "" }) !== JSON.stringify(DEFAULT) && <button type="button" onClick={() => setState({ ...DEFAULT })} style={{ ...btn("tertiary"), padding: "2px 8px", fontSize: 13, color: TC.sub }}>Reset</button>}
         </div>
-        {err && <div style={{ ...pill("rust"), marginTop: 10 }}>{err}</div>}
-        {showNew && <div style={{ marginTop: 12 }}><NewContactForm onDone={c => { setShowNew(false); load().then(() => c?.id && setOpenId(c.id)); }} onCancel={() => setShowNew(false)} /></div>}
+        {list.error && <div style={{ ...pill("rust"), marginTop: 10 }}>{list.error}</div>}
+        {showNew && <div style={{ marginTop: 12 }}><NewContactForm onDone={c => { setShowNew(false); reload(); if (c?.id) onNavigate?.("people", { contactId: c.id }); }} onCancel={() => setShowNew(false)} /></div>}
       </div>
       <div style={{ flex: 1, display: "flex", minHeight: 0, padding: "12px 24px 24px", gap: 0 }}>
-        <ListTable rows={visible} columns={cols} sel={sel} activeId={preview.id} loading={loading} onRow={preview.show} onOpen={r => setOpenId(r.id)}
-          empty={rows.length === 0 ? "No contacts yet. Add the first one, or capture one on a company page." : "No contact matches this view."} />
+        <ListTable rows={rows} columns={cols} sel={sel} activeId={preview.id} loading={list.loading} onRow={preview.show} onOpen={openRow}
+          sort={state.sort || SPEC.defaultSort} onSort={s => setState(st => ({ ...st, sort: s }))} page={state.page} pages={list.pages} total={list.total} pageSize={list.pageSize} onPage={p => setState(st => ({ ...st, page: p }))}
+          empty={counts.all === 0 ? "No contacts yet. Add the first one, or capture one on a company page." : "No contact matches this view."} />
         {preview.row && (
-          <PreviewPane index={preview.index} total={preview.total} onPrev={preview.prev} onNext={preview.next} onClose={preview.close} onOpen={() => setOpenId(preview.row.id)}
+          <PreviewPane index={preview.index} total={preview.total} onPrev={preview.prev} onNext={preview.next} onClose={preview.close} onOpen={() => openRow(preview.row)}
             title={preview.row.name || "Unnamed"} subtitle={[preview.row.title, preview.row.companies?.name].filter(Boolean).join(" · ")}
             pills={<><span style={pill(LEAD_STATUS_TONE[preview.row.lead_status] || "sand")}>{LEAD_STATUS_LABEL[preview.row.lead_status] || "New"}</span><span style={pill(LIFECYCLE_TONE[preview.row.lifecycle_stage] || "ocean")}>{LIFECYCLE_LABEL[preview.row.lifecycle_stage] || "Prospect"}</span><span style={pill(MKT_TONE[preview.row.marketing_status] || "outline")}>{preview.row.marketing_status || "unknown"}</span></>}>
             <Prop label="Email">{preview.row.email || "—"}</Prop>
@@ -163,13 +163,13 @@ export default function People({ initialContactId = null, initialNew = false, on
           </PreviewPane>
         )}
       </div>
-      <BulkBar count={n} onClear={sel.clear} busy={busy}>
-        <button style={barBtn} onClick={() => act(`${n} assigned to you`, () => bulkPatch("contacts", sel.selectedRows, { owner: me() }))}>Assign to me</button>
-        <button style={barBtn} onClick={() => act(`Owner cleared on ${n}`, () => bulkPatch("contacts", sel.selectedRows, { owner: null }))}>Clear owner</button>
-        <select style={barSelect} value="" onChange={e => e.target.value && act(`${n} set to ${LEAD_STATUS_LABEL[e.target.value]}`, () => bulkPatch("contacts", sel.selectedRows, { lead_status: e.target.value }))}><option value="">Lead status…</option>{LEAD_STATUS.map(k => <option key={k} value={k}>{LEAD_STATUS_LABEL[k]}</option>)}</select>
-        <button style={barBtn} title="Subscribing needs consent per person, so only unsubscribe is offered in bulk" onClick={() => act(`${n} marked unsubscribed`, () => bulkPatch("contacts", sel.selectedRows, { marketing_status: "unsubscribed" }))}>Mark unsubscribed</button>
-        {campaigns.length > 0 && <select style={barSelect} value="" onChange={e => addTo(e.target.value)}><option value="">Add to campaign…</option>{campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
-        {sequences.length > 0 && <select data-bulk-enroll style={barSelect} value="" onChange={e => e.target.value && enrollIn(e.target.value)} title="Each person gets their own thread; unsubscribed or already-enrolled people are skipped"><option value="">Enroll in sequence…</option>{sequences.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
+      <BulkBar sel={sel} onClear={sel.clear} busy={busy}>
+        <button type="button" style={barBtn} onClick={() => act(`${n} assigned to you`, rows => bulkPatch("contacts", rows, { owner: me() }))}>Assign to me</button>
+        <button type="button" style={barBtn} onClick={() => act(`Owner cleared on ${n}`, rows => bulkPatch("contacts", rows, { owner: null }))}>Clear owner</button>
+        <select style={barSelect} value="" aria-label="Set lead status" onChange={e => e.target.value && act(`${n} set to ${LEAD_STATUS_LABEL[e.target.value]}`, rows => bulkPatch("contacts", rows, { lead_status: e.target.value }))}><option value="">Lead status…</option>{LEAD_STATUS.map(k => <option key={k} value={k}>{LEAD_STATUS_LABEL[k]}</option>)}</select>
+        <button type="button" style={barBtn} title="Subscribing needs consent per person, so only unsubscribe is offered in bulk" onClick={() => act(`${n} marked unsubscribed`, rows => bulkPatch("contacts", rows, { marketing_status: "unsubscribed" }))}>Mark unsubscribed</button>
+        {campaigns.length > 0 && <select style={barSelect} value="" aria-label="Add to campaign" onChange={e => addTo(e.target.value)}><option value="">Add to campaign…</option>{campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
+        {sequences.length > 0 && <select data-bulk-enroll style={barSelect} value="" aria-label="Enroll in sequence" onChange={e => e.target.value && enrollIn(e.target.value)} title="Each person gets their own thread; unsubscribed or already-enrolled people are skipped"><option value="">Enroll in sequence…</option>{sequences.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
       </BulkBar>
       <Toast toast={toast} onDone={() => setToast(null)} />
     </div>

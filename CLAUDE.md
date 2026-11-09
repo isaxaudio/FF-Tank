@@ -386,6 +386,47 @@ each (`legacy`, `migration_note`); a campaign that was scheduled or mid-send arr
   `test/autosave.test.mjs`, `test/email-render.test.mjs` (client-safe HTML on fixtures); `scripts/verify-pr2.mjs` drives
   the workspace headless at 1440 and 390 px against the local preview (needs migration 013).
 
+## Sales screens (PR 3, migration 014)
+Two calendars on a deal: the sales calendar (`expected_close_date`, `decision_deadline`) drives forecasts and "closing
+this month"; the production calendar (`expected_event_date`, `deal_productions.event_date`) drives planning and
+rebooking. Older deals keep an unknown close date (null) and are listed under "No close date" instead of being
+guessed. One commitment can cover several productions (`deal_productions`: date, venue, city, budget, Flex project);
+reporting counts the deal once. Recurring or multi-city events share a `deal_series`. New deal columns: venue, city,
+service_scope, proposal_url / proposal_revision, est_production_cost / est_margin_pct, planning_window_start / _end,
+series_id. Days are computed in the business time zone (`app_settings.timezone`, America/Denver by default) through
+`src/lib/time.js`; never use `toISOString().slice(0,10)` for "today".
+
+URLs: `src/lib/router.js` maps every screen, record and tab to a path (`/deals/<id>`, `/companies/review`,
+`/deals/rebooking`, `/outreach/campaigns/<id>/emails/<id>?step=review`); list filters, sort and page live in the
+query string (`src/lib/urlState.js`), so a record opened from a filtered list returns to it on Back. App.jsx derives
+the screen from the URL and listens to popstate; `navTo` pushes history.
+
+Lists are server-side (`src/lib/listQuery.js`): a screen's `SPEC` (table, select, search columns, filter → PostgREST
+condition, sortable columns) becomes one paged request with an exact total (`db.page`, Content-Range), the same
+conditions give the tab counts (`useViewCounts`) and the "all matching" bulk scope. `ListTable` has sortable headers,
+a page footer, and `useSelection(rows, "id", total)` distinguishes the visible page from all matching rows; bulk
+actions load the matching rows (`rowsForBulk`) so undo keeps working. Saved views are rows in `saved_views`
+(personal, or shared; owner-scoped RLS); browser-saved views from older builds are offered for import.
+
+Today (`api today-feed`, `lib/server/sales.cjs`): replies waiting, overdue promises (tasks and deals' next actions)
+and decisions coming up, ranked. The owner scope (mine / unassigned / everyone) is applied in the queries before any
+limit. A reply is resolved only by a later outbound message in its own thread (`email_messages.provider_thread_id`)
+or by `activities.handled_at` (the Handled button); an unrelated email or call does not clear it.
+
+Rebooking review (`api rebooking`, `/deals/rebooking`): recommendations from past Flex events (one anchor project
+each, cadence inferred from the client's history), the lead window (`app_settings.rebooking.lead_days`), relationship
+inactivity and the absence of an open deal near the expected date; each cites its reasons. Decisions (assign, snooze,
+dismiss, done) are rows in `rebooking_reviews`; creating the deal is an explicit step on the recommendation.
+Contact role changes are not tracked yet and the reasons say so. Supabase answers at most 1000 rows per request
+whatever `limit` says (the Flex mirror has 2000+ projects): server code that needs a whole table pages with
+`getAll` (sales.cjs) / `selectAll` (campaigns.cjs), and `test/fakerest.cjs` enforces the same cap.
+A `/deals` link that carries list filters opens the list even if this browser last used Forecast or Board.
+
+Design: working text is 14px (body2, table cells, inputs, buttons); captions and pills stay 12. Real `<button>`s and
+`<a>`s everywhere (`.ff-linkbtn` for link-styled buttons), labelled facets (`aria-label`), visible `:focus-visible`
+rings. Record pages on a phone show Call · Note · Task · Email. Verification: `scripts/verify-pr3.mjs` (needs
+migration 014, the local preview on 4174 and `vercel dev` on 3001).
+
 ## Newsletter builder (CRM rebuild step 10, see CRM-PLAN.md)
 Outreach → Templates → New newsletter opens `src/components/NewsletterBuilder.jsx`; the model and the email-safe HTML
 compiler are in `src/lib/newsletter.js`. A newsletter is an `email_templates` row of kind campaign with `design`

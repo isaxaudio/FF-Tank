@@ -4,12 +4,12 @@
 // task, email), the timeline, and the summary folded under a Details toggle.
 import React, { useState } from "react";
 import { c as TC, t as TT, tile, btn } from "../tokens.js";
-import { ArrowLeft, StickyNote, ListTodo, Mail, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, StickyNote, ListTodo, Mail, Phone, ChevronDown, ChevronUp } from "lucide-react";
 import { useRecord } from "../lib/record.js";
 import { useIsPhone } from "../lib/viewport.js";
 import { useContextMenu } from "./ContextMenu.jsx";
 
-const PHONE_ACTIONS = [["note", "Note", StickyNote], ["task", "Task", ListTodo], ["email", "Email", Mail]];
+const PHONE_ACTIONS = [["call", "Call", Phone], ["note", "Note", StickyNote], ["task", "Task", ListTodo], ["email", "Email", Mail]];
 
 // Right-click anywhere on a record page (outside links and fields) shows the record's actions with their keys.
 export function RecordLayout({ header, left, children, maxWidth = 1280 }) {
@@ -25,12 +25,12 @@ export function RecordLayout({ header, left, children, maxWidth = 1280 }) {
         <div data-phone-actions style={{ display: "flex", gap: 8, padding: "12px 16px 0" }}>
           {PHONE_ACTIONS.map(([id, label, Icon]) => {
             const a = (record?.actions || []).find(x => x.id === id);
-            return <button key={id} data-action={id} disabled={!a || a.disabled} title={a?.label || label} onClick={() => a?.run?.()} style={{ ...btn("secondary"), flex: 1, justifyContent: "center", height: 40, opacity: !a || a.disabled ? 0.5 : 1 }}><Icon size={16} strokeWidth={1.5} /> {label}</button>;
+            return <button type="button" key={id} data-action={id} disabled={!a || a.disabled} title={a?.label || label} aria-label={a?.label || label} onClick={() => a?.run?.()} style={{ ...btn("secondary"), flex: 1, justifyContent: "center", height: 44, padding: "6px 4px", opacity: !a || a.disabled ? 0.5 : 1 }}><Icon size={16} strokeWidth={1.5} /> {label}</button>;
           })}
         </div>
         <div style={{ padding: "14px 16px 0", display: "flex", flexDirection: "column", gap: 14 }}>{children}</div>
         <div style={{ padding: "14px 16px 90px" }}>
-          <button data-toggle-details onClick={() => setDetails(v => !v)} style={{ ...btn("secondary"), width: "100%", justifyContent: "space-between", height: 40 }}><span>Details</span>{details ? <ChevronUp size={16} strokeWidth={1.5} /> : <ChevronDown size={16} strokeWidth={1.5} />}</button>
+          <button type="button" data-toggle-details aria-expanded={details} onClick={() => setDetails(v => !v)} style={{ ...btn("secondary"), width: "100%", justifyContent: "space-between", height: 44 }}><span>Details</span>{details ? <ChevronUp size={16} strokeWidth={1.5} /> : <ChevronDown size={16} strokeWidth={1.5} />}</button>
           {details && <div data-phone-details style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 12 }}>{left}</div>}
         </div>
       </div>
@@ -53,7 +53,7 @@ export function RecordHeader({ onBack, backLabel, icon: Icon, title, subtitle, p
   return (
     <div>
       {onBack && (
-        <button onClick={onBack} style={{ ...btn("tertiary"), padding: "2px 6px", marginLeft: -6, color: TC.sub, fontSize: 12 }}><ArrowLeft size={14} strokeWidth={1.5} /> {backLabel}</button>
+        <button type="button" data-record-back onClick={onBack} style={{ ...btn("tertiary"), padding: "2px 6px", marginLeft: -6, color: TC.sub, fontSize: 13 }}><ArrowLeft size={14} strokeWidth={1.5} /> {backLabel}</button>
       )}
       <div style={{ display: "flex", alignItems: "flex-start", gap: phone ? 10 : 14, marginTop: 6, flexWrap: phone ? "wrap" : "nowrap" }}>
         {Icon && !phone && <div style={{ width: 40, height: 40, borderRadius: 10, background: TC.card, border: `1px solid ${TC.line}`, display: "flex", alignItems: "center", justifyContent: "center", color: TC.sub, flexShrink: 0 }}><Icon size={20} strokeWidth={1.5} /></div>}

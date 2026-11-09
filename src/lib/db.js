@@ -4,8 +4,9 @@
 // (falls back to the anon key when signed out), and nothing is logged to the console.
 import { auth } from "./auth.js";
 
-const URL_ = (import.meta.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
-const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const ENV = import.meta.env || {};   // undefined under node (tests import these modules)
+const URL_ = (ENV.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+const ANON = ENV.VITE_SUPABASE_ANON_KEY || "";
 
 async function headers(extra) {
   const token = (await auth.token()) || ANON;
@@ -44,6 +45,22 @@ export const db = {
       if (page.length < pageSize) break;
     }
     return out;
+  },
+  // One page of rows plus the exact total, for server-side lists. `filters` carries the PostgREST params
+  // (filters, select, order) and `page` / `pageSize` become the range; PostgREST answers 206 with Content-Range.
+  async page(table, filters, { page = 1, pageSize = 50 } = {}) {
+    if (!URL_ || !ANON) return { rows: [], total: 0 };
+    const from = Math.max(0, (page - 1) * pageSize), to = from + pageSize - 1;
+    const qs = "?" + new URLSearchParams(filters || {}).toString();
+    const h = await headers({ Prefer: "count=exact", Range: `${from}-${to}`, "Range-Unit": "items" });
+    let r = await fetch(`${URL_}/rest/v1/${table}${qs}`, { headers: h });
+    if (r.status === 401 && (await auth.refresh())) r = await fetch(`${URL_}/rest/v1/${table}${qs}`, { headers: await headers({ Prefer: "count=exact", Range: `${from}-${to}`, "Range-Unit": "items" }) });
+    // 416: the page is past the end (a filter narrowed the list); the caller moves to page 1.
+    if (r.status === 416) return { rows: [], total: parseInt((r.headers.get("content-range") || "").split("/")[1], 10) || 0, pastEnd: true };
+    const body = await r.json().catch(() => null);
+    if (!r.ok) { const err = new Error(body?.message || `GET ${table} ${r.status}`); err.status = r.status; err.body = body; throw err; }
+    const n = parseInt((r.headers.get("content-range") || "").split("/")[1], 10);
+    return { rows: Array.isArray(body) ? body : [], total: Number.isFinite(n) ? n : (Array.isArray(body) ? body.length : 0) };
   },
   // Exact count without downloading rows (Content-Range header).
   async count(table, filters) {

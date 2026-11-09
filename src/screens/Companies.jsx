@@ -2,7 +2,7 @@
 // target accounts, dormant clients, needs review), selection and a preview pane, the match review
 // queue, and the company record page with its Flex history. Research signals are shown on the page
 // but labelled as signals; they are not deals.
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
 import { Search, Plus, Check, X, Building2, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import { db } from "../lib/db.js";
@@ -12,7 +12,9 @@ import { STAGE_LABEL, STAGE_TONE } from "../lib/deals.js";
 import { LIFECYCLE, LIFECYCLE_LABEL, LIFECYCLE_TONE, LEAD_STATUS_LABEL, LEAD_STATUS_TONE, CAMPAIGN_KIND_LABEL, CAMPAIGN_KIND_TONE, ago } from "../lib/status.js";
 import { membershipsForCompany, listCampaigns } from "../lib/campaigns.js";
 import { bulkPatch, bulkAddToCampaign } from "../lib/bulk.js";
-import { usePersonalViews } from "../lib/views.js";
+import { useSavedViews } from "../lib/views.js";
+import { useUrlState } from "../lib/urlState.js";
+import { useServerList, useViewCounts, listParams, filterParams, ownerFilter, eqFilter, inFilter } from "../lib/listQuery.js";
 import { setRecord, clearRecord, baseActions, fireAction, onAction } from "../lib/record.js";
 import { ListTable, ViewTabs, BulkBar, barBtn, barSelect, Toast, PreviewPane, usePreview, useSelection, Facet } from "../components/ListTable.jsx";
 import { RecordLayout, RecordHeader, Card, Prop, Empty } from "../components/RecordPage.jsx";
@@ -35,7 +37,7 @@ const th = { ...TT.tableHead, textAlign: "left", padding: "6px 8px", borderBotto
 const td = { fontSize: 13, lineHeight: "20px", color: TC.ink, padding: "6px 8px", borderBottom: `1px solid ${TC.lineSoft}`, verticalAlign: "top" };
 const lifecyclePill = s => <span style={pill(LIFECYCLE_TONE[s] || "sand")}>{LIFECYCLE_LABEL[s] || s}</span>;
 
-const DEFAULT = { q: "", lifecycle: "all", kind: "all", tier: "all", owner: "all", review: false };
+const DEFAULT = { q: "", lifecycle: "all", kind: "all", tier: "all", owner: "all", page: 1, sort: "" };
 const BUILTIN = [
   { id: "all", label: "All", state: {} },
   { id: "clients", label: "Clients", state: { lifecycle: "customer" } },
@@ -44,113 +46,108 @@ const BUILTIN = [
   { id: "targets", label: "Target accounts", state: { tier: "targets" } },
   { id: "dormant", label: "Dormant clients", state: { lifecycle: "former" } },
   { id: "competitors", label: "Competitors", state: { kind: "competitor" } },
-  { id: "review", label: "Needs review", state: { review: true } },
 ];
-
-function matches(r, s) {
-  const q = s.q.trim().toLowerCase();
-  if (q && !["name", "domain", "vertical", "source_detail"].some(k => (r[k] || "").toLowerCase().includes(q))) return false;
-  if (s.lifecycle !== "all" && (r.lifecycle_stage || "prospect") !== s.lifecycle) return false;
-  if (s.kind !== "all" && r.kind !== s.kind) return false;
-  if (s.tier === "targets" ? !TARGET_TIERS.includes(r.tier) : s.tier !== "all" && r.tier !== s.tier) return false;
-  if (s.owner === "me" ? r.owner !== me() : s.owner === "none" ? !!r.owner : s.owner !== "all" && r.owner !== s.owner) return false;
-  return true;
+const SELECT = "id,name,domain,kind,tier,vertical,source,source_detail,lifecycle_stage,owner,last_touch_at,updated_at,created_at,flex_clients(total_revenue,total_events,last_event_date)";
+const SPEC = {
+  table: "companies", select: SELECT, base: { merged_into_id: "is.null" }, search: ["name", "domain", "vertical", "source_detail"],
+  filters: { lifecycle: v => (v === "prospect" ? { or: "(lifecycle_stage.eq.prospect,lifecycle_stage.is.null)" } : eqFilter("lifecycle_stage")(v)), kind: eqFilter("kind"), tier: v => (v === "targets" ? inFilter("tier")(TARGET_TIERS) : eqFilter("tier")(v)), owner: ownerFilter },
+  defaultSort: "name.asc",
+  map: r => { const fc = r.flex_clients || []; return { ...r, revenue: fc.reduce((s, f) => s + Number(f.total_revenue || 0), 0), events: fc.reduce((s, f) => s + Number(f.total_events || 0), 0), lastEvent: fc.map(f => f.last_event_date).filter(Boolean).sort().pop() || null }; },
+};
+function useOwners() {
+  const [rows, setRows] = useState([]);
+  useEffect(() => { Promise.resolve().then(async () => { try { const r = await db.select("companies", { select: "owner", owner: "not.is.null", limit: 1000 }); setRows([...new Set((r || []).map(x => x.owner))].sort()); } catch { setRows([]); } }); }, []);
+  return rows;
 }
 
 export default function Companies({ initialReview = false, initialCompanyId = null, initialNew = false, onNavigate }) {
-  const [rows, setRows] = useState([]);
+  const [state, setState] = useUrlState(DEFAULT);
+  const [refresh, setRefresh] = useState(0);
   const [candidates, setCandidates] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [state, setState] = useState({ ...DEFAULT, review: !!initialReview });
-  const [openId, setOpenId] = useState(initialCompanyId);
   const [showNew, setShowNew] = useState(!!initialNew);
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
   const [campaigns, setCampaigns] = useState([]);
-  const personal = usePersonalViews("companies");
+  const personal = useSavedViews("companies");
+  const owners = useOwners();
+  const list = useServerList({ spec: SPEC, state, page: state.page, sort: state.sort || null, enabled: !initialCompanyId && !initialReview, refresh });
+  useEffect(() => { if (list.pastEnd) setState(s => ({ ...s, page: 1 })); }, [list.pastEnd]); // eslint-disable-line react-hooks/exhaustive-deps
+  const counts = useViewCounts(SPEC, BUILTIN, DEFAULT, refresh);
+  useEffect(() => {
+    let on = true;
+    Promise.all([
+      db.select("company_match_candidates", { select: "*,companies(id,name)", status: "eq.pending", order: "confidence.desc,source_name.asc" }).catch(() => []),
+      listCampaigns({ status: "in.(planned,active)" }).catch(() => []),
+    ]).then(([cands, cps]) => { if (on) { setCandidates(cands || []); setCampaigns(cps || []); } });
+    return () => { on = false; };
+  }, [refresh]);
+  const rows = list.rows;
+  const sel = useSelection(rows, "id", list.total);
+  const preview = usePreview(rows);
+  const set = k => v => setState(s => ({ ...s, [k]: v }));
+  const reload = () => setRefresh(n => n + 1);
+  const openRow = r => onNavigate?.("companies", { companyId: r.id });
 
-  async function load() {
-    setLoading(true); setErr("");
-    try {
-      const [cos, cands, cps] = await Promise.all([
-        db.selectAll("companies", { select: "id,name,domain,kind,tier,vertical,source,source_detail,lifecycle_stage,owner,last_touch_at,updated_at,created_at,flex_clients(total_revenue,total_events,last_event_date)", merged_into_id: "is.null", order: "name.asc" }),
-        db.select("company_match_candidates", { select: "*,companies(id,name)", status: "eq.pending", order: "confidence.desc,source_name.asc" }),
-        listCampaigns({ status: "in.(planned,active)" }).catch(() => []),
-      ]);
-      setRows((cos || []).map(r => { const fc = r.flex_clients || []; return { ...r, revenue: fc.reduce((s, f) => s + Number(f.total_revenue || 0), 0), events: fc.reduce((s, f) => s + Number(f.total_events || 0), 0), lastEvent: fc.map(f => f.last_event_date).filter(Boolean).sort().pop() || null }; }));
-      setCandidates(cands || []); setCampaigns(cps || []);
-    } catch (e) { setErr(e.message); }
-    setLoading(false);
+  async function rowsForBulk() {
+    if (!sel.isAll) return sel.selectedRows;
+    return db.selectAll("companies", { ...filterParams(listParams(SPEC, state)), select: "id,name,owner,lifecycle_stage,tier" });
   }
-  useEffect(() => { Promise.resolve().then(load); }, []);
-
-  const visible = useMemo(() => {
-    const out = rows.filter(r => matches(r, state));
-    if (state.tier === "targets") out.sort((a, b) => TARGET_TIERS.indexOf(a.tier) - TARGET_TIERS.indexOf(b.tier) || b.revenue - a.revenue || a.name.localeCompare(b.name));
-    else out.sort((a, b) => b.revenue - a.revenue || (a.name || "").localeCompare(b.name || ""));
-    return out;
-  }, [rows, state]);
-  const counts = useMemo(() => ({ ...Object.fromEntries(BUILTIN.filter(v => !v.state.review).map(v => [v.id, rows.filter(r => matches(r, { ...DEFAULT, ...v.state })).length])), review: candidates.length }), [rows, candidates]);
-  const owners = useMemo(() => [...new Set(rows.map(r => r.owner).filter(Boolean))].sort(), [rows]);
-  const sel = useSelection(visible);
-  const preview = usePreview(visible);
-  const set = k => v => setState(s => ({ ...s, [k]: v, review: false }));
-
   async function act(msg, fn) {
     setBusy(true);
-    try { const undo = await fn(); await load(); sel.clear(); setToast({ msg, undo: undo ? async () => { await undo(); await load(); } : null }); }
+    try { const undo = await fn(await rowsForBulk()); reload(); sel.clear(); setToast({ msg, undo: undo ? async () => { await undo(); reload(); } : null }); }
     catch (e) { setToast({ msg: `Failed: ${e.message}` }); }
     setBusy(false);
   }
   const n = sel.count;
 
-  if (openId) return <CompanyPage key={openId} id={openId} onBack={() => setOpenId(null)} onChanged={load} onNavigate={onNavigate} />;
+  if (initialCompanyId) return <CompanyPage key={initialCompanyId} id={initialCompanyId} onBack={() => onNavigate?.("companies", {})} onChanged={reload} onNavigate={onNavigate} />;
 
   const cols = [
-    { key: "name", label: "Company", width: 240, name: true },
-    { key: "lifecycle_stage", label: "Lifecycle", width: 110, render: r => lifecyclePill(r.lifecycle_stage || "prospect") },
-    { key: "tier", label: "Tier", width: 110, render: r => r.tier ? <span style={pill("outline")}>{TIER_LABEL(r.tier)}</span> : <span style={{ color: TC.faint }}>—</span> },
-    { key: "vertical", label: "Vertical", width: 140 },
-    { key: "owner", label: "Owner", width: 160, render: r => r.owner || <span style={{ color: TC.faint }}>unassigned</span> },
+    { key: "name", label: "Company", width: 240, name: true, sortable: true },
+    { key: "lifecycle_stage", label: "Lifecycle", width: 110, sortable: true, render: r => lifecyclePill(r.lifecycle_stage || "prospect") },
+    { key: "tier", label: "Tier", width: 110, sortable: true, render: r => r.tier ? <span style={pill("outline")}>{TIER_LABEL(r.tier)}</span> : <span style={{ color: TC.faint }}>—</span> },
+    { key: "vertical", label: "Vertical", width: 140, sortable: true },
+    { key: "owner", label: "Owner", width: 140, sortable: true, render: r => r.owner ? r.owner.split("@")[0] : <span style={{ color: TC.faint }}>unassigned</span> },
     { key: "revenue", label: "Flex revenue", width: 120, align: "right", render: r => r.revenue ? money(r.revenue) : <span style={{ color: TC.faint }}>—</span> },
     { key: "events", label: "Events", width: 80, align: "right", render: r => r.events || <span style={{ color: TC.faint }}>—</span> },
     { key: "lastEvent", label: "Last event", width: 100, render: r => r.lastEvent ? day(r.lastEvent) : <span style={{ color: TC.faint }}>—</span> },
-    { key: "last_touch_at", label: "Last touch", width: 100, render: r => <span style={{ color: r.last_touch_at ? TC.ink : TC.faint }}>{r.last_touch_at ? ago(r.last_touch_at) : "never"}</span> },
-    { key: "source", label: "Source", width: 180, render: r => [r.source, r.source_detail].filter(Boolean).join(" · ") || <span style={{ color: TC.faint }}>—</span> },
-    { key: "domain", label: "Domain", width: 160 },
+    { key: "last_touch_at", label: "Last touch", width: 100, sortable: true, render: r => <span style={{ color: r.last_touch_at ? TC.ink : TC.faint }}>{r.last_touch_at ? ago(r.last_touch_at) : "never"}</span> },
+    { key: "source", label: "Source", width: 180, sortable: true, render: r => [r.source, r.source_detail].filter(Boolean).join(" · ") || <span style={{ color: TC.faint }}>—</span> },
+    { key: "domain", label: "Domain", width: 160, sortable: true },
   ];
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, background: TC.bg }}>
       <div style={{ padding: "16px 24px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div><div style={{ ...TT.h3, color: TC.ink }}>Companies</div><div style={{ ...TT.caption, color: TC.muted }}>{rows.length.toLocaleString()} companies · {counts.clients || 0} clients · {counts.engaged || 0} engaged · {counts.prospects || 0} prospects{state.review ? "" : ` · ${visible.length.toLocaleString()} in this view`}</div></div>
-          <button onClick={() => setShowNew(s => !s)} style={{ ...btn("primary"), marginLeft: "auto" }}><Plus size={16} strokeWidth={1.5} /> Company</button>
+          <div><h1 style={{ ...TT.h3, color: TC.ink, margin: 0 }}>Companies</h1><div style={{ ...TT.caption, color: TC.muted }}>{counts.all != null ? `${counts.all.toLocaleString()} companies · ${counts.clients || 0} clients · ${counts.engaged || 0} engaged · ${counts.prospects || 0} prospects` : ""}{!initialReview && list.total != null ? ` · ${list.total.toLocaleString()} in this view` : ""}</div></div>
+          <button type="button" data-new-company onClick={() => setShowNew(s => !s)} style={{ ...btn("primary"), marginLeft: "auto" }}><Plus size={16} strokeWidth={1.5} /> Company</button>
         </div>
-        <div style={{ marginTop: 10 }}>
-          <ViewTabs builtin={BUILTIN} personal={personal.views} state={state} counts={counts} onPick={v => setState({ ...DEFAULT, ...v.state })} onSave={name => personal.save(name, state)} onRemove={personal.remove} />
+        <div style={{ marginTop: 10, display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+          <ViewTabs builtin={BUILTIN} personal={personal.views} state={initialReview ? { review: true } : state} counts={counts} onPick={v => { if (initialReview) onNavigate?.("companies", {}); setState({ ...DEFAULT, ...v.state }); }} onSave={(name, o) => personal.save(name, { ...state, page: 1 }, o)} onRemove={personal.remove} onShare={personal.setShared} onImport={async () => { const k = await personal.importBrowser(); setToast({ msg: `${k} view${k === 1 ? "" : "s"} moved to your account` }); }} />
+          <button type="button" data-view-tab="review" aria-pressed={initialReview} onClick={() => onNavigate?.("companies", { review: true })} style={{ ...pill(initialReview ? "ink" : "outline"), cursor: "pointer", padding: "3px 10px" }}>Needs review{candidates.length ? <span style={{ opacity: 0.7 }}> {candidates.length}</span> : null}</button>
         </div>
-        {!state.review && (
+        {!initialReview && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
-            <div style={{ position: "relative", width: 260 }}><Search size={16} strokeWidth={1.5} style={{ position: "absolute", left: 10, top: 8, color: TC.sub }} /><input value={state.q} onChange={e => set("q")(e.target.value)} placeholder="Search name, domain, vertical, show" style={inputStyle({ padding: "4px 8px 4px 32px" })} /></div>
-            <Facet value={state.lifecycle} onChange={set("lifecycle")} options={[["all", "Any lifecycle"], ...LIFECYCLE.map(k => [k, LIFECYCLE_LABEL[k]])]} />
-            <Facet value={state.kind} onChange={set("kind")} options={[["all", "Any kind"], ...KINDS.map(k => [k, k])]} width={130} />
-            <Facet value={state.tier} onChange={set("tier")} options={[["all", "Any tier"], ["targets", "Target tiers"], ...TIERS.map(k => [k, TIER_LABEL(k)])]} width={140} />
-            <Facet value={state.owner} onChange={set("owner")} options={[["all", "Any owner"], ["me", "Mine"], ["none", "No owner"], ...owners.map(o => [o, o])]} />
-            {JSON.stringify(state) !== JSON.stringify(DEFAULT) && <button onClick={() => setState({ ...DEFAULT })} style={{ ...btn("tertiary"), padding: "2px 8px", fontSize: 12, color: TC.sub }}>Reset</button>}
+            <div style={{ position: "relative", width: 260 }}><Search size={16} strokeWidth={1.5} style={{ position: "absolute", left: 10, top: 8, color: TC.sub }} aria-hidden /><input value={state.q} onChange={e => set("q")(e.target.value)} placeholder="Search name, domain, vertical, show" aria-label="Search companies" style={inputStyle({ padding: "4px 8px 4px 32px" })} /></div>
+            <Facet name="lifecycle" title="Lifecycle" value={state.lifecycle} onChange={set("lifecycle")} options={[["all", "Any lifecycle"], ...LIFECYCLE.map(k => [k, LIFECYCLE_LABEL[k]])]} />
+            <Facet name="kind" title="Kind" value={state.kind} onChange={set("kind")} options={[["all", "Any kind"], ...KINDS.map(k => [k, k])]} width={130} />
+            <Facet name="tier" title="Tier" value={state.tier} onChange={set("tier")} options={[["all", "Any tier"], ["targets", "Target tiers"], ...TIERS.map(k => [k, TIER_LABEL(k)])]} width={140} />
+            <Facet name="owner" title="Owner" value={state.owner} onChange={set("owner")} options={[["all", "Any owner"], ["me", "Mine"], ["none", "No owner"], ...owners.map(o => [o, o.split("@")[0]])]} />
+            {JSON.stringify({ ...state, page: 1, sort: "" }) !== JSON.stringify(DEFAULT) && <button type="button" onClick={() => setState({ ...DEFAULT })} style={{ ...btn("tertiary"), padding: "2px 8px", fontSize: 13, color: TC.sub }}>Reset</button>}
           </div>
         )}
-        {err && <div style={{ ...pill("rust"), marginTop: 10 }}>{err}</div>}
-        {showNew && <div style={{ marginTop: 12 }}><NewCompanyForm onDone={co => { setShowNew(false); load().then(() => setOpenId(co.id)); }} onCancel={() => setShowNew(false)} /></div>}
+        {list.error && <div style={{ ...pill("rust"), marginTop: 10 }}>{list.error}</div>}
+        {showNew && <div style={{ marginTop: 12 }}><NewCompanyForm onDone={co => { setShowNew(false); reload(); onNavigate?.("companies", { companyId: co.id }); }} onCancel={() => setShowNew(false)} /></div>}
       </div>
-      {state.review ? (
-        <div style={{ flex: 1, overflowY: "auto" }}><ReviewQueue candidates={candidates} onChanged={load} /></div>
+      {initialReview ? (
+        <div style={{ flex: 1, overflowY: "auto" }}><ReviewQueue candidates={candidates} onChanged={reload} /></div>
       ) : (
         <div style={{ flex: 1, display: "flex", minHeight: 0, padding: "12px 24px 24px" }}>
-          <ListTable rows={visible} columns={cols} sel={sel} activeId={preview.id} loading={loading} onRow={preview.show} onOpen={r => setOpenId(r.id)} empty="No company matches this view." />
+          <ListTable rows={rows} columns={cols} sel={sel} activeId={preview.id} loading={list.loading} onRow={preview.show} onOpen={openRow}
+            sort={state.sort || SPEC.defaultSort} onSort={s => setState(st => ({ ...st, sort: s }))} page={state.page} pages={list.pages} total={list.total} pageSize={list.pageSize} onPage={p => setState(st => ({ ...st, page: p }))} empty="No company matches this view." />
           {preview.row && (
-            <PreviewPane index={preview.index} total={preview.total} onPrev={preview.prev} onNext={preview.next} onClose={preview.close} onOpen={() => setOpenId(preview.row.id)}
+            <PreviewPane index={preview.index} total={preview.total} onPrev={preview.prev} onNext={preview.next} onClose={preview.close} onOpen={() => openRow(preview.row)}
               title={preview.row.name} subtitle={[preview.row.vertical, preview.row.domain].filter(Boolean).join(" · ")}
               pills={<>{lifecyclePill(preview.row.lifecycle_stage || "prospect")}{preview.row.tier && <span style={pill("outline")}>{TIER_LABEL(preview.row.tier)}</span>}{preview.row.kind && !["prospect", "client"].includes(preview.row.kind) && <span style={pill(preview.row.kind === "competitor" ? "rust" : "sand")}>{preview.row.kind}</span>}</>}>
               <Prop label="Owner">{preview.row.owner || "unassigned"}</Prop>
@@ -162,12 +159,12 @@ export default function Companies({ initialReview = false, initialCompanyId = nu
           )}
         </div>
       )}
-      <BulkBar count={n} onClear={sel.clear} busy={busy}>
-        <button style={barBtn} onClick={() => act(`${n} assigned to you`, () => bulkPatch("companies", sel.selectedRows, { owner: me() }))}>Assign to me</button>
-        <button style={barBtn} onClick={() => act(`Owner cleared on ${n}`, () => bulkPatch("companies", sel.selectedRows, { owner: null }))}>Clear owner</button>
-        <select style={barSelect} value="" onChange={e => e.target.value && act(`${n} set to ${LIFECYCLE_LABEL[e.target.value]}`, () => bulkPatch("companies", sel.selectedRows, { lifecycle_stage: e.target.value }))}><option value="">Lifecycle…</option>{LIFECYCLE.map(k => <option key={k} value={k}>{LIFECYCLE_LABEL[k]}</option>)}</select>
-        <select style={barSelect} value="" onChange={e => e.target.value && act(`${n} set to tier ${TIER_LABEL(e.target.value)}`, () => bulkPatch("companies", sel.selectedRows, { tier: e.target.value }))}><option value="">Tier…</option>{TIERS.map(k => <option key={k} value={k}>{TIER_LABEL(k)}</option>)}</select>
-        {campaigns.length > 0 && <select style={barSelect} value="" onChange={e => { const cp = campaigns.find(c => c.id === e.target.value); if (cp) act(`Added to ${cp.name}`, async () => (await bulkAddToCampaign(cp.id, sel.selectedRows, "company_id")).undo); }}><option value="">Add to campaign…</option>{campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
+      <BulkBar sel={sel} onClear={sel.clear} busy={busy}>
+        <button type="button" style={barBtn} onClick={() => act(`${n} assigned to you`, rows => bulkPatch("companies", rows, { owner: me() }))}>Assign to me</button>
+        <button type="button" style={barBtn} onClick={() => act(`Owner cleared on ${n}`, rows => bulkPatch("companies", rows, { owner: null }))}>Clear owner</button>
+        <select style={barSelect} value="" aria-label="Set lifecycle" onChange={e => e.target.value && act(`${n} set to ${LIFECYCLE_LABEL[e.target.value]}`, rows => bulkPatch("companies", rows, { lifecycle_stage: e.target.value }))}><option value="">Lifecycle…</option>{LIFECYCLE.map(k => <option key={k} value={k}>{LIFECYCLE_LABEL[k]}</option>)}</select>
+        <select style={barSelect} value="" aria-label="Set tier" onChange={e => e.target.value && act(`${n} set to tier ${TIER_LABEL(e.target.value)}`, rows => bulkPatch("companies", rows, { tier: e.target.value }))}><option value="">Tier…</option>{TIERS.map(k => <option key={k} value={k}>{TIER_LABEL(k)}</option>)}</select>
+        {campaigns.length > 0 && <select style={barSelect} value="" aria-label="Add to campaign" onChange={e => { const cp = campaigns.find(c => c.id === e.target.value); if (cp) act(`Added to ${cp.name}`, async rows => (await bulkAddToCampaign(cp.id, rows, "company_id")).undo); }}><option value="">Add to campaign…</option>{campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
       </BulkBar>
       <Toast toast={toast} onDone={() => setToast(null)} />
     </div>

@@ -71,7 +71,8 @@ export const font = {
 };
 export const weight = { regular: 400, medium: 450, bold: 550 };
 
-// Type scale: Apollo's typeface roles. Sizes 12 / 13 / 15 / 20 / 24 / 32; weights 400 / 450 / 550.
+// Type scale: Apollo's typeface roles. Sizes 12 / 14 / 15 / 20 / 24 / 32; weights 400 / 450 / 550. Working text
+// (body2, table cells, inputs, buttons) is 14px since PR 3; captions, pills and labels stay 12.
 export const t = {
   h1:        { fontSize: 32, fontWeight: 450, letterSpacing: "-0.4px", lineHeight: "40px" },
   h2:        { fontSize: 24, fontWeight: 450, lineHeight: "32px" },
@@ -81,9 +82,9 @@ export const t = {
   titleSm:   { fontSize: 15, fontWeight: 450, lineHeight: "24px" },
   body1:     { fontSize: 15, fontWeight: 400, lineHeight: "24px" },
   body1Med:  { fontSize: 15, fontWeight: 450, lineHeight: "24px" },
-  body2:     { fontSize: 13, fontWeight: 400, lineHeight: "20px" },
-  body2Med:  { fontSize: 13, fontWeight: 450, lineHeight: "20px" },
-  body2Bold: { fontSize: 13, fontWeight: 550, lineHeight: "20px" },
+  body2:     { fontSize: 14, fontWeight: 400, lineHeight: "20px" },
+  body2Med:  { fontSize: 14, fontWeight: 450, lineHeight: "20px" },
+  body2Bold: { fontSize: 14, fontWeight: 550, lineHeight: "20px" },
   caption:   { fontSize: 12, fontWeight: 400, lineHeight: "18px" },
   captionMed:{ fontSize: 12, fontWeight: 450, lineHeight: "18px" },
   mono:      { fontSize: 13, fontWeight: 400, fontFamily: "'Roboto Mono', ui-monospace, Menlo, monospace" },
@@ -92,8 +93,8 @@ export const t = {
   tileNum:   { fontSize: 24, fontWeight: 450, lineHeight: 1.1 },
   gauge:     { fontSize: 32, fontWeight: 450, letterSpacing: "-0.4px", lineHeight: 1 },
   leadTitle: { fontSize: 24, fontWeight: 450, lineHeight: "32px" },
-  rowTitle:  { fontSize: 13, fontWeight: 450, lineHeight: "20px" },
-  body:      { fontSize: 13, fontWeight: 400, lineHeight: "20px" },
+  rowTitle:  { fontSize: 14, fontWeight: 450, lineHeight: "20px" },
+  body:      { fontSize: 14, fontWeight: 400, lineHeight: "20px" },
   secondary: { fontSize: 13, fontWeight: 400, lineHeight: "20px", color: sand[70] },
   meta:      { fontSize: 12, fontWeight: 400, lineHeight: "18px" },
   // Apollo uses sentence-case captions, not tracked uppercase, for section and table labels
@@ -126,7 +127,7 @@ export const pill = (tone = "neutral") => {
   return { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: r.pill, padding: "2px 8px", fontSize: 12, fontWeight: 450, lineHeight: "18px", whiteSpace: "nowrap", border: "1px solid transparent", ...tone_ };
 };
 export const btn = (kind = "ink") => {
-  const base = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: r.button, padding: "6px 14px", fontSize: 13, fontWeight: 450, lineHeight: "20px", cursor: "pointer", fontFamily: "inherit", transition: "background 120ms ease, border-color 120ms ease" };
+  const base = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: r.button, padding: "6px 14px", fontSize: 14, fontWeight: 450, lineHeight: "20px", cursor: "pointer", fontFamily: "inherit", transition: "background 120ms ease, border-color 120ms ease" };
   if (kind === "primary" || kind === "accent") return { ...base, background: c.accent, color: c.onAccent, border: "1px solid transparent" };
   if (kind === "ink") return { ...base, background: sand[90], color: sand[4], border: "1px solid transparent" };
   if (kind === "outline" || kind === "secondary") return { ...base, background: sand[2], color: c.ink, border: `1px solid ${c.lineStrong}` };
@@ -134,4 +135,4 @@ export const btn = (kind = "ink") => {
   if (kind === "danger") return { ...base, background: rust[50], color: sand[0], border: "1px solid transparent" };
   return base;
 };
-export const inputStyle = (extra = {}) => ({ padding: "6px 10px", fontSize: 13, lineHeight: "20px", fontFamily: "inherit", color: c.ink, background: sand[0], border: `1px solid ${c.lineStrong}`, borderRadius: r.input, outline: "none", width: "100%", boxSizing: "border-box", ...extra });
+export const inputStyle = (extra = {}) => ({ padding: "6px 10px", fontSize: 14, lineHeight: "20px", fontFamily: "inherit", color: c.ink, background: sand[0], border: `1px solid ${c.lineStrong}`, borderRadius: r.input, width: "100%", boxSizing: "border-box", ...extra }); // no inline outline: the :focus-visible ring in App.jsx must win
