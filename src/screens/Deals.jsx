@@ -19,7 +19,7 @@ import { useServerList, useViewCounts, listParams, filterParams, ownerFilter, eq
 import { today as todayStr, thisMonthKey, shiftMonths, monthKey, fmtDay, relDay } from "../lib/time.js";
 import { forecast, closeUnknown, decisionState, eventDates } from "../lib/forecast.js";
 import * as rebooking from "../lib/rebooking.js";
-import { settings as appSettings, saveSetting } from "../lib/settings.js";
+import { settings as appSettings, saveSetting, team } from "../lib/settings.js";
 import { useIsPhone } from "../lib/viewport.js";
 import { setRecord, clearRecord, baseActions, fireAction } from "../lib/record.js";
 import { ListTable, ViewTabs, BulkBar, barBtn, Toast, PreviewPane, usePreview, useSelection, Facet } from "../components/ListTable.jsx";
@@ -27,6 +27,7 @@ import { RecordLayout, RecordHeader, Card, Prop, Empty } from "../components/Rec
 import InlineField from "../components/InlineField.jsx";
 import Timeline from "../components/Timeline.jsx";
 import CompanyPicker from "../components/CompanyPicker.jsx";
+import { useOwners } from "../lib/owners.js";
 
 const money = n => (n == null ? "—" : "$" + Math.round(Number(n)).toLocaleString());
 const day = d => (d ? String(d).slice(0, 10) : "—");
@@ -41,12 +42,6 @@ const SELECT = "*,companies(id,name,domain,kind,tier,lifecycle_stage),contacts(i
 function useCampaigns() {
   const [rows, setRows] = useState([]);
   useEffect(() => { Promise.resolve().then(async () => { try { setRows(await listCampaigns({ status: "in.(planned,active)" })); } catch { setRows([]); } }); }, []);
-  return rows;
-}
-// Owners seen on deals, for the owner facet.
-function useOwners() {
-  const [rows, setRows] = useState([]);
-  useEffect(() => { Promise.resolve().then(async () => { try { const r = await db.select("deals", { select: "owner", owner: "not.is.null", limit: 1000 }); setRows([...new Set((r || []).map(x => x.owner))].sort()); } catch { setRows([]); } }); }, []);
   return rows;
 }
 
@@ -103,7 +98,7 @@ export default function Deals({ initialDealId = null, initialNew = false, initia
   const [err, setErr] = useState("");
   const [stagesReady, setStagesReady] = useState(false);
   const personal = useSavedViews("deals");
-  const owners = useOwners();
+  const owners = useOwners("deals");
   const phone = useIsPhone();
   const mode = initialReview ? "review" : initialRebooking ? "rebooking" : view;
   useEffect(() => { loadStages().then(() => setStagesReady(true)).catch(() => setStagesReady(true)); }, []);
@@ -346,7 +341,7 @@ function RebookingQueue({ onNavigate, onCreated }) {
   const [data, setData] = useState(null); const [loading, setLoading] = useState(true); const [err, setErr] = useState("");
   const [busy, setBusy] = useState(null); const [creating, setCreating] = useState(null); const [showSettings, setShowSettings] = useState(false);
   const [cfg, setCfg] = useState(() => appSettings().rebooking);
-  const owners = useOwners();
+  const owners = useOwners("deals");
   const load = async () => { setLoading(true); setErr(""); try { const d = await rebooking.list(); setData(d); setCfg(d.settings); } catch (e) { setErr(e.message); } setLoading(false); };
   useEffect(() => { Promise.resolve().then(load); }, []);
   async function act(rec, fn) { setBusy(rec.anchor_project_id); setErr(""); try { await fn(); await load(); } catch (e) { setErr(e.message); } setBusy(null); }
@@ -685,7 +680,7 @@ function DealPage({ id, onBack, onChanged, onNavigate }) {
   const isOpen = OPEN_STAGES.includes(d.stage);
   const decision = decisionState(d);
   const unknownClose = closeUnknown(d);
-  const ownerOpts = [{ value: "", label: "unassigned" }, ...[...new Set([me(), d.owner, d.companies?.owner].filter(Boolean))].map(o => ({ value: o, label: short(o) }))];
+  const ownerOpts = [{ value: "", label: "unassigned" }, ...[...new Set([...team(me()), d.owner, d.companies?.owner].filter(Boolean))].map(o => ({ value: o, label: short(o) }))];
 
   return (
     <RecordLayout

@@ -61,3 +61,19 @@ preview are evidence for those environments only.
   decide (Automation → Email delivery). Follow-ups reconcile from the thread automatically.
 - `scripts/verify-step5.mjs` and `verify-step7.mjs` predate PR 1A/1B (they send `refreshToken` in the body and expect the
   old campaign statuses); update before reuse.
+
+## Adding a person (PR 3b: team list and password reset)
+Done once per new user, in this order; the app side is already built.
+1. **Supabase → Authentication → Users → Add user**: their work email, a temporary password, "Auto confirm" on. (Sign-in
+   is email + password; there is no self sign-up.) Tell them the password out of band; they change it in Settings → Account.
+2. **Supabase → Authentication → URL configuration**: Site URL `https://ff-tank.vercel.app`, and `https://ff-tank.vercel.app/**`
+   in Redirect URLs. Without this the "Forgot password?" link lands on localhost. Optional but recommended:
+   Authentication → SMTP settings → custom SMTP (Resend) so reset emails are not limited to Supabase's 2 per hour.
+3. **FF Tank → Settings → Team → Add** their email. Every owner picker and facet offers them from then on, so deals,
+   companies, people and tasks can be handed to them before they own anything.
+4. **Google Cloud → OAuth consent screen**: while the app is in Testing, add their Gmail address under Test users, or
+   publish the app. Then they open FF Tank → Settings → Gmail → Connect Gmail and consent as themselves. Sending is
+   per person: the server only lets someone send as a Gmail they connected (`canUseSender`).
+5. **Hand over work**: Deals → List → filter → select all matching → Assign (or the owner picker on a deal); Today →
+   Unassigned shows what nobody owns yet.
+6. First session: `docs/ae-walkthrough.md` is the 20-minute tour written for an AE.

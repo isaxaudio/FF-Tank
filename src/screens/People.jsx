@@ -21,6 +21,7 @@ import { RecordLayout, RecordHeader, Card, Prop, Empty } from "../components/Rec
 import InlineField from "../components/InlineField.jsx";
 import Timeline from "../components/Timeline.jsx";
 import CompanyPicker from "../components/CompanyPicker.jsx";
+import { useOwners } from "../lib/owners.js";
 
 const MKT = ["unknown", "subscribed", "unsubscribed"];
 const MKT_TONE = { subscribed: "evergreen", unsubscribed: "rust", unknown: "outline" };
@@ -55,11 +56,6 @@ function useSequenceOptions() {
   useEffect(() => { Promise.resolve().then(async () => { try { setRows((await listSequences()).filter(s => s.status === "active" && s.sequence_steps.length > 0)); } catch { setRows([]); } }); }, []);
   return rows;
 }
-function useOwners() {
-  const [rows, setRows] = useState([]);
-  useEffect(() => { Promise.resolve().then(async () => { try { const r = await db.select("contacts", { select: "owner", owner: "not.is.null", limit: 1000 }); setRows([...new Set((r || []).map(x => x.owner))].sort()); } catch { setRows([]); } }); }, []);
-  return rows;
-}
 
 export default function People({ initialContactId = null, initialNew = false, onNavigate }) {
   const [state, setState] = useUrlState(DEFAULT);
@@ -70,7 +66,7 @@ export default function People({ initialContactId = null, initialNew = false, on
   const personal = useSavedViews("people");
   const campaigns = useCampaignOptions();
   const sequences = useSequenceOptions();
-  const owners = useOwners();
+  const owners = useOwners("contacts");
   const list = useServerList({ spec: SPEC, state, page: state.page, sort: state.sort || null, enabled: !initialContactId, refresh });
   useEffect(() => { if (list.pastEnd) setState(s => ({ ...s, page: 1 })); }, [list.pastEnd]); // eslint-disable-line react-hooks/exhaustive-deps
   const counts = useViewCounts(SPEC, BUILTIN, DEFAULT, refresh);

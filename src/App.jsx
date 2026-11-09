@@ -14,9 +14,9 @@ import Reports from "./screens/Reports.jsx";
 import Automation from "./screens/Automation.jsx";
 import CommandBar from "./components/CommandBar.jsx";
 import { currentRoute, navigate as routeTo, onRouteChange, currentSearch } from "./lib/router.js";
-import { loadSettings } from "./lib/settings.js";
-import { inputStyle, btn } from "./tokens.js";
-import { Home as IcHome, Building2, Users, Send, Bot, Settings as IcSettings, Kanban, PieChart, LogOut, Search as IcSearch } from "lucide-react";
+import { loadSettings, saveSetting, settings as appSettings, onSettings } from "./lib/settings.js";
+import { inputStyle, btn, tile } from "./tokens.js";
+import { X, Home as IcHome, Building2, Users, Send, Bot, Settings as IcSettings, Kanban, PieChart, LogOut, Search as IcSearch } from "lucide-react";
 const FONT = TF.sans;
 
 export class ErrorBoundary extends React.Component {
@@ -1410,6 +1410,76 @@ function GmailCard({ senders }) {
   );
 }
 
+// Settings → Team: the sign-in emails that may own records (app_settings.team). Every owner picker and facet
+// offers these, so a deal can be handed to someone before they own anything. Access itself is a Supabase user
+// account, created in the Supabase dashboard; this list only names who shows up as an owner.
+function TeamCard() {
+  const [members, setMembers] = useState(() => appSettings().team || []);
+  const [add, setAdd] = useState("");
+  const [state, setState] = useState({ busy: false, msg: "", ok: false });
+  useEffect(() => onSettings(s => setMembers(s.team || [])), []);
+  const me = (auth.user()?.email || "").toLowerCase();
+  async function save(next, done) {
+    setState({ busy: true, msg: "", ok: false });
+    try { await saveSetting("team", next); setState({ busy: false, ok: true, msg: done }); }
+    catch (err) { setState({ busy: false, ok: false, msg: err.message || "Could not save the team." }); }
+  }
+  function submit(e) { e.preventDefault(); const v = add.trim().toLowerCase(); if (!v) return; setAdd(""); save([...new Set([...members, v])], `${v} added`); }
+  return (
+    <form data-team-card onSubmit={submit} style={{ background: TC.bg, border: `1px solid ${TC.line}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 13, fontWeight: 450, color: TC.ink }}>Team</span><span style={{ marginLeft: "auto", fontSize: 11.5, color: TC.faint }}>{members.length} {members.length === 1 ? "person" : "people"}</span></div>
+      <div style={{ fontSize: 11.5, lineHeight: "16px", color: TC.faint }}>Who can be an owner on deals, companies, people and tasks. Sign-in accounts themselves are created in Supabase (Authentication → Users).</div>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+        {members.length === 0 && <li style={{ fontSize: 12, color: TC.faint }}>No one yet besides you.</li>}
+        {members.map(m => (
+          <li key={m} data-team-member={m} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: TC.ink }}>
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m}{m === me ? <span style={{ color: TC.faint }}> · you</span> : null}</span>
+            <button type="button" aria-label={`Remove ${m} from the team`} disabled={state.busy} onClick={() => save(members.filter(x => x !== m), `${m} removed`)} style={{ ...btn("tertiary"), padding: "2px 6px" }}><X size={13} /></button>
+          </li>
+        ))}
+      </ul>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input type="email" value={add} onChange={e => setAdd(e.target.value)} placeholder="name@fatfishmedia.com" aria-label="Add a team member by email" style={inputStyle({ flex: 1 })} />
+        <button type="submit" disabled={state.busy || !add.trim()} style={btn("secondary")}>Add</button>
+      </div>
+      {state.msg && <div style={{ fontSize: 12, color: state.ok ? TC.positiveInk : TC.criticalInk }}>{state.msg}</div>}
+    </form>
+  );
+}
+
+// The page a recovery link lands on: the link signed the person in once; they choose a new password here.
+function ResetPasswordScreen({ onDone }) {
+  const [pw, setPw] = useState(""); const [again, setAgain] = useState("");
+  const [email, setEmail] = useState(auth.user()?.email || "");
+  const [state, setState] = useState({ busy: false, msg: "" });
+  useEffect(() => { if (!email) auth.loadUser().then(u => u && setEmail(u.email)); }, [email]);
+  async function submit(e) {
+    e.preventDefault();
+    if (pw.length < 12) return setState({ busy: false, msg: "Use at least 12 characters." });
+    if (pw !== again) return setState({ busy: false, msg: "The two entries differ." });
+    setState({ busy: true, msg: "" });
+    try { await auth.updatePassword(pw); await auth.loadUser(); onDone(); }
+    catch (err) { setState({ busy: false, msg: err.message || "Could not set the password." }); }
+  }
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: TC.bg, padding: 16 }}>
+      <form data-reset-password onSubmit={submit} style={{ width: "100%", maxWidth: 380, display: "flex", flexDirection: "column", gap: 12, ...tile({ padding: 20 }) }}>
+        <div style={{ fontSize: 18, fontWeight: 450, color: TC.ink }}>Choose a new password</div>
+        <div style={{ fontSize: 13, color: TC.sub }}>{email ? `for ${email}` : "The reset link signed you in."}</div>
+        <input type="text" name="username" autoComplete="username" value={email} readOnly hidden />
+        <label style={{ fontSize: 12, color: TC.muted, display: "flex", flexDirection: "column", gap: 4 }}>New password
+          <input type="password" autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} placeholder="At least 12 characters" autoFocus style={inputStyle()} />
+        </label>
+        <label style={{ fontSize: 12, color: TC.muted, display: "flex", flexDirection: "column", gap: 4 }}>Again
+          <input type="password" autoComplete="new-password" value={again} onChange={e => setAgain(e.target.value)} style={inputStyle()} />
+        </label>
+        {state.msg && <div style={{ fontSize: 12, color: TC.criticalInk }}>{state.msg}</div>}
+        <button type="submit" disabled={state.busy} style={btn("primary")}>{state.busy ? "Saving…" : "Save and continue"}</button>
+      </form>
+    </div>
+  );
+}
+
 // Settings → Account: change the signed-in user's password. Other devices keep their sessions.
 function PasswordCard() {
   const [pw, setPw] = useState(""); const [again, setAgain] = useState("");
@@ -1537,6 +1607,7 @@ function FFTank({ onSignOut }) {
             <div style={{ fontSize: 13, lineHeight: "20px", color: TC.sub, marginBottom: 18 }}>Keys entered here stay in this browser and are only used by the legacy Flex and Apollo views. Scheduled jobs and email use the keys configured on the server.</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
               <PasswordCard />
+              <TeamCard />
               <GmailCard senders={senders} />
               {SETTINGS_FIELDS.map(f => (
                 <div key={f.key} style={{ background: TC.bg, border: `1px solid ${TC.line}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1612,7 +1683,10 @@ function FFTank({ onSignOut }) {
 }
 
 export default function App() {
+  // A recovery (or magic) link lands with the session in the URL hash; pick it up before reading the session.
+  const [landed] = useState(() => auth.sessionFromHash());
   const [session, setSession] = useState(() => auth.session());
+  const [resetting, setResetting] = useState(() => landed?.type === "recovery");
   useEffect(() => {
     if (!session) return;
     auth.token();
@@ -1629,6 +1703,7 @@ export default function App() {
     window.addEventListener("ff:signed-out", out);
     return () => { clearInterval(t); clearTimeout(t0); clearInterval(t2); window.removeEventListener("ff:signed-out", out); };
   }, [session]);
-  if (auth.configured() && !session) return <Login onSignedIn={() => setSession(auth.session())} />;
+  if (auth.configured() && !session) return <Login onSignedIn={() => setSession(auth.session())} notice={landed?.error ? `That link did not work (${landed.error}). Ask for a new one below.` : ""} />;
+  if (resetting) return <ResetPasswordScreen onDone={() => { setResetting(false); setSession(auth.session()); }} />;
   return <FFTank onSignOut={async () => { await auth.signOut(); setSession(null); }} />;
 }
