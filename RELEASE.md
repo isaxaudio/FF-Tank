@@ -76,7 +76,8 @@ Done once per new user, in this order; the app side is already built.
    Authentication → SMTP settings → custom SMTP (Resend) so reset emails are not limited to Supabase's 2 per hour.
 3. **FF Tank → Settings → Team → Add** their email. Every owner picker and facet offers them from then on, so deals,
    companies, people and tasks can be handed to them before they own anything.
-4. **Google Cloud → OAuth consent screen**: while the app is in Testing, add their Gmail address under Test users, or
+4. **Google Cloud → Google Auth Platform → Audience** (project "OpenClaw Gmail", which owns the "FF Tank" web client):
+   while the app is in Testing, add their Gmail address under Test users (done 2026-11-10 for Taylor), or
    publish the app. Then they open FF Tank → Settings → Gmail → Connect Gmail and consent as themselves. Sending is
    per person: the server only lets someone send as a Gmail they connected (`canUseSender`).
 5. **Hand over work**: Deals → List → filter → select all matching → Assign (or the owner picker on a deal); Today →
