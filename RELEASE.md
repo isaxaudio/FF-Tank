@@ -64,10 +64,15 @@ preview are evidence for those environments only.
 
 ## Adding a person (PR 3b: team list and password reset)
 Done once per new user, in this order; the app side is already built.
-1. **Supabase → Authentication → Users → Add user**: their work email, a temporary password, "Auto confirm" on. (Sign-in
-   is email + password; there is no self sign-up.) Tell them the password out of band; they change it in Settings → Account.
+1. **Create the auth user without a password** (so nobody has to type or relay one). From the project folder, with
+   `SUPABASE_SERVICE_ROLE_KEY` in `.env`:
+   `curl -X POST "$SUPABASE_URL/auth/v1/admin/users" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" -d '{"email":"name@fatfishmedia.com","email_confirm":true}'`
+   They then open ff-tank.vercel.app → "Forgot password?" → set their own. (The dashboard's Add user with a temporary
+   password also works; there is no self sign-up either way.) Done 2026-11-09 for taylor@fatfishmedia.com.
 2. **Supabase → Authentication → URL configuration**: Site URL `https://ff-tank.vercel.app`, and `https://ff-tank.vercel.app/**`
-   in Redirect URLs. Without this the "Forgot password?" link lands on localhost. Optional but recommended:
+   and `http://127.0.0.1:4174/**` in Redirect URLs (the second is for the local preview). Without the Site URL the
+   "Forgot password?" link lands on localhost. Set 2026-11-09; the recovery link was verified landing on the app's
+   set-a-new-password screen with `scripts/verify-reset.mjs`. Optional but recommended:
    Authentication → SMTP settings → custom SMTP (Resend) so reset emails are not limited to Supabase's 2 per hour.
 3. **FF Tank → Settings → Team → Add** their email. Every owner picker and facet offers them from then on, so deals,
    companies, people and tasks can be handed to them before they own anything.
