@@ -35,3 +35,24 @@ test("a deal linked to a cancelled quote carries no booked value and is listed; 
   const f = flexFreshness({ projects, now: new Date("2026-11-10T00:00:00Z") });
   assert.equal(f.coverage.bookings, 1); assert.equal(f.coverage.projects, 4); assert.equal(f.coverage.future, 0, "the open inquiry is not a booking ahead");
 });
+
+test("an account belongs to the AM on its latest live quote; cancelled quotes do not move it; others are listed", async () => {
+  const { accountOwner } = web;
+  const { accountsByAM } = await import("../src/lib/reports.js");
+  const q = (doc, date, status, am, extra = {}) => ({ client_name: "Acme", event_type: "Quote", event_date: date, budget_estimate: 10000, notes: `[Fat Fish Media] · status: ${status} · doc ${doc} · AM: ${am}`, ...extra });
+  const now = new Date("2026-11-10T00:00:00Z");
+  const ps = [q("24-0001", "2024-05-01", "Closed", "Bubba Palmer"), q("25-0007", "2025-06-01", "Closed", "Chase Cook"), q("26-0100", "2026-12-01", "Cancelled", "Pete Bordass"), q("26-0090", "2026-09-01", "Confirmed", "Chase Cook")];
+  const own = accountOwner(ps, { now });
+  assert.equal(own.owner, "Chase Cook", "the later cancelled quote by someone else does not take the account");
+  assert.deepEqual(own.basis, { doc: "26-0090", status: "Confirmed", date: "2026-09-01" });
+  assert.deepEqual(own.others, [{ name: "Bubba Palmer", n: 1 }, { name: "Pete Bordass", n: 1 }]);
+  assert.equal(accountOwner([q("26-0100", "2026-12-01", "Cancelled", "Pete Bordass")], { now }).owner, "Pete Bordass", "only cancelled quotes: the latest one still names someone");
+  assert.equal(accountOwner([{ client_name: "X", event_type: "Event Folder", notes: "status: Confirmed · doc 26-1 · AM: Sam" }], { now }), null, "folders do not decide ownership");
+  const old = { ...q("21-0001", "2021-03-01", "Closed", "Richard Payson"), client_name: "Lapsed Co" };
+  const a = accountsByAM({ projects: [...ps, old], clients: [{ name: "Acme", company_id: "co1", companies: { name: "Acme Events" } }], now });
+  assert.equal(a.totals.active, 1); assert.equal(a.totals.shared, 1); assert.equal(a.totals.unmatched, 0);
+  const acme = a.rows.find(r => r.client === "Acme");
+  assert.deepEqual([acme.companyId, acme.companyName, acme.lastEvent, acme.nextEvent, acme.booked3y], ["co1", "Acme Events", "2026-09-01", null, 30000], "the cancelled December quote is not a next booking");
+  assert.equal(a.rows.find(r => r.client === "Lapsed Co").active, false);
+  assert.deepEqual(a.people.map(p => [p.name, p.accounts]), [["Chase Cook", 1]]);
+});

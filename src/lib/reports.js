@@ -18,7 +18,7 @@
 //   it and never makes an old import look fresh.
 import { db } from "./db.js";
 import { STAGES, STAGE_LABEL, OPEN_STAGES, weighted, STAGE_PROBABILITY } from "./deals.js";
-import { isBooking, docStatus, docType, isQuoteType, OPEN_STATUSES } from "./flexdocs.js";
+import { isBooking, docStatus, docType, isQuoteType, OPEN_STATUSES, accountOwner } from "./flexdocs.js";
 
 export const PERIODS = [
   { id: "30", label: "Last 30 days", days: 30 },
@@ -76,6 +76,10 @@ export const METRICS = {
   emails_sent: { label: "Emails sent", def: "One-to-one and sequence emails sent from Gmail, and campaign emails recorded as sent.", period: "Logged in {period}", source: "activities type email_sent" },
   meetings: { label: "Meetings", def: "Meetings logged on a record.", period: "Logged in {period}", source: "activities type meeting" },
   tasks_done: { label: "Tasks done", def: "Tasks marked done.", period: "Logged in {period}", source: "activities type task_done" },
+  am_accounts: { label: "Active accounts", def: "Flex clients with a booking whose event falls in the last three years or ahead.", period: "Last 3 years and ahead", source: "flex_projects (quotes: client, status, AM)" },
+  am_people: { label: "Account managers", def: "People who own at least one active account. The owner is the AM on the client's latest quote that is not cancelled.", period: "Latest quote per client", source: "flex_projects notes (AM)" },
+  am_shared: { label: "Worked by several AMs", def: "Active accounts where someone other than the owner was AM on a quote in the last three years.", period: "Last 3 years", source: "flex_projects notes (AM)" },
+  am_unmatched: { label: "Not matched to a company", def: "Active Flex clients with no FF Tank company yet, so their owner cannot show on a company page.", period: "Right now", source: "flex_clients.company_id" },
   ops_heartbeat: { label: "Scheduler", def: `Minutes since the scheduler tick last finished cleanly. It runs every 15 minutes from the Mac mini and any open tab; more than ${HEARTBEAT_STALE_MIN} minutes is a problem.`, period: "Right now", source: "job_state scheduler" },
   ops_reply_sync: { label: "Reply sync", def: "Mailboxes whose replies were read in the last 6 hours, out of all connected Gmail accounts.", period: "Right now", source: "gmail_accounts.replies_checked_at" },
   ops_failures: { label: "Needs attention", def: "Campaign emails that finished with failures or are paused, plus sequence steps whose delivery is uncertain.", period: "Right now", source: "campaign_emails, sequence_step_runs" },
@@ -92,6 +96,7 @@ export const HEADLINES = {
   flex: ["flex_imported", "flex_projects", "flex_latest_event", "flex_matcher", "crm_linked"],
   activity: ["touches", "calls", "emails_sent", "meetings", "tasks_done"],
   ops: ["ops_heartbeat", "ops_reply_sync", "ops_failures", "ops_events"],
+  accounts: ["am_accounts", "am_people", "am_shared", "am_unmatched"],
 };
 
 export const REPORTS = [
@@ -101,6 +106,7 @@ export const REPORTS = [
   { id: "campaign", label: "Campaign outcomes", blurb: "Replies, meetings, proposals and bookings per campaign; opens and clicks second." },
   { id: "flex", label: "Flex data and history", blurb: "How fresh the Flex mirror is, what the matcher did, and project value by year." },
   { id: "activity", label: "Activity per owner", blurb: "Calls, emails, meetings, notes and tasks logged by each person." },
+  { id: "accounts", label: "Accounts by AM", blurb: "Who handles each client in Flex: the account manager on its latest live quote." },
   { id: "ops", label: "Operations", blurb: "Scheduler heartbeat, reply sync, delivery failures and what to do about them." },
 ];
 
@@ -109,7 +115,7 @@ export const REPORTS = [
 export async function loadReportData(periodId, now = new Date()) {
   const since = periodSince(periodId, now);
   const started = Date.now();
-  const [deals, history, productions, campaigns, stats, signals, activities, flexProjects, flexClientsLatest, flexClientsCount, jobs, sends, members, replies] = await Promise.all([
+  const [deals, history, productions, campaigns, stats, signals, activities, flexProjects, flexClientsLatest, flexClientsCount, jobs, sends, members, replies, flexClients] = await Promise.all([
     db.selectAll("deals", { select: "id,name,company_id,primary_contact_id,stage,probability,amount_estimate,owner,source,source_detail,flex_project_id,flex_linked_at,primary_campaign_id,opportunity_id,signal_id,deal_type,series_id,created_at,closed_at,updated_at,companies(name)" }),
     db.selectAll("deal_stage_history", { select: "deal_id,from_stage,to_stage,changed_at", order: "changed_at.asc" }),
     db.selectAll("deal_productions", { select: "deal_id,flex_project_id" }).catch(() => []),
@@ -124,6 +130,7 @@ export async function loadReportData(periodId, now = new Date()) {
     db.selectAll("campaign_sends", { select: "campaign_id,contact_id,sent_at,outcome,contacts(company_id)", is_test: "eq.false", outcome: "in.(accepted,delivered)" }).catch(() => []),
     db.selectAll("campaign_members", { select: "campaign_id,contact_id,company_id,added_at,contacts(company_id)" }).catch(() => []),
     db.selectAll("email_messages", { select: "id,campaign_id,contact_id,replied_at,contacts(name)", campaign_id: "not.is.null", replied_at: "not.is.null" }).catch(() => []),
+    db.selectAll("flex_clients", { select: "name,company_id,companies(name)" }).catch(() => []),
   ]);
   const byFlexId = Object.fromEntries((flexProjects || []).map(p => [p.flex_id, p]));
   const ledger = bookedLedger(deals || [], productions || [], byFlexId);
@@ -133,7 +140,7 @@ export async function loadReportData(periodId, now = new Date()) {
     stats: Object.fromEntries((stats || []).map(s => [s.campaign_id, s])), signals: signals || 0, activities: activities || [],
     flexProjects: flexProjects || [], flexClientsImportedAt: flexClientsLatest?.[0]?.created_at || null, flexClientsCount: flexClientsCount || 0,
     jobs: Object.fromEntries((jobs || []).map(j => [j.job, j])), sends: sends || [], members: members || [], replies: replies || [],
-    byFlexId, ledger,
+    byFlexId, ledger, flexClients: flexClients || [],
   };
 }
 
@@ -407,6 +414,32 @@ export function flexHistory(allProjects, now = new Date()) {
     const t = (p.event_type || "Other").trim(); const g2 = (byType[t] ||= { name: t, projects: 0, value: 0 }); g2.projects++; g2.value += Number(p.budget_estimate || 0);
   }
   return { years: rows, topClients: Object.values(byClient).sort((a, b) => b.value - a.value).slice(0, 10), eventTypes: Object.values(byType).sort((a, b) => b.value - a.value).slice(0, 8), total: rows.reduce((s, r) => s + r.value, 0), bookings: projects.length, excluded };
+}
+
+// ---- accounts by account manager ---------------------------------------------------------------------------------
+
+// One row per Flex client with quotes: owner (accountOwner), brand, others, last and next booked event, booked value
+// over the last three years and lifetime, and the FF Tank company it maps to through flex_clients (by name).
+export function accountsByAM({ projects, clients = [], now = new Date() }) {
+  const today = now.toISOString().slice(0, 10), since = new Date(now.getTime() - 3 * 365 * DAY).toISOString().slice(0, 10);
+  const company = new Map(); for (const c of clients) if (c.name && c.company_id && !company.has(c.name.trim().toLowerCase())) company.set(c.name.trim().toLowerCase(), { id: c.company_id, name: c.companies?.name || c.name });
+  const byClient = new Map(); for (const p of projects) { const k = (p.client_name || "").trim(); if (!k) continue; const a = byClient.get(k) || []; a.push(p); byClient.set(k, a); }
+  const rows = [];
+  for (const [client, ps] of byClient) {
+    const own = accountOwner(ps, { now }); if (!own) continue;
+    const booked = ps.filter(isBooking); const day = p => String(p.event_date || "").slice(0, 10);
+    const past = booked.filter(p => day(p) && day(p) <= today).map(day).sort(), ahead = booked.filter(p => day(p) > today).map(day).sort();
+    const co = company.get(client.toLowerCase()) || null;
+    rows.push({ key: client, client, companyId: co?.id || null, companyName: co?.name || null, owner: own.owner, brand: own.brand, basis: own.basis, others: own.others,
+      lastEvent: past.length ? past[past.length - 1] : null, nextEvent: ahead[0] || null,
+      booked3y: booked.filter(p => day(p) >= since).reduce((s, p) => s + Number(p.budget_estimate || 0), 0), lifetime: booked.reduce((s, p) => s + Number(p.budget_estimate || 0), 0),
+      active: booked.some(p => day(p) >= since) });
+  }
+  rows.sort((a, b) => b.booked3y - a.booked3y || b.lifetime - a.lifetime);
+  const people = {};
+  for (const r of rows.filter(r => r.active)) { const g = (people[r.owner] ||= { name: r.owner, accounts: 0, booked3y: 0, ahead: 0 }); g.accounts++; g.booked3y += r.booked3y; if (r.nextEvent) g.ahead++; }
+  const active = rows.filter(r => r.active);
+  return { rows, people: Object.values(people).sort((a, b) => b.booked3y - a.booked3y), totals: { active: active.length, people: Object.keys(people).length, shared: active.filter(r => r.others.length).length, unmatched: active.filter(r => !r.companyId).length } };
 }
 
 // ---- 6. activity per owner ------------------------------------------------------------------------------------------

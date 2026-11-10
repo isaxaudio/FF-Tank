@@ -10,3 +10,20 @@ export function docNumber(p) { const m = String((p && p.notes) || "").match(/doc
 export function isBooking(p) { const t = docType(p), s = docStatus(p); if (t && !isQuoteType(t)) return false; return s == null || BOOKED_STATUSES.includes(s); }
 export const isCancelled = p => docStatus(p) === "Cancelled";
 export function isMatchable(p) { const t = docType(p); return (!t || isQuoteType(t)) && !isCancelled(p); }
+
+// ---- who handles an account ----------------------------------------------------------------------------------------
+export function docAM(p) { const m = String((p && p.notes) || "").match(/AM:\s*(.+?)\s*$/); return m ? m[1] : null; }
+export function docBrand(p) { const m = String((p && p.notes) || "").match(/^\[([^\]]+)\]/); return m ? m[1] : null; }
+// The account manager of a client: the AM on the client's latest live quote (not cancelled; by event date, then doc
+// number), else on its latest quote of any status. `others` are the other AMs on the client's quotes in `sinceDays`.
+export function accountOwner(projects, { now = new Date(), sinceDays = 3 * 365 } = {}) {
+  const quotes = (projects || []).filter(p => isQuoteType(docType(p)) || !docType(p)).filter(p => docAM(p));
+  if (!quotes.length) return null;
+  const key = p => `${String(p.event_date || "").slice(0, 10)}|${docNumber(p) || ""}`;
+  const latest = xs => [...xs].sort((a, b) => key(b).localeCompare(key(a)))[0];
+  const live = quotes.filter(p => !isCancelled(p));
+  const pick = latest(live.length ? live : quotes);
+  const since = new Date(now.getTime() - sinceDays * 864e5).toISOString().slice(0, 10);
+  const counts = {}; for (const p of quotes) if (String(p.event_date || "").slice(0, 10) >= since && docAM(p) !== docAM(pick)) counts[docAM(p)] = (counts[docAM(p)] || 0) + 1;
+  return { owner: docAM(pick), brand: docBrand(pick), basis: { doc: docNumber(pick), status: docStatus(pick), date: String(pick.event_date || "").slice(0, 10) || null }, others: Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, n]) => ({ name, n })) };
+}
