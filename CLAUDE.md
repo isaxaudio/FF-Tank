@@ -290,7 +290,7 @@ unauthenticated call never reaches a handler that holds server keys:
 - **public** — `gmail-auth` (Google's OAuth redirect; the signed state binds it to the user who started it), `resend-webhook`
   (Svix signature, 5-minute timestamp window), `unsubscribe` (`/u/<token>`, the contact's own `unsub_token`).
 - **staff** — every other service and the stand-alone files (`apollo-prospect`, `enrich-opportunities`, `scan-targets`,
-  `cron-exec-movement`, `cron-scout`): a Supabase user JWT or `CRON_SECRET` (`Authorization: Bearer …`).
+  `cron-scout`): a Supabase user JWT or `CRON_SECRET` (`Authorization: Bearer …`).
 - **person only** — `gmail-send`, `gmail-draft`, `gmail-connect` need a signed-in user (`requireUser`); the cron secret is refused.
 - **sender permission** — a user may send as a Gmail account whose address is their own sign-in email or that they connected
   (`gmail_accounts.connected_by`); `canUseSender`. The scheduler sends as the sequence's configured `sender_email`.
@@ -438,6 +438,23 @@ Design: working text is 14px (body2, table cells, inputs, buttons); captions and
 rings. Record pages on a phone show Call · Note · Task · Email. Verification: `scripts/verify-pr3.mjs` (needs
 migration 014, the local preview on 4174 and `vercel dev` on 3001).
 
+## AI work runs on the Claude subscription (Mac mini), not API credits
+Since 2026-11-10 no server code calls the Anthropic API (`ANTHROPIC_API_KEY` in Vercel is unused). Model work happens on
+the Mac mini through Claude Code (`claude -p`, the subscription login; `ANTHROPIC_API_KEY` is stripped from its
+environment, no tools, no MCP), installed with `sh scripts/install-mini-jobs.sh`:
+- **Lead scoring** `scripts/score-leads.mjs` (7:15, 19:15): the Vercel scout (`api/cron-scout.js`, 13:00 UTC) only
+  searches and saves leads as `unscored` (Handoff and Signals never show them). The mini scores them with the shared rules
+  in `lib/server/scoutprompt.cjs` (`decide`: < 5 archived; otherwise `new` with score, reason, host, date) and, for good
+  leads, writes `metadata.pitch` (angle, subject, opener). Handoff shows it as "Suggested first email"; `enrich-lead`
+  (Apollo contact lookup) uses it as the draft. job_state `lead_scoring`.
+- **Flex refresh** `scripts/flex-refresh.mjs --apply` (02:30): documents, then clients (new ones `client:<name>`, linked to
+  the company with the same name, totals from bookings only). job_state `flex_import`.
+Reports → Operations flags scoring after 36 h and the Flex refresh after 2 days without success. Handoff shows the last
+30 days by default. Retired on 2026-11-10: the Monday brief, `api/cron-exec-movement.js`, the Flex Intel screen with its AI
+panels, lookalike engine, Flex Sync and CSV import (and the browser-held Apollo/Flex keys), `draft-outreach`.
+`scripts/archive-signal-backlog.mjs` archived the pre-November backlog (`--undo <file>`). Tests: `test/scout.test.cjs`.
+The hiring checks in job_runs ("mac-mini" agent) are not in this repo (OpenClaw on the VPS).
+
 ## Reports you can trust (PR 4, migration 015)
 `src/lib/reports.js` loads once per period and computes every report with pure functions (`test/reports.test.mjs`).
 - **Definitions.** `METRICS` gives each headline a label, definition, period and source; `HEADLINES[report]` lists the
@@ -472,6 +489,11 @@ migration 014, the local preview on 4174 and `vercel dev` on 3001).
   backups/flex-cache), upserts on `flex_id` (Flex's element id, so deal links survive), stamps `created_at` and
   `job_state.flex_import`. Token from `FLEX_TOKEN_FILE` (default `~/Projects/flex-quoting-study/.flex_token`; the in-app
   `flexApiKey` only reaches contacts). The Flex Intel CSV import invents row-number ids and would duplicate rows.
+- **Accounts by AM.** Reports → Accounts by AM (`accountsByAM`) and "Flex AM" on the company page (`accountOwner` in
+  src/lib/flexdocs.js): the owner of a Flex client is the AM on its latest quote that is not cancelled; other AMs on its
+  quotes in the last three years are listed. Clients map to companies through `flex_clients` by name; clients added in
+  Flex since the last contact sync show "not in FF Tank". This is Flex's view; `companies.owner` (who works the account
+  in the CRM) is separate and not changed by it.
 - **Migration 015** fixes `campaign_stats`: `open_value` = open stages only (a booked deal used to stay in it), `sent` /
   `failed` by delivery outcome. Same columns, so readers keep working.
 - **Measured:** first report renders about 2 s after navigation on the live data (2,000+ Flex projects); queries stay in

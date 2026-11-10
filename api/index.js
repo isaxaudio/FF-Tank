@@ -9,17 +9,7 @@ const worker = require('../lib/server/worker.cjs');
 const sales = require('../lib/server/sales.cjs');
 const { wrap, signedBody } = require('../lib/server/http.cjs');
 
-// ─── Anthropic shared headers ─────────────────────────────────────────────────
-// ANTHROPIC_HEADERS: base headers for all direct Anthropic API calls.
-// CACHE_HEADERS: adds prompt-caching beta — marks static system/tool content
-// with cache_control so repeated calls reuse cached tokens (90% cheaper on hits).
-const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY || '';
-const ANTHROPIC_HEADERS = (key) => ({
-  'Content-Type': 'application/json',
-  'x-api-key': key || ANTHROPIC_KEY(),
-  'anthropic-version': '2023-06-01',
-  'anthropic-beta': 'prompt-caching-2024-07-31',
-});
+// No Anthropic API calls from this server: model work runs through Claude Code on the Mac mini (scripts/score-leads.mjs).
 // Helper: wrap a system prompt string into a cacheable content block array.
 const cachedSystem = (text) => [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
 // Helper: mark the last tool in an array as the cache boundary.
@@ -55,18 +45,6 @@ const gptMini = async (system, user, maxTokens = 500) => {
 // Extract text content from a GPT-4o-mini response.
 const gptText = (d) => d.choices?.[0]?.message?.content || '';
 
-// Claude Haiku one-shot — cheap text task (extraction, short drafts). Uses the
-// Anthropic key (always configured here; OpenAI is not). Returns plain text.
-const claudeMini = async (system, user, maxTokens = 300) => {
-  const key = ANTHROPIC_KEY();
-  if (!key) throw new Error('ANTHROPIC_API_KEY not set');
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST', headers: ANTHROPIC_HEADERS(key),
-    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
-  });
-  const d = await r.json();
-  return (d.content || []).map(b => b.text || '').join('').trim();
-};
 
 // ─── Unified run logger ───────────────────────────────────────────────────────
 // Writes one job_runs row per handler call. Fire-and-forget, never throws.
@@ -110,10 +88,10 @@ const logRun = (handler, provider, model, inT, outT, durationMs, success) => {
 // Access boundaries. Every service needs a signed-in user or the scheduler secret before it runs,
 // except the three that are reached from outside and validate their own input (lib/server/auth.cjs).
 const PUBLIC_SERVICES = new Set(['gmail-auth', 'resend-webhook', 'unsubscribe']);
-const SERVICES = ['apollo', 'tavily', 'supabase', 'qualify', 'flex-analyze', 'flex-sync', 'flex-intel', 'flex-lookalike', 'lookalike-engine',
+const SERVICES = ['apollo', 'tavily', 'supabase', 'qualify',
   'gmail-draft', 'gmail-send', 'gmail-auth', 'gmail-connect', 'gmail-accounts', 'sequence-run', 'reply-check', 'flex-candidates',
   'campaign-send', 'campaign-audience', 'campaign-email', 'template-test', 'today-feed', 'rebooking', 'app-settings', 'resend-webhook', 'unsubscribe', 'worker-status', 'worker-recover', 'send-lead', 'enrich-lead', 'vps',
-  'sales-notes', 'apollo-company', 'apollo-person', 'flex-probe', 'exa', 'firecrawl', 'draft-outreach'];
+  'sales-notes', 'apollo-company', 'apollo-person', 'flex-probe', 'exa', 'firecrawl'];
 
 module.exports = wrap(async (req, res) => {
   const service = req.query.service || '';
@@ -127,11 +105,6 @@ module.exports = wrap(async (req, res) => {
       case 'tavily':        return await handleTavily(req, res, path);
       case 'supabase':      return await handleSupabase(req, res, path);
       case 'qualify':        return await handleQualify(req, res);
-      case 'flex-analyze':   return await handleFlexAnalyze(req, res);
-      case 'flex-sync':      return await handleFlexSync(req, res);
-      case 'flex-intel':     return await handleFlexIntelligence(req, res);
-      case 'flex-lookalike':    return await handleFlexLookalike(req, res);
-      case 'lookalike-engine':  return await handleLookalikeEngine(req, res);
       case 'gmail-draft':    return await handleGmailDraft(req, res);
       case 'gmail-send':     return await handleGmailSend(req, res);
       case 'gmail-auth':     return await handleGmailAuth(req, res);
@@ -230,52 +203,6 @@ module.exports = wrap(async (req, res) => {
           return res.status(400).json({ error: 'mode must be scrape or extract' });
         } catch (err) {
           return res.status(500).json({ error: 'Firecrawl handler error', details: err.message });
-        }
-      }
-      case 'draft-outreach': {
-        if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-        const { contact, title, company, email, signal } = req.body || {};
-        if (!contact || !company || !signal) {
-          return res.status(400).json({ error: 'Missing required fields: contact, company, signal' });
-        }
-        // Dedup: skip if a draft already exists for this contact email
-        if (email) {
-          const sbUrl = process.env.SUPABASE_URL;
-          const sbKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
-          if (sbUrl && sbKey) {
-            try {
-              const base = sbUrl.replace(/\/$/, '');
-              const sbH = { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` };
-              const r = await fetch(
-                `${base}/rest/v1/outreach_drafts?contact_email=eq.${encodeURIComponent(email)}&select=id,subject,body&limit=1`,
-                { headers: sbH }
-              );
-              const existing = await r.json();
-              if (Array.isArray(existing) && existing.length > 0) {
-                const d = existing[0];
-                return res.status(200).json({ subject: d.subject, body: d.body, existing: true });
-              }
-            } catch { /* dedup check failed — fall through and generate new draft */ }
-          }
-        }
-        const doApiKey = process.env.ANTHROPIC_API_KEY;
-        if (!doApiKey) return res.status(500).json({ error: 'Missing ANTHROPIC_API_KEY' });
-        try {
-          const doSystem = `You are writing cold outreach emails on behalf of Isaac Gonzalez at Fatfish, a full-service event production company in Salt Lake City, Utah. Fatfish handles AV, lighting, staging, décor, video, and experiential events for clients like WGU, Huntsman Cancer Institute, TEDx, and the Utah Jazz.\n\nRules:\n- 3–4 sentences max for the body (not counting sign-off)\n- Tone: direct, confident, specific — no generic agency language or buzzwords\n- Open with a specific reference to the signal provided (treat it as context you "came across")\n- Include one clear CTA: either request a 15-minute call or ask if they have an upcoming event needing production support\n- Sign off as: Isaac Gonzalez | Fatfish | Salt Lake City\n- Return ONLY valid JSON with two fields: "subject" (email subject line, concise, no clickbait) and "body" (the full email text, plain text, no markdown). No other text.`;
-          const doUser = `Write a cold outreach email with these details:\nContact name: ${contact}\nTitle: ${title || 'not provided'}\nCompany: ${company}\nEmail: ${email || 'not provided'}\nSignal / reason for outreach: ${signal}`;
-          const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': doApiKey, 'anthropic-version': '2023-06-01' },
-            body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 500, system: doSystem, messages: [{ role: 'user', content: doUser }] }),
-          });
-          const doData = await upstream.json();
-          if (!upstream.ok) return res.status(500).json({ error: doData.error?.message || `Anthropic error ${upstream.status}` });
-          const text = doData.content?.find(b => b.type === 'text')?.text || '';
-          const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
-          if (!parsed.subject || !parsed.body) throw new Error('Invalid response shape from Claude');
-          return res.status(200).json({ subject: parsed.subject, body: parsed.body });
-        } catch (err) {
-          return res.status(500).json({ error: err.message });
         }
       }
       default:
@@ -439,166 +366,6 @@ Be practical and honest. Do not invent data. Use null for dates when not clearly
   return res.status(200).json({ qualified, skipped, total: opps.length });
 }
 
-async function handleFlexAnalyze(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
-  if (!anthropicKey || !supabaseUrl || !supabaseKey) return res.status(500).json({ error: 'Missing env vars' });
-
-  const base = supabaseUrl.replace(/\/$/, '');
-  const sbH = { 'Content-Type': 'application/json', 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` };
-
-  const [clientsRes, venuesRes, projectsRes] = await Promise.all([
-    fetch(`${base}/rest/v1/flex_clients?select=name,industry,location,total_events,total_revenue,first_event_date,last_event_date&order=total_events.desc&limit=100`, { headers: sbH }),
-    fetch(`${base}/rest/v1/flex_venues?select=name,city,state,venue_type,capacity&order=name&limit=100`, { headers: sbH }),
-    fetch(`${base}/rest/v1/flex_projects?select=client_name,venue_name,event_type,event_date,budget_estimate,services&order=event_date.desc&limit=100`, { headers: sbH }),
-  ]);
-  const [clients, venues, projects] = await Promise.all([clientsRes.json(), venuesRes.json(), projectsRes.json()]);
-
-  const dataStr = JSON.stringify({ clients: clients.slice(0, 50), venues: venues.slice(0, 30), projects: projects.slice(0, 50) });
-
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: ANTHROPIC_HEADERS(anthropicKey),
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1000,
-      system: cachedSystem(`You are the Flex Intelligence Agent for Fatfish, a full-service event production company in Salt Lake City. Analyze their historical client, venue, and project data from Flex (their rental management system) and surface strategic insights. Focus on: top industries by event volume, most-used venues, repeatable event types, revenue patterns, geographic concentration, and look-alike prospect opportunities. Be specific and actionable. Format as clean sections with short bullet points. No markdown headers with #.`),
-      messages: [{ role: 'user', content: `Analyze this Fatfish historical data and give strategic insights:\n\n${dataStr}` }],
-    }),
-  });
-  const d = await r.json();
-  const analysis = d.content?.find(b => b.type === 'text')?.text || '';
-  return res.status(200).json({ analysis, counts: { clients: Array.isArray(clients) ? clients.length : 0, venues: Array.isArray(venues) ? venues.length : 0, projects: Array.isArray(projects) ? projects.length : 0 } });
-}
-
-async function handleFlexSync(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { flexApiKey } = req.body || {};
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
-
-  if (!flexApiKey) return res.status(400).json({ error: 'flexApiKey is required' });
-  if (!supabaseUrl || !supabaseKey) return res.status(500).json({ error: 'Missing Supabase env vars' });
-
-  const FLEX_BASE = 'https://clearlamp.flexrentalsolutions.com/f5/api';
-  const flexH = { 'X-Auth-Token': flexApiKey, 'Accept': 'application/json' };
-  const sbBase = supabaseUrl.replace(/\/$/, '');
-  const sbH = { 'Content-Type': 'application/json', 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` };
-
-  // Extract industry from contactTypes array (embedded in detail response)
-  function classifyIndustry(contactTypes) {
-    if (!Array.isArray(contactTypes) || contactTypes.length === 0) return null;
-    const raw = contactTypes.map(t => t.name || t.label || t.value || String(t)).join(' ').toLowerCase();
-    if (raw.includes('university') || raw.includes('college') || raw.includes('school') || raw.includes('education')) return 'Higher Ed';
-    if (raw.includes('nonprofit') || raw.includes('non-profit') || raw.includes('charity') || raw.includes('foundation')) return 'Nonprofit';
-    if (raw.includes('government') || raw.includes('municipal') || raw.includes('county') || raw.includes('state agency')) return 'Government';
-    if (raw.includes('sport') || raw.includes('athletic') || raw.includes('league') || raw.includes('team')) return 'Sports';
-    if (raw.includes('church') || raw.includes('religious') || raw.includes('faith') || raw.includes('congregation')) return 'Religious';
-    if (raw.includes('hotel') || raw.includes('hospitality') || raw.includes('resort') || raw.includes('venue')) return 'Hospitality';
-    if (raw.includes('tech') || raw.includes('software') || raw.includes('saas') || raw.includes('startup')) return 'Tech';
-    if (raw.includes('health') || raw.includes('medical') || raw.includes('hospital') || raw.includes('clinic')) return 'Healthcare';
-    if (raw.includes('corp') || raw.includes('corporate') || raw.includes('business') || raw.includes('enterprise')) return 'Corporate';
-    // Return the first type name verbatim if no match
-    return contactTypes[0]?.name || null;
-  }
-
-  const debug = {};
-
-  // ── 1. Collect all contact IDs from paginated list ─────────────────────
-  const allContactIds = [];
-  try {
-    let page = 0;
-    const MAX_PAGES = 60;
-    while (page < MAX_PAGES) {
-      const r = await fetch(`${FLEX_BASE}/contact?page=${page}&size=100`, { headers: flexH });
-      const raw = await r.json();
-      const items = raw?.content || (Array.isArray(raw) ? raw : []);
-      console.log(`[flex-sync] list page ${page} count:${items.length}`);
-      if (!items.length) break;
-      for (const c of items) {
-        if (!c.deleted && c.id) allContactIds.push(c.id);
-      }
-      if (page === 0) debug.list_status = r.status;
-      page++;
-    }
-    debug.total_ids = allContactIds.length;
-  } catch (e) {
-    console.error('[flex-sync] list error:', e.message);
-    debug.list_error = e.message;
-  }
-
-  // ── 2. Fetch contact details in parallel batches of 50 ─────────────────
-  // Detail has: company, contactTypes[], internetAddresses[], addresses[], phoneNumbers[]
-  let contacts_synced = 0;
-  const BATCH = 50;
-  try {
-    for (let i = 0; i < allContactIds.length; i += BATCH) {
-      const batch = allContactIds.slice(i, i + BATCH);
-      const details = await Promise.all(
-        batch.map(id => fetch(`${FLEX_BASE}/contact/${id}`, { headers: flexH }).then(r => r.json()).catch(() => null))
-      );
-
-      const rows = details.filter(Boolean).map(d => {
-        // Email: internetAddresses array
-        const email = Array.isArray(d.internetAddresses)
-          ? (d.internetAddresses.find(a => a.type === 'EMAIL' || a.internetAddressType === 'EMAIL' || a.label?.toLowerCase().includes('email'))?.address
-             || d.internetAddresses[0]?.address || null)
-          : null;
-
-        // Location: addresses array
-        const addr = Array.isArray(d.addresses) ? d.addresses[0] : null;
-        const city = addr?.city || addr?.addressCity || null;
-        const state = addr?.state || addr?.addressState || addr?.stateCode || null;
-        const location = [city, state].filter(Boolean).join(', ') || null;
-
-        // Industry from contactTypes
-        const industry = classifyIndustry(d.contactTypes);
-
-        // Company name (for org contacts, name == company; for person contacts, company is their employer)
-        const company = d.company || d.name || null;
-
-        // Notes: email + job title if available
-        const noteParts = [
-          email ? `email:${email}` : null,
-          d.jobTitle ? `title:${d.jobTitle}` : null,
-          Array.isArray(d.contactTypes) && d.contactTypes.length ? `types:${d.contactTypes.map(t => t.name || t).join(',')}` : null,
-        ].filter(Boolean);
-
-        return {
-          flex_id: String(d.id),
-          name: d.name || company || '',
-          location,
-          industry,
-          notes: noteParts.join(' | ').slice(0, 500) || null,
-        };
-      }).filter(r => r.flex_id);
-
-      if (rows.length > 0) {
-        await fetch(`${sbBase}/rest/v1/flex_clients?on_conflict=flex_id`, {
-          method: 'POST',
-          headers: { ...sbH, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-          body: JSON.stringify(rows),
-        });
-        contacts_synced += rows.length;
-      }
-    }
-    debug.contacts_synced = contacts_synced;
-  } catch (e) {
-    console.error('[flex-sync] detail error:', e.message);
-    debug.detail_error = e.message;
-  }
-
-  // Projects and venues: not exposed by this Flex API instance
-  const projects_synced = 0;
-  const venues_synced = 0;
-
-  return res.status(200).json({ contacts_synced, projects_synced, venues_synced, debug });
-}
-
-// Probe: hit common Flex endpoints and return raw shapes so we can map fields correctly
 async function handleFlexProbe(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { flexApiKey } = req.body || {};
@@ -681,287 +448,7 @@ async function handleFlexProbe(req, res) {
   return res.status(200).json(results);
 }
 
-async function handleFlexLookalike(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { apolloKey, growthInsight } = req.body || {};
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apolloKey) return res.status(400).json({ error: 'apolloKey required' });
-  if (!anthropicKey) return res.status(500).json({ error: 'Missing ANTHROPIC_API_KEY' });
-
-  // Step 1: Extract named organizations from growth insight via Claude
-  let targetOrgs = [];
-  if (growthInsight && growthInsight.length > 50) {
-    try {
-      const extractStart = Date.now();
-      const extractD = await gptMini(
-        'You extract named organizations from text. Return ONLY a valid JSON array of strings. No explanation, no markdown.',
-        `Extract all named organizations mentioned as lookalike prospects, dormant clients, or specific target companies from this text. Return ONLY a valid JSON array of strings with organization names.\n\nText:\n${growthInsight.slice(0, 3000)}`,
-        300,
-      );
-      logRun('handleFlexLookalike-extract', 'openai', 'gpt-4o-mini',
-        extractD.usage?.prompt_tokens || 0, extractD.usage?.completion_tokens || 0,
-        Date.now() - extractStart, true);
-      const extractText = gptText(extractD) || '[]';
-      const match = extractText.match(/\[[\s\S]*?\]/);
-      if (match) {
-        const parsed = JSON.parse(match[0]);
-        targetOrgs = parsed.filter(o => typeof o === 'string' && o.length > 2).slice(0, 8);
-      }
-    } catch (e) {
-      console.error('[flex-lookalike] extract error:', e.message);
-    }
-  }
-
-  // Fallback: use Flex client names if no orgs extracted
-  if (targetOrgs.length === 0) {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
-    if (supabaseUrl && supabaseKey) {
-      const base = supabaseUrl.replace(/\/$/, '');
-      const sbH = { 'Content-Type': 'application/json', 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` };
-      try {
-        const r = await fetch(`${base}/rest/v1/flex_clients?select=name&limit=8&order=total_events.desc.nullslast`, { headers: sbH });
-        const data = await r.json();
-        if (Array.isArray(data)) targetOrgs = data.map(c => c.name).filter(Boolean);
-      } catch {}
-    }
-  }
-
-  if (targetOrgs.length === 0) return res.status(200).json({ contacts: [], orgs_searched: [] });
-
-  console.log('[flex-lookalike] searching orgs:', targetOrgs);
-
-  const EVENT_TITLES = ['Director of Events', 'Event Manager', 'Event Director', 'VP Marketing', 'Marketing Director', 'Head of Events', 'Conference Director', 'Director of Marketing'];
-  const allContacts = [];
-
-  for (const orgName of targetOrgs.slice(0, 6)) {
-    try {
-      // Find org ID
-      const orgR = await fetch('https://api.apollo.io/v1/mixed_companies/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apolloKey },
-        body: JSON.stringify({ api_key: apolloKey, q_organization_name: orgName, page: 1, per_page: 1 }),
-      });
-      const orgD = await orgR.json();
-      const org = orgD?.organizations?.[0];
-      if (!org?.id) { console.log('[flex-lookalike] no org found for:', orgName); continue; }
-
-      // Find people at org
-      const peopleR = await fetch('https://api.apollo.io/v1/mixed_people/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apolloKey },
-        body: JSON.stringify({
-          api_key: apolloKey,
-          organization_ids: [org.id],
-          person_titles: EVENT_TITLES,
-          page: 1,
-          per_page: 3,
-        }),
-      });
-      const peopleD = await peopleR.json();
-      const people = peopleD?.people || [];
-      console.log(`[flex-lookalike] ${orgName}: org_id=${org.id} people=${people.length}`);
-
-      people.forEach(p => {
-        allContacts.push({
-          name: [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
-          title: p.title || null,
-          company: org.name || orgName,
-          email: p.email || null,
-          linkedin: p.linkedin_url || null,
-          location: p.city ? `${p.city}${p.state ? ', ' + p.state : ''}` : null,
-          employees: org.estimated_num_employees || p.organization?.estimated_num_employees || null,
-        });
-      });
-    } catch (e) {
-      console.error('[flex-lookalike] error for', orgName, ':', e.message);
-    }
-  }
-
-  return res.status(200).json({ contacts: allContacts, orgs_searched: targetOrgs.slice(0, 6) });
-}
-
 // ─── Lookalike Engine: Flex patterns → Claude target list → Apollo enrich → target_accounts ───
-async function handleLookalikeEngine(req, res) {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const apolloKey    = process.env.APOLLO_API_KEY;
-  const supabaseUrl  = process.env.SUPABASE_URL;
-  const supabaseKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
-
-  if (!anthropicKey || !supabaseUrl || !supabaseKey)
-    return res.status(500).json({ error: 'Missing env vars: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY' });
-
-  const base  = supabaseUrl.replace(/\/$/, '');
-  const sbH   = { 'Content-Type': 'application/json', 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` };
-  const log   = (...a) => console.log('[lookalike-engine]', ...a);
-  const start = Date.now();
-
-  // 1. Fetch Flex data + existing target_accounts for dedup
-  const [clientsR, projectsR, existingR] = await Promise.all([
-    fetch(`${base}/rest/v1/flex_clients?select=name,industry,location,total_events,total_revenue&order=total_revenue.desc.nullslast&limit=80`, { headers: sbH }),
-    fetch(`${base}/rest/v1/flex_projects?select=client_name,venue_name,event_type,budget_estimate,services&order=budget_estimate.desc.nullslast&limit=60`, { headers: sbH }),
-    fetch(`${base}/rest/v1/target_accounts?select=name&limit=500`, { headers: sbH }),
-  ]);
-  const [flexClients, flexProjects, existingAccounts] = await Promise.all([clientsR.json(), projectsR.json(), existingR.json()]);
-
-  const clientList  = Array.isArray(flexClients)  ? flexClients  : [];
-  const projectList = Array.isArray(flexProjects) ? flexProjects : [];
-  const existingNames = new Set(
-    (Array.isArray(existingAccounts) ? existingAccounts : []).map(a => (a.name || '').toLowerCase().trim())
-  );
-  log(`${clientList.length} clients, ${projectList.length} projects, ${existingNames.size} existing targets`);
-
-  // 2. Claude: analyze patterns → generate 20 lookalike targets
-  const claudePrompt = `You are a business development strategist for Fatfish, a full-service event production company in Salt Lake City, Utah.
-
-Fatfish services: AV, lighting, staging, décor, video production, experiential design.
-Known flagship clients: WGU, Huntsman Cancer Institute, Fox Pest Control, TEDx Salt Lake City, Progressive Leasing, Utah Jazz / SEG Group.
-Competitors: Webb AV, Cornerstone AV, RMNG, Encore.
-
-Fatfish historical client + project data:
-${JSON.stringify({
-  top_clients: clientList.slice(0, 40).map(c => ({ name: c.name, industry: c.industry, location: c.location, events: c.total_events, revenue: c.total_revenue })),
-  recent_projects: projectList.slice(0, 25).map(p => ({ client: p.client_name, venue: p.venue_name, type: p.event_type, budget: p.budget_estimate, services: p.services })),
-})}
-
-Based on these patterns, generate exactly 20 Utah-based (or Utah-operating) organizations Fatfish should target as high-probability lookalike prospects. Prioritize organizations that hold recurring annual events with budgets similar to existing clients.
-
-Return ONLY a valid JSON array — no markdown, no explanation:
-[
-  {
-    "name": "Exact Organization Name",
-    "city": "Salt Lake City",
-    "state": "UT",
-    "industry": "Higher Education",
-    "vertical": "higher-ed",
-    "lookalike_client": "Most similar existing Fatfish client name",
-    "reason": "One specific sentence: why this org needs event production and matches Fatfish's profile",
-    "confidence": 80
-  }
-]
-Valid vertical values: corporate, higher-ed, healthcare, nonprofit, sports, tech, government, luxury`;
-
-  const claudeR = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: ANTHROPIC_HEADERS(anthropicKey),
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content: claudePrompt }] }),
-  });
-  const claudeData = await claudeR.json();
-  const claudeText = claudeData.content?.find(b => b.type === 'text')?.text || '[]';
-
-  let targets = [];
-  try {
-    targets = JSON.parse(claudeText.replace(/```json|```/g, '').trim());
-    if (!Array.isArray(targets)) targets = [];
-  } catch {
-    const match = claudeText.match(/\[[\s\S]*\]/);
-    if (match) { try { targets = JSON.parse(match[0]); } catch {} }
-  }
-  log(`Claude returned ${targets.length} targets`);
-
-  const inputT  = claudeData.usage?.input_tokens  || 0;
-  const outputT = claudeData.usage?.output_tokens || 0;
-  const claudeCost = (inputT * 3.0 + outputT * 15.0) / 1_000_000;
-
-  // Filter dupes, cap at 15
-  const newTargets = targets
-    .filter(t => t && t.name && !existingNames.has(t.name.toLowerCase().trim()))
-    .slice(0, 15);
-  log(`${newTargets.length} new targets after dedup`);
-
-  // 3. Apollo enrich each target → upsert to target_accounts
-  const results = [];
-  for (const target of newTargets) {
-    try {
-      let orgId = null, website = null, employees = null;
-      let contactName = null, contactTitle = null, contactEmail = null, contactLinkedin = null;
-
-      if (apolloKey) {
-        // Step 1: Company search
-        const orgR = await fetch('https://api.apollo.io/v1/mixed_companies/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-          body: JSON.stringify({
-            api_key: apolloKey,
-            q_organization_name: target.name,
-            organization_locations: [`${target.city || 'Salt Lake City'}, ${target.state || 'UT'}`],
-            page: 1, per_page: 1,
-          }),
-        });
-        const orgData = await orgR.json();
-        const org = orgData?.organizations?.[0] || null;
-        if (org) {
-          orgId     = org.id;
-          website   = org.website_url?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || null;
-          employees = org.estimated_num_employees || null;
-        }
-        log(`${target.name}: orgId=${orgId || 'not found'}`);
-
-        // Step 2: People search
-        if (orgId) {
-          const peopleR = await fetch('https://api.apollo.io/v1/mixed_people/api_search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-            body: JSON.stringify({
-              api_key: apolloKey,
-              organization_ids: [orgId],
-              person_titles: ['CEO', 'President', 'Chief Executive Officer', 'VP Events', 'Director of Events', 'Event Director', 'CMO', 'VP Marketing', 'Director of Marketing', 'Chief Marketing Officer'],
-              page: 1, per_page: 1,
-            }),
-          });
-          const peopleData = await peopleR.json();
-          const person = peopleData?.people?.[0] || null;
-
-          // Step 3: Reveal
-          if (person?.id) {
-            const revealR = await fetch('https://api.apollo.io/v1/people/match', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-              body: JSON.stringify({ api_key: apolloKey, id: person.id, reveal_personal_emails: true }),
-            });
-            const revealData = await revealR.json();
-            const p = revealData?.person || person;
-            contactName    = [p.first_name, p.last_name].filter(Boolean).join(' ') || null;
-            contactTitle   = p.title || person.title || null;
-            contactEmail   = p.email || null;
-            contactLinkedin = p.linkedin_url || person.linkedin_url || null;
-            log(`  → ${contactName} <${contactEmail || 'no email'}>`);
-          }
-        }
-        await new Promise(r => setTimeout(r, 400));
-      }
-
-      await upsertLookalikeTarget(base, sbH, target, { id: orgId, website_url: website, estimated_num_employees: employees }, contactEmail ? { first_name: contactName?.split(' ')[0], last_name: contactName?.split(' ').slice(1).join(' '), title: contactTitle, email: contactEmail, linkedin_url: contactLinkedin } : null);
-
-      results.push({ name: target.name, org_found: !!orgId, contact: contactName, email: !!contactEmail });
-    } catch (e) {
-      log(`Error on ${target.name}: ${e.message}`);
-      results.push({ name: target.name, error: e.message });
-    }
-  }
-
-  // Log job run
-  const duration  = Date.now() - start;
-  const withEmail = results.filter(r => r.email).length;
-  const summary   = `${newTargets.length} targets added, ${withEmail} with contacts`;
-  fetch(`${base}/rest/v1/job_runs`, {
-    method: 'POST',
-    headers: { ...sbH, 'Prefer': 'return=minimal' },
-    body: JSON.stringify({
-      job_name: 'lookalike', agent_name: 'vercel', provider: 'anthropic', model: 'claude-sonnet-4-6',
-      input_tokens: inputT, output_tokens: outputT, total_tokens: inputT + outputT,
-      estimated_cost: claudeCost, duration_ms: duration,
-      status: 'completed', triggered_by: 'ui', result_summary: summary,
-      created_at: new Date().toISOString(), completed_at: new Date().toISOString(),
-    }),
-  }).catch(() => {});
-
-  log(summary);
-  return res.status(200).json({ ran_at: new Date().toISOString(), targets_generated: targets.length, new_targets: newTargets.length, with_contact: withEmail, results });
-}
-
 async function upsertLookalikeTarget(base, sbH, target, org, person) {
   const row = {
     name:             target.name,
@@ -995,192 +482,6 @@ async function upsertLookalikeTarget(base, sbH, target, org, person) {
       body: JSON.stringify({ ...row, created_at: new Date().toISOString() }),
     });
   }
-}
-
-async function handleFlexIntelligence(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { section } = req.body || {};
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY);
-
-  if (!section) return res.status(400).json({ error: 'section is required' });
-  if (!anthropicKey || !supabaseUrl || !supabaseKey) return res.status(500).json({ error: 'Missing env vars' });
-
-  const base = supabaseUrl.replace(/\/$/, '');
-  const sbH = { 'Content-Type': 'application/json', 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` };
-
-  const [cR, vR, pR] = await Promise.all([
-    fetch(`${base}/rest/v1/flex_clients?select=name,industry,location,total_events,total_revenue,notes&limit=200`, { headers: sbH }),
-    fetch(`${base}/rest/v1/flex_venues?select=name,city,state,venue_type,capacity&limit=100`, { headers: sbH }),
-    fetch(`${base}/rest/v1/flex_projects?select=client_name,venue_name,event_type,event_date,budget_estimate,services&order=event_date.desc&limit=200`, { headers: sbH }),
-  ]);
-  const [clients, venues, projects] = await Promise.all([cR.json(), vR.json(), pR.json()]);
-
-  const context = `Fatfish is a full-service event production company in Salt Lake City, Utah. Services: AV, lighting, staging, décor, video production, experiential. Known clients: WGU, Huntsman, Fox Pest Control, TEDx, Utah Jazz/SEG Group, Progressive Leasing. Competitors: Webb AV, Cornerstone AV, RMNG, Encore.`;
-
-  const data = JSON.stringify({
-    clients: Array.isArray(clients) ? clients.slice(0, 100) : [],
-    venues: Array.isArray(venues) ? venues.slice(0, 60) : [],
-    projects: Array.isArray(projects) ? projects.slice(0, 100) : [],
-  });
-
-  const PROMPTS = {
-    overview: `You are the Flex Intelligence Agent for Fatfish — a full-service event production company in Salt Lake City, Utah. You have access to their complete historical client, venue, and project database from Flex Rental Solutions.
-
-${context}
-
-Write an executive intelligence brief for the CEO/CMO. This should feel like a business intelligence report, not a data summary.
-
-Structure your output exactly as follows (use these labels as plain text, not # headers):
-
-PORTFOLIO SNAPSHOT
-One paragraph summarizing the scope and character of Fatfish's historical work — total clients, project volume, geographic reach. Write it like an analyst would brief an executive.
-
-TOP INDUSTRIES
-List the 3-5 dominant industry sectors with specific client examples for each. Note which sectors have repeat work.
-
-STRONGEST MARKETS
-Identify the top cities/venues and what that concentration signals strategically.
-
-REPEAT CLIENT PATTERNS
-Identify which organizations or types of clients have returned. What does this tell us about our strongest value proposition?
-
-STRATEGIC POSITIONING
-2-3 high-value strategic observations that a CEO/CMO should act on. Be direct and specific.
-
-Data:\n${data}`,
-
-    industries: `You are the Flex Intelligence Agent for Fatfish. Analyze the historical client and project data to produce an industry intelligence report.
-
-${context}
-
-For each major industry sector you detect, write a section using this format (plain text labels, no # headers):
-
-[INDUSTRY NAME]
-Key Clients: [list specific company names]
-Work Type: [describe the kind of events]
-Repeat Pattern: [yes/no, and why it matters]
-Recommended Service Page: [exact page title to build]
-Campaign Ideas: [2 specific campaign or outreach ideas]
-
-After covering all sectors, add:
-
-PRIORITY SECTORS
-Top 3 sectors to double down on, with one sentence of reasoning each.
-
-UNDER-INDEXED OPPORTUNITY
-One sector where Fatfish has adjacent capability but hasn't fully penetrated — with a specific action to change that.
-
-Be specific. Use real company names from the data. No generic filler.
-
-Data:\n${data}`,
-
-    markets: `You are the Flex Intelligence Agent for Fatfish. Analyze the historical venue and geographic data to produce a markets and venues intelligence report.
-
-${context}
-
-Structure your output as follows (plain text labels, no # headers):
-
-TOP VENUES
-List the most frequently used venues. For each note: venue name, city, estimated frequency, and what the relationship suggests (anchor venue? emerging partner?).
-
-GEOGRAPHIC CONCENTRATION
-Where is Fatfish's work concentrated? What does this tell us about our market strength and positioning?
-
-VENUE CATEGORY PATTERNS
-Break down work by venue type (hotel ballroom, outdoor amphitheater, convention center, university campus, etc.). Which categories dominate?
-
-EXPANSION MARKET OPPORTUNITIES
-Identify 3 specific cities outside current concentration that represent natural expansion targets. For each: city name, why it fits, what types of organizations to approach.
-
-VENUE PARTNERSHIP IDEAS
-Name 3 specific venues where a preferred vendor relationship or partnership would be worth pursuing. Include an outreach angle for each.
-
-Be specific with real venue and city names from the data. No generic recommendations.
-
-Data:\n${data}`,
-
-    growth: `You are the Flex Intelligence Agent for Fatfish. Analyze historical client data to identify concrete growth opportunities.
-
-${context}
-
-Structure your output exactly as follows (plain text labels, no # headers):
-
-DORMANT CLIENT REACTIVATION
-List 6-8 specific organizations from the client data that represent reactivation opportunities. For each:
-- Company name
-- Why they're a strong reactivation target
-- Suggested outreach message opening (1 sentence)
-
-LOOKALIKE PROSPECT PROFILE
-Based on the best-performing client patterns, define the ideal target account profile for Apollo prospecting:
-- Industry and sub-sector
-- Organization type and size signals
-- Typical event type and cadence
-- Budget range indicators
-- Geographic target
-- Job titles to target (Event Director, VP Marketing, etc.)
-
-SPECIFIC LOOKALIKE TARGETS
-Name 6-10 specific organizations (not in current client list) that match the lookalike profile. These should be real, named organizations that Fatfish should pursue.
-
-ADJACENT MARKET PLAYS
-Identify 2-3 specific market segments adjacent to current strengths. For each: segment name, why it fits, and a specific first-move action.
-
-Use real names throughout. This analysis will be used directly to drive Apollo searches and outreach campaigns.
-
-Data:\n${data}`,
-
-    content: `You are the Flex Intelligence Agent and content strategist for Fatfish. Convert historical work patterns into a concrete content and positioning strategy.
-
-${context}
-
-Structure your output exactly as follows (plain text labels, no # headers):
-
-SERVICE PAGES TO BUILD
-List 5 website service pages. For each:
-- Page title (exact)
-- Target search intent (what would someone Google?)
-- Proof point from historical work (use real client/venue names)
-
-CASE STUDY BUCKETS
-Identify 5 compelling case study categories based on real work patterns. For each:
-- Bucket title
-- Example clients or events that fit this bucket
-- The emotional or business hook for the story
-
-HOMEPAGE PROOF POINTS
-Write 3 punchy, specific credibility statements for the website hero. Use real names and concrete language — no generic event production clichés.
-
-LINKEDIN CONTENT THEMES
-Identify 3 LinkedIn content angles that would resonate with event directors and marketing leaders in Utah. For each: theme name + one specific post idea.
-
-META/LINKEDIN AD CAMPAIGN IDEAS
-Suggest 2 paid campaign concepts directly tied to detected industry strengths. For each: audience, creative angle, proof point.
-
-Ground everything in real historical work. Specificity is the point.
-
-Data:\n${data}`,
-  };
-
-  const prompt = PROMPTS[section];
-  if (!prompt) return res.status(400).json({ error: `Unknown section: ${section}` });
-
-  // Use Sonnet for richer, more structured intelligence output
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: ANTHROPIC_HEADERS(anthropicKey),
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  const d = await r.json();
-  const insight = d.content?.find(b => b.type === 'text')?.text || '';
-  return res.status(200).json({ insight });
 }
 
 // ─── CEO Brain ───────────────────────────────────────────────────────────────
@@ -1646,14 +947,7 @@ async function handleEnrichLead(req, res) {
     let m = t.match(/\|\s*([A-Z][A-Za-z0-9&.,'\- ]{2,50})\s*$/) || t.match(/\bat\s+([A-Z][A-Za-z0-9&.,'\- ]{2,50})/) || t.match(/\bfor\s+(the\s+)?([A-Z][A-Za-z0-9&.,'\- ]{2,50})/);
     if (m) orgName = (m[2] || m[1]).trim();
   }
-  if (!orgName || orgName.length < 2) {
-    try {
-      const guess = (await claudeMini(
-        'Extract ONLY the host organization or company name from this event/RFP lead — the org that would hire an event-production vendor. Reply with just the name, nothing else. If it is a generic listicle or no single org is identifiable, reply exactly "NONE".',
-        evText, 30)).replace(/^["']|["'.]+$/g, '').trim();
-      if (guess && guess.toUpperCase() !== 'NONE' && guess.length >= 2) orgName = guess;
-    } catch {}
-  }
+  // No model call here: the Mac mini scorer (scripts/score-leads.mjs) names the host organization in `company`.
   if (!orgName) return res.status(200).json({ ok: false, reason: 'no host org — likely a listicle/aggregator, not a single event' });
 
   // 2. Apollo: org → people (event/marketing titles) → reveal top person's email
@@ -1680,16 +974,11 @@ async function handleEnrichLead(req, res) {
 
   const contactName = [person.first_name, person.last_name].filter(Boolean).join(' ') || person.name || '';
 
-  // 3. Draft a short, event-specific pitch
-  let subject = `Fatfish — production support for your upcoming event`, body = '';
-  try {
-    const txt = await claudeMini(
-      'You write short, warm B2B outreach for Fatfish, a Salt Lake City event production company (AV, staging, lighting, video, experiential). 3-4 sentences, specific to the event, no fluff, ends with a soft ask for 15 minutes. Return ONLY JSON: {"subject":"...","body":"..."}',
-      `Recipient: ${contactName || 'the events lead'} at ${org.name}. Their event/opportunity: ${evText}`, 320);
-    const j = JSON.parse((txt.match(/\{[\s\S]*\}/) || ['{}'])[0]);
-    if (j.subject) subject = j.subject;
-    if (j.body) body = j.body;
-  } catch {}
+  // 3. The pitch: written ahead of time by the Mac mini scorer through Claude Code (opportunities.metadata.pitch);
+  //    no model call here, so this button never needs API credits. Without one, a plain template.
+  const pitch = (opp.metadata && opp.metadata.pitch) || {};
+  let subject = pitch.subject || `Fatfish — production support for your upcoming event`;
+  let body = pitch.opener ? `Hi ${contactName ? contactName.split(' ')[0] : 'there'},\n\n${pitch.opener}` : '';
   if (!body) body = `Hi ${contactName ? contactName.split(' ')[0] : 'there'} — saw ${org.name}'s upcoming event and wanted to introduce Fatfish. We handle full-service production (AV, staging, lighting, video) for events across the Mountain West and would love to help. Could we grab 15 minutes this week?`;
 
   // 4. Save outreach_draft + patch opportunity
