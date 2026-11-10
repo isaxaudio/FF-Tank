@@ -11,7 +11,7 @@ preview are evidence for those environments only.
    deal_series, saved_views, rebooking_reviews, app_settings; existing Flex-linked deals get one production each). Apply it
    BEFORE promoting the PR 3 code: the Deals screen reads `deal_productions` and `deal_series`, so the PR 3 build fails
    on a database without 014. The PR 2 code keeps working on 014.
-2. Done 2026-11-10 (Isaac's Resend account "fatfishmedia", key "FF Tank production", from `Fatfish Media <hello@fatfishmedia.com>`,
+2. Done 2026-11-10 (Isaac's Resend account "fatfishmedia", key "FF Tank production", from `Fatfish Media <newsletter@fatfishmedia.com>` (changed from hello@ 2026-11-10),
    secrets kept in gitignored `backups/resend.env`). Vercel env: `RESEND_API_KEY`, `RESEND_FROM` (a sender on a verified domain), `RESEND_WEBHOOK_SECRET` (the Svix secret of
    the Resend webhook pointing at `https://ff-tank.vercel.app/api/index?service=resend-webhook`), `CRON_SECRET` (already set;
    also signs the Gmail OAuth state), optional `STATE_SECRET`, and `NODEJS_HELPERS=0` for exact webhook signatures.
