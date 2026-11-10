@@ -89,3 +89,13 @@ Done once per new user, in this order; the app side is already built.
 5. **Hand over work**: Deals → List → filter → select all matching → Assign (or the owner picker on a deal); Today →
    Unassigned shows what nobody owns yet.
 6. First session: `docs/ae-walkthrough.md` is the 20-minute tour written for an AE.
+
+## PR 4: reports (migration 015)
+1. `node scripts/migrate.js up --to 015_report_trust` (only the `campaign_stats` view changes; `down 1` restores it). The
+   new reports do not depend on it; the campaign panel's "Open value" is correct only after it.
+2. Merge the PR, `npx vercel deploy --yes`, then `npx vercel promote <url> --yes`.
+3. Check on production: Reports → every report shows tiles with a period and a Definition; Flex data and history says
+   the mirror is out of date (import Aug 6, 2026) until a fresh Flex export is imported; Operations shows the scheduler
+   a few minutes old.
+Rollback: promote the previous deployment; `node scripts/migrate.js down 1` if 015 must go too.
+
