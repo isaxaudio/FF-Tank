@@ -47,3 +47,27 @@ test('the next run scores held leads: a good one is released to Handoff, a listi
   assert.equal(js.last_error, null); assert.ok(js.last_success_at);
   assert.ok(db.table('opportunities').filter(o => !['h1', 'h2'].includes(o.id)).every(o => o.status === 'new' && o.overall_score === 9), 'this run\'s own lead was scored and is new');
 });
+
+test('SCOUT_SCORER=claude-code: the scout makes no Anthropic call and holds every lead for the Mac mini', async () => {
+  process.env.SCOUT_SCORER = 'claude-code';
+  try {
+    const db = new FakeRest({ opportunities: [], target_accounts: [], job_state: [], agent_runs: [], job_runs: [], weekly_briefs: [], opportunity_feedback: [] });
+    const fetch = stubFetch([tavily, restRoute(db)]);   // no api.anthropic.com route: a call would throw
+    global.fetch = fetch;
+    const res = await run();
+    assert.equal(res.statusCode, 200);
+    assert.ok(!fetch.calls.some(c => c.url.includes('api.anthropic.com') && /claude-haiku|qualify/i.test(c.body || '') && !/brief/i.test(c.body || '')), 'no scoring call');
+    assert.ok(db.table('opportunities').length >= 1 && db.table('opportunities').every(o => o.status === 'unscored'));
+    const js = db.table('job_state').find(j => j.job === 'scout');
+    assert.equal(js.last_error, null); assert.ok(js.last_success_at); assert.match(js.last_result.model, /claude-code/);
+  } finally { delete process.env.SCOUT_SCORER; }
+});
+
+test('the shared scoring prompt numbers items and reads the reply array', () => {
+  const { listing, parseScores, SYSTEM } = require('../lib/server/scoutprompt.cjs');
+  assert.match(SYSTEM, /SINGLE-ORGANIZATION TEST/);
+  const p = listing([{ type: 'event', title: '**WGU** Commencement', content: 'May 2027', company: null }], 20);
+  assert.match(p, /^Items:\n20\. \[event\] WGU Commencement\n {3}May 2027/);
+  assert.deepEqual(parseScores('Sure: [{"i":20,"score":9}] done'), [{ i: 20, score: 9 }]);
+  assert.throws(() => parseScores('no scores'), /no JSON array/);
+});

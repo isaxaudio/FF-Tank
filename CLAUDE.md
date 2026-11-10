@@ -445,6 +445,12 @@ with status `unscored` (Handoff and Signals never show it); the next run scores 
 and releases them (`new`) or archives them (score < 5). Each run writes job_state `scout` (last_error such as "credit
 balance is too low"), which Reports → Operations shows. Handoff shows the last 30 days by default ("Include the older
 backlog" for the rest). `scripts/archive-signal-backlog.mjs` archived the pre-November backlog (`--undo <file>`).
+**Scoring on the subscription:** with `SCOUT_SCORER=claude-code` (set in Vercel production since 2026-11-10) the scout makes
+no Anthropic API call and saves every lead as `unscored`; `scripts/score-leads.mjs` on the Mac mini scores them with
+`claude -p` (Claude Code on the subscription: ANTHROPIC_API_KEY is stripped from its environment, no tools, no MCP,
+rules from `lib/server/scoutprompt.cjs`) at 7:15 and 19:15 (`sh scripts/install-score-leads.sh`; log
+~/Library/Logs/ff-tank-score-leads.log) and writes job_state `lead_scoring`; Operations flags it after 36 h without
+success. Other API features (draft outreach, enrich-lead, the Monday brief) still need Anthropic API credits.
 OpenClaw on the VPS is not part of this path. Tests: `test/scout.test.cjs`.
 
 ## Reports you can trust (PR 4, migration 015)
