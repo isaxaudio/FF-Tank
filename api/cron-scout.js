@@ -240,15 +240,15 @@ module.exports = wrap(async function handler(req, res) {
     // Chunked: one oversized batch would blow past max_tokens, truncate the JSON, and lose
     // scoring for EVERY candidate. Per-chunk failure only costs that chunk.
     const qualKey = process.env.ANTHROPIC_API_KEY;
+    // The model is configurable so a retired id never silently stops scoring (SCOUT_MODEL in Vercel to override).
+    const QUAL_MODEL = process.env.SCOUT_MODEL || 'claude-haiku-5-5';
     const QUAL_CHUNK = 20;
-    const qmap = {};
-    if (candidates.length && qualKey) {
-      // Tuned against a real 18-lead sample. The naive version inverted the two things that matter
-      // most here: it dropped University of Phoenix / Chamberlain commencements to 4 ("lower
-      // production complexity") while KEEPING gala calendars and "top N conferences" roundups at
-      // 5-6. The single-organization test and the explicit commencement rule fix both — same
-      // sample now puts WGU/Chamberlain/UOPX at 9 and every directory page at 0-2.
-      const sys = `You qualify B2B sales leads for Fatfish, a full-service event-production company (AV, staging, lighting, video, experiential) based in Salt Lake City, Utah. Fatfish produces university commencements, corporate galas and conferences, brand activations, and sports/entertainment events. Existing clients: Western Governors University, University of Phoenix, Huntsman, TEDx, Progressive Leasing, Utah Jazz.
+    // Tuned against a real 18-lead sample. The naive version inverted the two things that matter
+    // most here: it dropped University of Phoenix / Chamberlain commencements to 4 ("lower
+    // production complexity") while KEEPING gala calendars and "top N conferences" roundups at
+    // 5-6. The single-organization test and the explicit commencement rule fix both — same
+    // sample now puts WGU/Chamberlain/UOPX at 9 and every directory page at 0-2.
+    const sys = `You qualify B2B sales leads for Fatfish, a full-service event-production company (AV, staging, lighting, video, experiential) based in Salt Lake City, Utah. Fatfish produces university commencements, corporate galas and conferences, brand activations, and sports/entertainment events. Existing clients: Western Governors University, University of Phoenix, Huntsman, TEDx, Progressive Leasing, Utah Jazz.
 
 For each numbered item return: the organization hosting the event or issuing the RFP, the event date, a 0-10 fit score, and a one-line reason.
 
@@ -261,30 +261,58 @@ Score 0-4: directory/calendar/listicle/roundup pages; news articles; past events
 University commencements and graduations are a FLAGSHIP line of business — when a specific university is named, score 8+. Do not mark them down for seeming routine or low-complexity; they are exactly what Fatfish wins.
 
 Return ONLY a JSON array, no prose.`;
-      for (let start = 0; start < candidates.length; start += QUAL_CHUNK) {
-        const chunk = candidates.slice(start, start + QUAL_CHUNK);
+    // Score items [{ type, title, content, company }] in chunks; returns { byIndex, error }. A failed chunk is left
+    // unscored and its error kept, so the caller holds those leads instead of passing them to people unscored.
+    async function qualify(items) {
+      const byIndex = {}; let error = null;
+      if (!items.length) return { byIndex, error };
+      if (!qualKey) return { byIndex, error: 'ANTHROPIC_API_KEY not set' };
+      for (let start = 0; start < items.length; start += QUAL_CHUNK) {
+        const chunk = items.slice(start, start + QUAL_CHUNK);
         try {
-          // Index by absolute position so the model's `i` maps straight back into `candidates`.
-          const listing = chunk.map((c, j) =>
-            `${start + j}. [${c.type}] ${stripMd(c.r.title || '').slice(0, 120)}${c.company ? ` @ ${c.company}` : ''}\n   ${stripMd(c.r.content || '').slice(0, 300)}`
-          ).join('\n');
-          const usr = `Items:\n${listing}\n\nReturn a JSON array, one object per item, using each item's number as "i":\n[{"i":${start},"company":"<org name or null>","event_date":"<YYYY-MM-DD or null>","score":<0-10 integer>,"why":"<reason, <=140 chars>"}]`;
+          const listing = chunk.map((c, j) => `${start + j}. [${c.type}] ${stripMd(c.title || '').slice(0, 120)}${c.company ? ` @ ${c.company}` : ''}\n   ${stripMd(c.content || '').slice(0, 300)}`).join('\n');
+          const usr = `Items:\n${listing}\n\nReturn a JSON array, one object per item, using each item's number as "i":\n[{"i":${start},"company":"<org name or null>","event_date":"<YYYY-MM-DD or null>","score":<0-10 integer>,"why":"<one line>"}]`;
           const cr = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-api-key': qualKey, 'anthropic-version': '2023-06-01' },
-            body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 4000, system: sys, messages: [{ role: 'user', content: usr }] }),
+            body: JSON.stringify({ model: QUAL_MODEL, max_tokens: 4000, system: sys, messages: [{ role: 'user', content: usr }] }),
           });
           const cd = await cr.json();
           if (cd && cd.error) throw new Error(cd.error.message || 'anthropic error');
           const txt = (cd && cd.content && cd.content[0] && cd.content[0].text) || '[]';
           const arr = JSON.parse(txt.slice(txt.indexOf('['), txt.lastIndexOf(']') + 1));
-          for (const o of arr) if (o && typeof o.i === 'number' && candidates[o.i]) qmap[o.i] = o;
+          for (const o of arr) if (o && typeof o.i === 'number' && items[o.i]) byIndex[o.i] = o;
         } catch (e) {
-          console.error(`[cron-scout] Haiku qualify failed for chunk ${start}-${start + chunk.length - 1} — those insert unscored (no leads lost):`, e.message);
+          error = error || e.message;
+          console.error(`[cron-scout] qualify failed for items ${start}-${start + chunk.length - 1}; they are held as unscored:`, e.message);
         }
       }
-      console.log('[cron-scout] Haiku qualified', Object.keys(qmap).length, 'of', candidates.length, 'candidates');
+      return { byIndex, error };
     }
+
+    // Leads held by an earlier failed run (status 'unscored', last 30 days) are scored first.
+    const rescored = { checked: 0, released: 0, dropped: 0, error: null };
+    try {
+      const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
+      const held = await fetch(`${base}/rest/v1/opportunities?status=eq.unscored&created_at=gte.${since30}&select=id,title,notes,signal,company&order=created_at.desc&limit=60`, { headers }).then(r => r.json());
+      if (Array.isArray(held) && held.length) {
+        const { byIndex, error } = await qualify(held.map(h => ({ type: h.signal || 'event', title: h.title, content: String(h.notes || '').replace(/^\[[^\]]*\]\s*/, ''), company: h.company })));
+        rescored.checked = held.length; rescored.error = error;
+        for (const [i, q] of Object.entries(byIndex)) {
+          const h = held[i]; const score = typeof q.score === 'number' ? q.score : null; if (score == null) continue;
+          const patch = score < 5 ? { status: 'archived', overall_score: score, why_this_matters: q.why ? String(q.why).slice(0, 300) : null }
+            : { status: 'new', overall_score: score, why_this_matters: q.why ? String(q.why).slice(0, 300) : null, company: h.company || (q.company && String(q.company).toLowerCase() !== 'null' ? String(q.company).slice(0, 120) : null), deadline: q.event_date && !isNaN(new Date(q.event_date)) ? new Date(q.event_date).toISOString().slice(0, 10) : null };
+          await fetch(`${base}/rest/v1/opportunities?id=eq.${h.id}`, { method: 'PATCH', headers, body: JSON.stringify(patch) });
+          if (score < 5) rescored.dropped++; else rescored.released++;
+        }
+      }
+    } catch (e) { rescored.error = rescored.error || e.message; }
+
+    // ── Batch-qualify this run's survivors, then insert with real columns populated ──
+    // Chunked: one oversized batch would blow past max_tokens, truncate the JSON, and lose
+    // scoring for EVERY candidate. Per-chunk failure only costs that chunk.
+    const { byIndex: qmap, error: qualifyError } = await qualify(candidates.map(c => ({ type: c.type, title: c.r.title, content: c.r.content, company: c.company })));
+    console.log('[cron-scout] qualified', Object.keys(qmap).length, 'of', candidates.length, 'candidates', qualifyError ? `(error: ${qualifyError})` : '');
 
     for (let i = 0; i < candidates.length; i++) {
       const c = candidates[i];
@@ -302,7 +330,8 @@ Return ONLY a JSON array, no prose.`;
       const row = {
         title: stripMd(c.r.title) || c.r.url,
         source: c.source,
-        status: 'new',
+        // A lead Claude could not score is held ('unscored'): Handoff never shows it, the next run scores it.
+        status: score == null ? 'unscored' : 'new',
         signal: c.type,   // 'rfp' | 'event' → drives UI tag, chips, learning key
         company,
         overall_score: score,
@@ -489,9 +518,21 @@ Historical data: ${JSON.stringify({ clients: Array.isArray(flexClients) ? flexCl
       }).catch(() => {});
     }
 
+    // The run's state for Reports → Operations (job_state 'scout'): a scoring failure is an error people see.
+    const heldNow = candidates.filter((c, i) => !qmap[i]).length;
+    const scoutError = qualifyError || rescored.error || null;
+    await fetch(`${base}/rest/v1/job_state?on_conflict=job`, { method: 'POST', headers: { ...headers, Prefer: 'return=minimal,resolution=merge-duplicates' }, body: JSON.stringify({
+      job: 'scout', last_run_at: completedAt, updated_at: completedAt, ...(scoutError ? {} : { last_success_at: completedAt }),
+      last_error: scoutError ? `Claude scoring failed: ${scoutError}${heldNow ? ` (${heldNow} new leads held as unscored)` : ''}` : null,
+      last_result: { inserted, held_unscored: heldNow, rescored, model: QUAL_MODEL },
+    }) }).catch(() => {});
+
     return res.status(200).json({
       run_id: runId,
       ran_at: completedAt,
+      held_unscored: heldNow,
+      rescored,
+      scoring_error: scoutError,
       rfp_results: rfpResults.length + procurementResults.length,
       event_results: galaResults.length + conferenceResults.length + higherEdResults.length + corporateResults.length,
       total_raw: allResults.length,
@@ -508,6 +549,8 @@ Historical data: ${JSON.stringify({ clients: Array.isArray(flexClients) ? flexCl
     });
   } catch (e) {
     console.error('[cron-scout] error:', e.message);
+    const base = (process.env.SUPABASE_URL || '').replace(/\/$/, ''), key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    if (base && key) await fetch(`${base}/rest/v1/job_state?on_conflict=job`, { method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=minimal,resolution=merge-duplicates' }, body: JSON.stringify({ job: 'scout', last_run_at: new Date().toISOString(), updated_at: new Date().toISOString(), last_error: e.message }) }).catch(() => {});
     return res.status(500).json({ error: e.message });
   }
 });

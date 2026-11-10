@@ -157,6 +157,8 @@ function LeadHandoffView({ db }) {
   const [sent, setSent] = React.useState({});
   const [dismissed, setDismissed] = React.useState({});
   const [showNoise, setShowNoise] = React.useState(false);
+  // Recent leads by default: the scout's last 30 days. The older backlog (bulk research) stays one click away.
+  const [backlog, setBacklog] = React.useState(false);
   const [toast, setToast] = React.useState(null);
   const [enriching, setEnriching] = React.useState({});
   const [enriched, setEnriched] = React.useState({}); // id → { company, contact:{name,title,email}, draft }
@@ -213,8 +215,9 @@ function LeadHandoffView({ db }) {
         db.selectAll("opportunities", {
           order: "created_at.desc",
           and: `(${OPEN_Q},or(overall_score.gte.5,overall_score.is.null))`,
+          ...(backlog ? {} : { created_at: `gte.${new Date(Date.now() - 30 * 864e5).toISOString()}` }),
         }),
-        db.selectAll("opportunities", { order: "created_at.desc", and: `(${OPEN_Q},${VENUE_Q})` }),
+        db.selectAll("opportunities", { order: "created_at.desc", and: `(${OPEN_Q},${VENUE_Q})`, ...(backlog ? {} : { created_at: `gte.${new Date(Date.now() - 30 * 864e5).toISOString()}` }) }),
         db.count("opportunities", {}),
         db.count("opportunities", { status: "eq.contacted" }),
         db.count("opportunities", { status: "eq.archived" }),
@@ -227,7 +230,7 @@ function LeadHandoffView({ db }) {
       setFlexClients(fx || []);
     } catch (e) { console.error("lead queue load failed:", e); setRows([]); }
     setLoading(false);
-  })(); }, []);
+  })(); }, [backlog]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const usdShort = n => n >= 1000000 ? `$${(n / 1000000).toFixed(2)}M` : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${Math.round(n || 0)}`;
   // The single most decisive fact on a lead card: have we worked with them before?
@@ -327,6 +330,7 @@ function LeadHandoffView({ db }) {
         {loading ? "Loading signals…" : <>
           {(totals.scanned ?? rows.length).toLocaleString()} scanned · <span style={{ color: TC.accentDeep }}>{allWorthy.length} upcoming &amp; send-worthy</span> across UT·NV·ID·SoCal·AZ ·
           {" "}{totals.scanned ? `${(totals.scanned - totals.loaded).toLocaleString()} low-fit filtered before download` : "filtered"} · {hidden} more hidden here{skippedCount ? ` · ${skippedCount} skipped` : ""}.
+          {" "}<button data-handoff-backlog className="ff-linkbtn" onClick={() => setBacklog(b => !b)}>{backlog ? "Show only the last 30 days" : "Include the older backlog"}</button>
         </>}
       </div>
 

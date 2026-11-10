@@ -389,7 +389,7 @@ function Ops({ onNavigate }) {
     catch (e) { setNote(e.message); }
     setBusy(false);
   }
-  const act = a => (a.act === "run" ? <button data-ops-run onClick={run} disabled={busy} style={{ ...btn("secondary"), padding: "2px 10px" }}>{busy ? "Running…" : "Run scheduler now"}</button>
+  const act = a => (a.act === "none" ? null : a.act === "run" ? <button data-ops-run onClick={run} disabled={busy} style={{ ...btn("secondary"), padding: "2px 10px" }}>{busy ? "Running…" : "Run scheduler now"}</button>
     : a.act === "delivery" ? <button onClick={() => onNavigate?.("automation")} style={{ ...btn("secondary"), padding: "2px 10px" }}>Open Email delivery</button>
     : <button onClick={() => window.dispatchEvent(new Event("ff:open-settings"))} style={{ ...btn("secondary"), padding: "2px 10px" }}>Open Settings → Gmail</button>);
   if (err) return <div role="alert" style={pill("rust")}>{err}</div>;

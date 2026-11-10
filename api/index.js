@@ -62,9 +62,10 @@ const claudeMini = async (system, user, maxTokens = 300) => {
   if (!key) throw new Error('ANTHROPIC_API_KEY not set');
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST', headers: ANTHROPIC_HEADERS(key),
-    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
+    body: JSON.stringify({ model: process.env.SCOUT_MODEL || 'claude-haiku-5-5', max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
   });
   const d = await r.json();
+  if (d && d.error) throw new Error(`Claude: ${d.error.message || d.error.type}`);   // e.g. "credit balance is too low": say so instead of returning ''
   return (d.content || []).map(b => b.text || '').join('').trim();
 };
 

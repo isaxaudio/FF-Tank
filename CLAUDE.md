@@ -438,6 +438,15 @@ Design: working text is 14px (body2, table cells, inputs, buttons); captions and
 rings. Record pages on a phone show Call · Note · Task · Email. Verification: `scripts/verify-pr3.mjs` (needs
 migration 014, the local preview on 4174 and `vercel dev` on 3001).
 
+## Lead scout (signals and Handoff)
+The daily scout is the Vercel cron `api/cron-scout.js` (13:00 UTC, see vercel.json): Tavily searches, noise filters,
+then Claude scores each survivor (model `SCOUT_MODEL`, default claude-haiku-5-5). A lead Claude cannot score is saved
+with status `unscored` (Handoff and Signals never show it); the next run scores held leads from the last 30 days first
+and releases them (`new`) or archives them (score < 5). Each run writes job_state `scout` (last_error such as "credit
+balance is too low"), which Reports → Operations shows. Handoff shows the last 30 days by default ("Include the older
+backlog" for the rest). `scripts/archive-signal-backlog.mjs` archived the pre-November backlog (`--undo <file>`).
+OpenClaw on the VPS is not part of this path. Tests: `test/scout.test.cjs`.
+
 ## Reports you can trust (PR 4, migration 015)
 `src/lib/reports.js` loads once per period and computes every report with pure functions (`test/reports.test.mjs`).
 - **Definitions.** `METRICS` gives each headline a label, definition, period and source; `HEADLINES[report]` lists the

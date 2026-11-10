@@ -438,7 +438,7 @@ export function opsSummary({ worker, waiting }, now = new Date()) {
   for (const m of mailboxes.filter(m => !m.ok || m.stale)) actions.push({ key: `mbx-${m.email}`, text: `${m.email}: ${m.reason || "reply sync is behind"}. Follow-ups from this mailbox wait until it syncs.`, act: !m.ok ? "reconnect" : "run" });
   if (campaigns.length) actions.push({ key: "campaigns", text: `${campaigns.length} campaign email${campaigns.length === 1 ? "" : "s"} need${campaigns.length === 1 ? "s" : ""} a look (failures, paused or stuck). Retry or resume from Email delivery.`, act: "delivery" });
   if (review.length) actions.push({ key: "review", text: `${review.length} sequence step${review.length === 1 ? "" : "s"} with uncertain delivery. Mark sent, resend or skip from Email delivery.`, act: "delivery" });
-  for (const j of jobErrors) actions.push({ key: `job-${j.job}`, text: `${j.job} failed last time: ${j.error}`, act: "run" });
+  for (const j of jobErrors) actions.push({ key: `job-${j.job}`, text: j.job === "scout" ? `Lead scout: ${j.error}. New leads wait as unscored and are scored on the next run once Claude answers; if the message mentions credits, add them in the Anthropic console (Plans & Billing).` : `${j.job} failed last time: ${j.error}`, act: j.job === "scout" ? "none" : "run" });
   if (waiting > 0) actions.push({ key: "events", text: `${waiting} Resend receipt${waiting === 1 ? "" : "s"} older than an hour not applied yet. The next scheduler run retries them.`, act: "run" });
   return {
     heartbeat: { minutes, ok: !!sched && minutes != null && minutes <= HEARTBEAT_STALE_MIN && !sched.stale, lastSuccessAt: sched?.last_success_at || null, running: !!sched?.running },
