@@ -124,7 +124,6 @@ function CampaignPanel({ campaign: c, onClose, onChanged, onNavigate, onOpenEmai
   async function memberStatus(m, s) {
     try { await setMemberStatus(m.id, s); await load(); onChanged(); } catch (e) { setErr(e.message); }
   }
-  const roi = c.cost ? Number(c.stats.open_value || 0) - Number(c.cost) : null;
 
   return (
     <div style={{ width: 520, flexShrink: 0, borderLeft: `1px solid ${TC.line}`, background: TC.card, overflowY: "auto" }}>
@@ -148,7 +147,7 @@ function CampaignPanel({ campaign: c, onClose, onChanged, onNavigate, onOpenEmai
             <div key={l} style={{ ...tile({ padding: "10px 12px" }) }}><div style={TT.label}>{l}</div><div style={{ ...TT.h4, color: TC.ink, marginTop: 4 }}>{v}</div></div>
           ))}
         </div>
-        {roi != null && <div style={{ ...TT.caption, color: TC.muted }}>Open pipeline minus cost: <b style={{ color: roi >= 0 ? TC.ink : TC.criticalInk, fontWeight: 450 }}>{money(roi)}</b>. Booked value is counted only for deals linked to a Flex project.</div>}
+        <div style={{ ...TT.caption, color: TC.muted }}>Open value is the estimate on this campaign's open deals; booked deals leave it. Replies, meetings, linked bookings, booked value and return on spend are in Reports → Campaign outcomes.</div>
 
         <CampaignEmails campaign={c} onOpen={onOpenEmail} onChanged={onChanged} />
 

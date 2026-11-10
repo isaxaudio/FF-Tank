@@ -438,6 +438,46 @@ Design: working text is 14px (body2, table cells, inputs, buttons); captions and
 rings. Record pages on a phone show Call · Note · Task · Email. Verification: `scripts/verify-pr3.mjs` (needs
 migration 014, the local preview on 4174 and `vercel dev` on 3001).
 
+## Reports you can trust (PR 4, migration 015)
+`src/lib/reports.js` loads once per period and computes every report with pure functions (`test/reports.test.mjs`).
+- **Definitions.** `METRICS` gives each headline a label, definition, period and source; `HEADLINES[report]` lists the
+  tiles; `Reports.jsx` draws tiles only through `<Headlines report=…>` (the test fails on a hand-labelled tile). Each
+  tile shows its period and opens to its definition and source.
+- **Value buckets.** Open pipeline (estimates on open stages, now), booked project value (Flex `budget_estimate` of
+  linked projects, by link date), lost value (by close date). No invoiced/collected source exists, so nothing claims
+  to be revenue received; return on spend is (booked value − spend) ÷ spend, not profit.
+- **One booking, once.** `bookedLedger` collects links from `deals.flex_project_id` and `deal_productions.flex_project_id`
+  on booked deals and credits each Flex project to the deal that linked it first; later claims are duplicates (counted
+  nowhere, labelled "already counted on another deal"). A booked deal with no link is "booked, not linked": no value.
+- **Conversion.** Cohort = deals created in the period, stage as of now. Only deals linked to a source record
+  (`primary_campaign_id`, `opportunity_id`, `signal_id`) get rates; typed-source and no-source deals are listed apart.
+- **Campaigns.** Sourced = primary campaign (adds up). Influenced = the campaign emailed or listed the deal's company or
+  primary contact within `INFLUENCE_DAYS` (90) before the deal was created (never added up). Outcomes first: people
+  who replied (human replies on `email_messages.replied_at`), meetings after a touch, proposals, linked bookings,
+  repeat-event deals, booked value, return; opens/clicks in a secondary table. Each row opens to the people, meetings
+  and deals behind it, linked to their records.
+- **Flex freshness.** `flexFreshness` reads only import timestamps (`flex_projects`/`flex_clients.created_at`); stale after
+  `FLEX_STALE_DAYS` (30). The matcher's `job_state.flex_candidates` run is shown beside it and cannot make it fresh.
+- **Operations.** Reports → Operations reads `worker-status` plus `email_events` not applied after an hour, and turns
+  them into actions (run the scheduler, open Email delivery, reconnect Gmail).
+- **What a Flex row is.** Each `flex_projects` row is one Flex document: `event_type` = document type (Quote, Sales Quote,
+  Event Folder, Pull Sheet, Expense Sheet, Invoice), `notes` = "[identity] · status: X · doc NN-NNNN · AM: Name".
+  `src/lib/flexdocs.js` / `lib/server/flexdocs.cjs` (kept identical by `test/flexdocs.test.mjs`): a booking is a quote with
+  status Confirmed, Prepped, Awaiting Prep, Returned, Closed, Invoice Created or Invoice Paid. Cancelled quotes, inquiries,
+  tentative holds and other document types never count as bookings in reports, rebooking (`sales.cjs`) or Flex history;
+  the matcher (`flexjobs.cjs`) skips cancelled quotes and non-quotes. Rows with no type or status (old CSV, fixtures) are
+  taken as bookings. On 2026-11-10 the August mirror held $36.3M of "value" of which $16.8M was bookings.
+- **Refreshing Flex.** `node scripts/flex-refresh.mjs` (dry run) / `--apply`: lists every document through the Flex API
+  document search by doc-number prefix, reads headers for new or still-changing documents (cached 6 h in
+  backups/flex-cache), upserts on `flex_id` (Flex's element id, so deal links survive), stamps `created_at` and
+  `job_state.flex_import`. Token from `FLEX_TOKEN_FILE` (default `~/Projects/flex-quoting-study/.flex_token`; the in-app
+  `flexApiKey` only reaches contacts). The Flex Intel CSV import invents row-number ids and would duplicate rows.
+- **Migration 015** fixes `campaign_stats`: `open_value` = open stages only (a booked deal used to stay in it), `sent` /
+  `failed` by delivery outcome. Same columns, so readers keep working.
+- **Measured:** first report renders about 2 s after navigation on the live data (2,000+ Flex projects); queries stay in
+  the browser until that number grows. `scripts/verify-pr4.mjs` (16 checks, throwaway `zz-pr4` rows, cleans up)
+  supersedes the report checks in `verify-step8.mjs`.
+
 ## Newsletter builder (CRM rebuild step 10, see CRM-PLAN.md)
 Outreach → Templates → New newsletter opens `src/components/NewsletterBuilder.jsx`; the model and the email-safe HTML
 compiler are in `src/lib/newsletter.js`. A newsletter is an `email_templates` row of kind campaign with `design`
