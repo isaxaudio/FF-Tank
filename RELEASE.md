@@ -11,10 +11,13 @@ preview are evidence for those environments only.
    deal_series, saved_views, rebooking_reviews, app_settings; existing Flex-linked deals get one production each). Apply it
    BEFORE promoting the PR 3 code: the Deals screen reads `deal_productions` and `deal_series`, so the PR 3 build fails
    on a database without 014. The PR 2 code keeps working on 014.
-2. Vercel env: `RESEND_API_KEY`, `RESEND_FROM` (a sender on a verified domain), `RESEND_WEBHOOK_SECRET` (the Svix secret of
+2. Done 2026-11-10 (Isaac's Resend account "fatfishmedia", key "FF Tank production", from `Fatfish Media <hello@fatfishmedia.com>`,
+   secrets kept in gitignored `backups/resend.env`). Vercel env: `RESEND_API_KEY`, `RESEND_FROM` (a sender on a verified domain), `RESEND_WEBHOOK_SECRET` (the Svix secret of
    the Resend webhook pointing at `https://ff-tank.vercel.app/api/index?service=resend-webhook`), `CRON_SECRET` (already set;
    also signs the Gmail OAuth state), optional `STATE_SECRET`, and `NODEJS_HELPERS=0` for exact webhook signatures.
-3. Resend domain: SPF and DKIM for the sending domain verified in Resend; DMARC published.
+3. Resend domain: SPF and DKIM for the sending domain verified in Resend; DMARC published. Done 2026-11-10: fatfishmedia.com
+   verified (DKIM TXT `resend._domainkey`, CNAMEs `send` and `rsend` at Bluehost; receiving left off so Google keeps the MX).
+   DMARC is still `p=none`; tighten to quarantine after a few clean campaigns.
 
 ## After deploying
 4. Settings → Gmail → Reconnect as isaac@fatfishmedia.com (Google consent). Confirms the new OAuth state flow and grants the
@@ -24,7 +27,10 @@ preview are evidence for those environments only.
 6. Scheduler health: run the Mac mini tick once (`sh scripts/sequence-tick.sh`) and open Automation → Email delivery:
    the scheduler row must read "ok · last success Nm ago" with no stale lock. Wait for the next Vercel cron run of
    cron-scout and cron-exec-movement and check they answered 200 (Vercel sends CRON_SECRET itself).
-7. Internal delivery test, in this order, with internal addresses only:
+7. Internal delivery test, in this order, with internal addresses only. 7a, 7c and 7d passed 2026-11-10 (template test to
+   isaac@ landed in the inbox as Fatfish Media; receipts signed and stored within a second; unsubscribe link on a throwaway
+   contact; bounced@resend.dev → permanent_failure and, after f0d6492, on the suppression list). 7b is a Gmail-sequence test
+   and is still open.
    a. Campaign test send to two internal addresses (Campaigns → Email send → Send test). Both arrive; Resend's webhook
       posts `email.sent` / `email.delivered`; `email_events` gets rows with `applied_at` set; the campaign panel shows
       outcomes.
