@@ -220,3 +220,19 @@ test('recommend: a yearly show that already came around again is anchored on the
   const recs = sales.recommend(f);
   assert.deepEqual(recs.map(r => [r.anchor_project_id, r.next_expected]), [['f3', '2027-07-11']]);
 });
+
+test('rebookingList: a cancelled quote is not an event, so it neither anchors nor blocks a recommendation', async () => {
+  const f = rebookFixture();
+  f.clients = [{ id: 'fc9', name: 'Farm City', company_id: 'co9' }];
+  f.companies = [{ id: 'co9', name: 'Farm City', owner: null, last_touch_at: null, lifecycle_stage: 'customer' }];
+  // Held in July 2025; the July 2026 quote was cancelled. The client is due again for July 2026's slot, so the
+  // recommendation stays anchored on 2025 (a cancelled 2026 quote must not make it look as if the show happened).
+  const held = { ...flex('f1', 'Farm City', '2025-07-12'), notes: '[Fat Fish Media] · status: Closed · doc 25-0101 · AM: Chase Cook' };
+  const cancelled = { ...flex('f2', 'Farm City', '2026-07-11'), notes: '[Fat Fish Media] · status: Cancelled · doc 26-0101 · AM: Chase Cook' };
+  const folder = { ...flex('f3', 'Farm City', '2026-07-11'), event_type: 'Event Folder', notes: 'status: Confirmed · doc 26-0102 · AM: Chase Cook' };
+  const db = new FakeRest({ app_settings: [{ key: 'timezone', value: 'America/Denver' }], tasks: [], deals: [], activities: [], email_messages: [], flex_clients: f.clients, flex_projects: [held, cancelled, folder], companies: f.companies, rebooking_reviews: [] });
+  global.fetch = stubFetch([restRoute(db)]);
+  const out = await sales.rebookingList({ now: new Date('2026-05-01T17:00:00Z').getTime() });
+  assert.deepEqual(out.recommendations.map(r => r.anchor_project_id), ['f1']);
+  assert.ok(out.recommendations[0].history.every(h => h.flex_id === 'f1'), 'the cancelled quote and the folder are not in the history');
+});

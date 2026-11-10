@@ -460,6 +460,18 @@ migration 014, the local preview on 4174 and `vercel dev` on 3001).
   `FLEX_STALE_DAYS` (30). The matcher's `job_state.flex_candidates` run is shown beside it and cannot make it fresh.
 - **Operations.** Reports → Operations reads `worker-status` plus `email_events` not applied after an hour, and turns
   them into actions (run the scheduler, open Email delivery, reconnect Gmail).
+- **What a Flex row is.** Each `flex_projects` row is one Flex document: `event_type` = document type (Quote, Sales Quote,
+  Event Folder, Pull Sheet, Expense Sheet, Invoice), `notes` = "[identity] · status: X · doc NN-NNNN · AM: Name".
+  `src/lib/flexdocs.js` / `lib/server/flexdocs.cjs` (kept identical by `test/flexdocs.test.mjs`): a booking is a quote with
+  status Confirmed, Prepped, Awaiting Prep, Returned, Closed, Invoice Created or Invoice Paid. Cancelled quotes, inquiries,
+  tentative holds and other document types never count as bookings in reports, rebooking (`sales.cjs`) or Flex history;
+  the matcher (`flexjobs.cjs`) skips cancelled quotes and non-quotes. Rows with no type or status (old CSV, fixtures) are
+  taken as bookings. On 2026-11-10 the August mirror held $36.3M of "value" of which $16.8M was bookings.
+- **Refreshing Flex.** `node scripts/flex-refresh.mjs` (dry run) / `--apply`: lists every document through the Flex API
+  document search by doc-number prefix, reads headers for new or still-changing documents (cached 6 h in
+  backups/flex-cache), upserts on `flex_id` (Flex's element id, so deal links survive), stamps `created_at` and
+  `job_state.flex_import`. Token from `FLEX_TOKEN_FILE` (default `~/Projects/flex-quoting-study/.flex_token`; the in-app
+  `flexApiKey` only reaches contacts). The Flex Intel CSV import invents row-number ids and would duplicate rows.
 - **Migration 015** fixes `campaign_stats`: `open_value` = open stages only (a booked deal used to stay in it), `sent` /
   `failed` by delivery outcome. Same columns, so readers keep working.
 - **Measured:** first report renders about 2 s after navigation on the live data (2,000+ Flex projects); queries stay in

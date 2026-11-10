@@ -196,9 +196,10 @@ function Pipeline({ data, periodLabel, onNavigate }) {
         lost_value: [money(v.lost.estimate), plural(v.lost.count, "deal")],
         win_rate: [pct(wr.rate), `${plural(wr.won, "linked booking")}, ${num(wr.lost)} lost`],
       }} />
-      {(v.bookedUnlinked.count > 0 || v.duplicates > 0) && (
+      {(v.bookedUnlinked.count > 0 || v.duplicates > 0 || v.notBookings.length > 0) && (
         <Section title="Not counted as booked value" data-unlinked note="These would otherwise inflate the numbers above.">
           {v.bookedUnlinked.count > 0 && <div style={{ ...TT.body2, color: TC.ink }}>{v.bookedUnlinked.count} deal{v.bookedUnlinked.count === 1 ? " is" : "s are"} in Booked without a Flex project, so {v.bookedUnlinked.count === 1 ? "it carries" : "they carry"} no value: {v.bookedUnlinked.deals.slice(0, 8).map((d, i) => <span key={d.id}>{i ? ", " : ""}<LinkBtn onClick={() => onNavigate?.("deals", { dealId: d.id })}>{d.name}</LinkBtn></span>)}{v.bookedUnlinked.count > 8 ? " …" : ""}. Link each one from the deal page.</div>}
+          {v.notBookings.length > 0 && <div style={{ ...TT.body2, color: TC.ink, marginTop: 6 }}>{v.notBookings.length} deal{v.notBookings.length === 1 ? " is" : "s are"} linked to a Flex document that is not a booking, so {v.notBookings.length === 1 ? "it carries" : "they carry"} no value: {v.notBookings.slice(0, 8).map((x, i) => <span key={x.flexId}>{i ? ", " : ""}<LinkBtn onClick={() => onNavigate?.("deals", { dealId: x.dealId })}>{x.dealName}</LinkBtn> ({x.status})</span>)}.</div>}
           {v.duplicates > 0 && <div style={{ ...TT.body2, color: TC.ink, marginTop: 6 }}>{v.duplicates} later link{v.duplicates === 1 ? "" : "s"} point at a Flex project another deal already booked; the project is counted once, on the first deal.</div>}
         </Section>
       )}
@@ -323,7 +324,7 @@ function TraceList({ title, items, render, empty }) {
 // ---- 5. Flex data and history -----------------------------------------------------------------------------------
 
 function FlexData({ data }) {
-  const f = useMemo(() => flexFreshness({ projects: data.flexProjects, clientsImportedAt: data.flexClientsImportedAt, matcher: data.jobs.flex_candidates, now: data.now }), [data]);
+  const f = useMemo(() => flexFreshness({ projects: data.flexProjects, clientsImportedAt: data.flexClientsImportedAt, importJob: data.jobs.flex_import, matcher: data.jobs.flex_candidates, now: data.now }), [data]);
   const h = useMemo(() => flexHistory(data.flexProjects, data.now), [data]);
   const linkedValue = [...data.ledger.byDeal.values()].reduce((s, e) => s + e.value, 0);
   const cols = [{ key: "year", label: "Year" }, { key: "projects", label: "Projects", align: "right" }, { key: "noBudget", label: "No budget", align: "right" }, { key: "value", label: "Project value", align: "right", value: r => money(r.value) }, { key: "avgProject", label: "Avg per budgeted project", align: "right", value: r => money(r.avgProject) }, { key: "clients", label: "Clients", align: "right" }, { key: "newClients", label: "New", align: "right" }, { key: "repeatClients", label: "Repeat", align: "right" }];
@@ -331,17 +332,20 @@ function FlexData({ data }) {
     <>
       <Headlines report="flex" values={{
         flex_imported: [f.importedAt ? dayOf(f.importedAt) : "never", f.importedAt ? `${f.ageDays} days ago${f.stale ? ` · older than ${FLEX_STALE_DAYS} days` : ""}` : "the mirror is empty", f.stale ? "warn" : null],
-        flex_projects: [num(f.coverage.projects), `${pct(f.coverage.budgetPct)} with a budget · ${num(data.flexClientsCount)} clients`],
+        flex_projects: [num(f.coverage.bookings), `of ${num(f.coverage.projects)} Flex documents · ${pct(f.coverage.budgetPct)} with a budget`],
         flex_latest_event: [f.coverage.latestPastEvent ? dayOf(f.coverage.latestPastEvent + "T12:00:00") : "—", `${num(f.coverage.lastYear)} events in the last 12 months · ${num(f.coverage.future)} ahead`],
         flex_matcher: [f.matcher.ranAt ? ago(f.matcher.ranAt) : "never", f.matcher.error ? `failed: ${f.matcher.error}` : f.matcher.ranAt ? `${plural(f.matcher.deals ?? 0, "deal")} checked, ${plural(f.matcher.candidatesNew ?? 0, "new candidate")}` : "runs once a day on the scheduler", f.matcher.error ? "warn" : null],
         crm_linked: [num(data.ledger.projects), `${money(linkedValue)} of project value`],
       }} />
       {f.stale && (
         <Section title="The Flex mirror is out of date" data-flex-stale note="">
-          <div style={{ ...TT.body2, color: TC.ink }}>The newest Flex row was imported {f.importedAt ? `on ${dayOf(f.importedAt)}, ${f.ageDays} days ago` : "never"}. Bookings made in Flex since then are missing, so rebooking suggestions, the matcher and the history below are behind. {f.matcher.ranAt && <>The matcher ran {ago(f.matcher.ranAt)}, but it only reads what was imported.</>} Import a fresh export from Reports → Flex Intel (Sync or CSV import).</div>
+          <div style={{ ...TT.body2, color: TC.ink }}>The newest Flex row was imported {f.importedAt ? `on ${dayOf(f.importedAt)}, ${f.ageDays} days ago` : "never"}. Bookings made in Flex since then are missing, so rebooking suggestions, the matcher and the history below are behind. {f.matcher.ranAt && <>The matcher ran {ago(f.matcher.ranAt)}, but it only reads what was imported.</>} Refresh it with `node scripts/flex-refresh.mjs --apply` (Flex API, keyed on Flex ids, never duplicates). The CSV import in Flex Intel would duplicate rows.</div>
         </Section>
       )}
-      <Section title="Project value by year" note="Flex budget estimates by event date; the period does not apply. Estimates, not invoiced revenue. Years after this one are booked ahead." action={<Csv name="flex-value-by-year" rows={h.years} columns={cols} />}>
+      <Section title="Not counted as bookings" data-flex-excluded note="Kept in the mirror for matching and history, left out of every value above and below.">
+        <Table columns={[{ key: "label", label: "Kind" }, { key: "n", label: "Documents", align: "right" }, { key: "value", label: "Quoted value", align: "right", value: r => money(r.value) }]} rows={[{ key: "cancelled", label: "Cancelled quotes", ...h.excluded.cancelled }, { key: "open", label: "Inquiries and tentative holds (Flex pipeline)", ...h.excluded.open }, { key: "other", label: "Event folders, pull sheets, invoices and other documents", ...h.excluded.otherDocs }]} rowKey={r => r.key} />
+      </Section>
+      <Section title="Project value by year" note="Bookings only: Flex budget estimates by event date; the period does not apply. Estimates, not invoiced revenue. Years after this one are booked ahead." action={<Csv name="flex-value-by-year" rows={h.years} columns={cols} />}>
         <Bars rows={h.years} value={r => r.value} label={r => <span>{r.year}{r.future ? <span style={{ ...pill("ocean"), marginLeft: 6 }}>ahead</span> : null}</span>} sub={r => `${r.projects} projects${r.noBudget ? ` (${r.noBudget} without a budget)` : ""} · ${r.clients} clients (${r.newClients} new, ${r.repeatClients} repeat)`} format={money} />
       </Section>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>

@@ -18,6 +18,7 @@
 //   it and never makes an old import look fresh.
 import { db } from "./db.js";
 import { STAGES, STAGE_LABEL, OPEN_STAGES, weighted, STAGE_PROBABILITY } from "./deals.js";
+import { isBooking, docStatus, docType, isQuoteType, OPEN_STATUSES } from "./flexdocs.js";
 
 export const PERIODS = [
   { id: "30", label: "Last 30 days", days: 30 },
@@ -47,7 +48,7 @@ export const PROPOSAL_PLUS = ["proposal", "negotiation", "booked"];
 export const METRICS = {
   open_pipeline: { label: "Open pipeline", def: "Sum of the estimate on deals in Prospect through Negotiation. Booked and lost deals are not in it.", period: "Right now", source: "deals.amount_estimate" },
   weighted_pipeline: { label: "Weighted pipeline", def: "Each open deal's estimate times its stage probability, summed.", period: "Right now", source: "deals, deal_stages.probability" },
-  booked_value: { label: "Booked project value", def: "Flex budget estimate of each Flex project linked to a booked deal, counted once even when several deals or productions point at it. An estimate of project value, not invoiced or collected revenue.", period: "Linked in {period}", source: "flex_projects.budget_estimate via deals and deal_productions" },
+  booked_value: { label: "Booked project value", def: "Flex budget estimate of each Flex booking linked to a booked deal, counted once even when several deals or productions point at it. A link to a cancelled quote or an open inquiry carries no value. An estimate of project value, not invoiced or collected revenue.", period: "Linked in {period}", source: "flex_projects.budget_estimate via deals and deal_productions" },
   lost_value: { label: "Lost value", def: "Sum of the estimate on deals marked lost.", period: "Closed in {period}", source: "deals.amount_estimate, deals.closed_at" },
   win_rate: { label: "Win rate", def: "Linked bookings ÷ (linked bookings + lost), among deals created in the period. Booked deals without a Flex link are left out of both sides.", period: "Deals created in {period}", source: "deals, Flex links" },
   signals: { label: "Signals", def: "Opportunities the scout or a person saved.", period: "Created in {period}", source: "opportunities" },
@@ -65,9 +66,9 @@ export const METRICS = {
   campaign_bookings: { label: "Linked bookings", def: "Distinct Flex projects booked on deals sourced by a campaign.", period: "Deals created in {period}", source: "deals.primary_campaign_id, Flex links" },
   campaign_value: { label: "Booked value, sourced", def: "Booked project value of deals whose primary campaign is the campaign. Each deal has one primary campaign, so this adds up across campaigns.", period: "Deals created in {period}", source: "flex_projects.budget_estimate" },
   campaign_return: { label: "Return on spend", def: "(Booked value, sourced − spend) ÷ spend, over campaigns with a spend entered. Booked value is an estimate, not gross profit: production costs are not reliable enough yet.", period: "Deals created in {period}", source: "campaigns.cost, booked value" },
-  flex_imported: { label: "Flex data imported", def: "When the newest row in the Flex mirror was written. This is how fresh the data is; the matcher reading it does not change it.", period: "Last import", source: "flex_projects.created_at, flex_clients.created_at" },
-  flex_projects: { label: "Flex projects", def: "Projects in the mirror, with how many carry a budget estimate.", period: "Whole mirror", source: "flex_projects" },
-  flex_latest_event: { label: "Latest past event", def: "The most recent event date in the mirror that is not in the future. An old date here with a recent import means Flex itself has no newer events.", period: "Whole mirror", source: "flex_projects.event_date" },
+  flex_imported: { label: "Flex data imported", def: "When the newest row in the Flex mirror was written. This is how fresh the data is; the matcher reading it does not change it.", period: "Last import", source: "flex_projects.created_at, flex_clients.created_at, job_state flex_import" },
+  flex_projects: { label: "Flex bookings", def: "Quotes in the mirror whose status says the job is on or done (Confirmed through Closed and invoiced). Cancelled quotes, open inquiries, tentative holds, event folders and pull sheets are counted apart, never as bookings.", period: "Whole mirror", source: "flex_projects (document type and status)" },
+  flex_latest_event: { label: "Latest past event", def: "The most recent booking event date in the mirror that is not in the future. An old date here with a recent import means Flex itself has no newer events.", period: "Whole mirror", source: "flex_projects.event_date" },
   flex_matcher: { label: "Matcher last ran", def: "When the nightly job last compared open deals with the mirror. It reads the mirror; it does not refresh it.", period: "Last run", source: "job_state flex_candidates" },
   crm_linked: { label: "CRM bookings linked", def: "Flex projects linked to a CRM deal, and their budget estimate.", period: "All time", source: "deals, deal_productions" },
   touches: { label: "Touches logged", def: "Calls, emails sent, replies, meetings, notes, tasks done, stage moves and enrollments. Drafts and Slack handoffs are not counted.", period: "Logged in {period}", source: "activities" },
@@ -116,7 +117,7 @@ export async function loadReportData(periodId, now = new Date()) {
     db.select("campaign_stats", { select: "*" }),
     db.count("opportunities", since ? { created_at: `gte.${since}` } : {}),
     db.selectAll("activities", { select: "id,actor,type,occurred_at,direction,contact_id,company_id,deal_id,contacts(name)", ...(since ? { occurred_at: `gte.${since}` } : {}), order: "occurred_at.desc" }),
-    db.selectAll("flex_projects", { select: "flex_id,client_name,event_type,event_date,budget_estimate,created_at" }),
+    db.selectAll("flex_projects", { select: "flex_id,client_name,event_type,event_date,budget_estimate,created_at,notes" }),
     db.select("flex_clients", { select: "created_at", order: "created_at.desc", limit: 1 }).catch(() => []),
     db.count("flex_clients", {}).catch(() => 0),
     db.select("job_state", { select: "job,last_run_at,last_success_at,last_error,last_result" }).catch(() => []),
@@ -157,17 +158,19 @@ export function bookedLedger(deals, productions, byFlexId) {
   for (const d of deals) if (d.stage === "booked" && d.flex_project_id) links.push({ flexId: d.flex_project_id, deal: d });
   for (const p of productions || []) { const d = dealById.get(p.deal_id); if (d && d.stage === "booked" && p.flex_project_id) links.push({ flexId: p.flex_project_id, deal: d }); }
   links.sort((a, b) => String(bookedAt(a.deal)).localeCompare(String(bookedAt(b.deal))) || String(a.deal.id).localeCompare(String(b.deal.id)));
-  const credited = new Map(), byDeal = new Map(), duplicates = [], touched = new Set();
+  const credited = new Map(), byDeal = new Map(), duplicates = [], touched = new Set(), notBookings = [];
   for (const l of links) {
     touched.add(l.deal.id);
     if (credited.has(l.flexId)) { if (credited.get(l.flexId) !== l.deal.id) duplicates.push({ flexId: l.flexId, dealId: l.deal.id, creditedTo: credited.get(l.flexId) }); continue; }
     credited.set(l.flexId, l.deal.id);
     const p = byFlexId[l.flexId];
+    // A link to a cancelled quote, an open inquiry or a folder is not a booking: no value, listed for a person to fix.
+    if (p && !isBooking(p)) { notBookings.push({ flexId: l.flexId, dealId: l.deal.id, dealName: l.deal.name, status: docStatus(p) || docType(p) }); continue; }
     const e = byDeal.get(l.deal.id) || { value: 0, projects: [], missingBudget: 0 };
     e.value += Number(p?.budget_estimate || 0); e.projects.push(l.flexId); if (!p || !Number(p.budget_estimate)) e.missingBudget++;
     byDeal.set(l.deal.id, e);
   }
-  return { byDeal, duplicates, linkedDealIds: touched, projects: credited.size };
+  return { byDeal, duplicates, notBookings, linkedDealIds: touched, projects: credited.size - notBookings.length };
 }
 export const isLinked = (d, ledger) => ledger.byDeal.has(d.id);
 export const dealValue = (d, ledger) => ledger.byDeal.get(d.id)?.value || 0;
@@ -197,6 +200,7 @@ export function valueSummary(deals, ledger, since) {
     lost: { count: lost.length, estimate: lost.reduce((s, d) => s + Number(d.amount_estimate || 0), 0) },
     bookedUnlinked: { count: unlinked.length, deals: unlinked.map(d => ({ id: d.id, name: d.name })) },
     duplicates: ledger.duplicates.length,
+    notBookings: ledger.notBookings,
   };
 }
 
@@ -353,23 +357,34 @@ export function campaignTotals(rows) {
 
 // ---- 5. Flex freshness and history ----------------------------------------------------------------------------------
 
-export function flexFreshness({ projects, clientsImportedAt = null, matcher = null, now = new Date() }) {
-  const stamps = [...projects.map(p => p.created_at), clientsImportedAt].filter(Boolean).sort();
+export function flexFreshness({ projects, clientsImportedAt = null, importJob = null, matcher = null, now = new Date() }) {
+  // Import times only: row stamps and the refresh script's own job record (scripts/flex-refresh.mjs). Never the matcher.
+  const stamps = [...projects.map(p => p.created_at), clientsImportedAt, importJob?.last_success_at].filter(Boolean).sort();
   const importedAt = stamps.length ? stamps[stamps.length - 1] : null;
   const ageDays = importedAt ? Math.floor(days(importedAt, now)) : null;
   const today = now.toISOString().slice(0, 10);
-  const past = projects.map(p => p.event_date).filter(d => d && String(d).slice(0, 10) <= today).sort();
+  const bookings = projects.filter(isBooking);
+  const past = bookings.map(p => p.event_date).filter(d => d && String(d).slice(0, 10) <= today).sort();
   const yearAgo = new Date(now.getTime() - 365 * DAY).toISOString().slice(0, 10);
-  const withBudget = projects.filter(p => Number(p.budget_estimate) > 0).length;
+  const withBudget = bookings.filter(p => Number(p.budget_estimate) > 0).length;
   let result = matcher?.last_result || null; if (typeof result === "string") { try { result = JSON.parse(result); } catch { result = null; } }
   return {
     importedAt, ageDays, stale: ageDays == null || ageDays > FLEX_STALE_DAYS,
-    coverage: { projects: projects.length, withBudget, budgetPct: pctOf(withBudget, projects.length), latestPastEvent: past.length ? String(past[past.length - 1]).slice(0, 10) : null, lastYear: past.filter(d => String(d).slice(0, 10) >= yearAgo).length, future: projects.filter(p => p.event_date && String(p.event_date).slice(0, 10) > today).length },
+    coverage: { projects: projects.length, bookings: bookings.length, withBudget, budgetPct: pctOf(withBudget, bookings.length), latestPastEvent: past.length ? String(past[past.length - 1]).slice(0, 10) : null, lastYear: past.filter(d => String(d).slice(0, 10) >= yearAgo).length, future: bookings.filter(p => p.event_date && String(p.event_date).slice(0, 10) > today).length },
     matcher: { ranAt: matcher?.last_run_at || null, lastSuccessAt: matcher?.last_success_at || null, error: matcher?.last_error || null, deals: result?.deals ?? null, candidatesNew: result?.candidates_new ?? null, sawImportAt: result?.mirror?.last_import || null },
   };
 }
 
-export function flexHistory(projects, now = new Date()) {
+// Only bookings count (see src/lib/flexdocs.js): a cancelled quote, an open inquiry and a folder or pull sheet are
+// reported apart in `excluded`, never added to project value.
+export function flexHistory(allProjects, now = new Date()) {
+  const projects = allProjects.filter(isBooking);
+  const excluded = { cancelled: { n: 0, value: 0 }, open: { n: 0, value: 0 }, otherDocs: { n: 0, value: 0 } };
+  for (const p of allProjects) {
+    if (isBooking(p)) continue;
+    const b = docStatus(p) === "Cancelled" ? excluded.cancelled : OPEN_STATUSES.includes(docStatus(p)) && (!docType(p) || isQuoteType(docType(p))) ? excluded.open : excluded.otherDocs;
+    b.n++; b.value += Number(p.budget_estimate || 0);
+  }
   const years = {}, firstYear = {};
   for (const p of projects) {
     if (!p.event_date) continue;
@@ -391,7 +406,7 @@ export function flexHistory(projects, now = new Date()) {
     const c = (p.client_name || "").trim(); if (c) { const g = (byClient[c] ||= { name: c, projects: 0, value: 0, last: null }); g.projects++; g.value += Number(p.budget_estimate || 0); if (p.event_date && (!g.last || p.event_date > g.last)) g.last = p.event_date; }
     const t = (p.event_type || "Other").trim(); const g2 = (byType[t] ||= { name: t, projects: 0, value: 0 }); g2.projects++; g2.value += Number(p.budget_estimate || 0);
   }
-  return { years: rows, topClients: Object.values(byClient).sort((a, b) => b.value - a.value).slice(0, 10), eventTypes: Object.values(byType).sort((a, b) => b.value - a.value).slice(0, 8), total: rows.reduce((s, r) => s + r.value, 0) };
+  return { years: rows, topClients: Object.values(byClient).sort((a, b) => b.value - a.value).slice(0, 10), eventTypes: Object.values(byType).sort((a, b) => b.value - a.value).slice(0, 8), total: rows.reduce((s, r) => s + r.value, 0), bookings: projects.length, excluded };
 }
 
 // ---- 6. activity per owner ------------------------------------------------------------------------------------------

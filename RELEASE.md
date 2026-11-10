@@ -97,5 +97,8 @@ Done once per new user, in this order; the app side is already built.
 3. Check on production: Reports → every report shows tiles with a period and a Definition; Flex data and history says
    the mirror is out of date (import Aug 6, 2026) until a fresh Flex export is imported; Operations shows the scheduler
    a few minutes old.
-Rollback: promote the previous deployment; `node scripts/migrate.js down 1` if 015 must go too.
+4. After the promote (production then counts only real bookings): `node scripts/flex-refresh.mjs` to see the changes,
+   then `node scripts/flex-refresh.mjs --apply`. Reports → Flex data and history then shows today's import date.
+Rollback: promote the previous deployment; `node scripts/migrate.js down 1` if 015 must go too. A Flex refresh only
+upserts; backups/flex-refresh-<date>.json lists every added and changed row with its old values.
 
