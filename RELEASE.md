@@ -26,7 +26,7 @@ preview are evidence for those environments only.
    `email_sent` with a Gmail message id.
 6. Scheduler health: run the Mac mini tick once (`sh scripts/sequence-tick.sh`) and open Automation → Email delivery:
    the scheduler row must read "ok · last success Nm ago" with no stale lock. Wait for the next Vercel cron run of
-   cron-scout and cron-exec-movement and check they answered 200 (Vercel sends CRON_SECRET itself).
+   cron-scout and check it answered 200 (Vercel sends CRON_SECRET itself).
 7. Internal delivery test, in this order, with internal addresses only. 7a, 7c and 7d passed 2026-11-10 (template test to
    isaac@ landed in the inbox as Fatfish Media; receipts signed and stored within a second; unsubscribe link on a throwaway
    contact; bounced@resend.dev → permanent_failure and, after f0d6492, on the suppression list). 7b is a Gmail-sequence test

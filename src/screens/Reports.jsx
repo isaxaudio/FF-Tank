@@ -1,8 +1,7 @@
 // src/screens/Reports.jsx — the reports from src/lib/reports.js. Every report opens with its headline tiles, drawn
 // from HEADLINES/METRICS only, so each number shows its period and carries its definition and source. Then sorted bars
 // and tables with a CSV download. One period picker; numbers that ignore it say "Right now" or "Whole mirror".
-// Campaign rows open to the people, meetings and deals behind each outcome, linked to their records. The legacy
-// Flex Intel view stays reachable as the last entry because it holds the Flex sync and CSV import.
+// Campaign rows open to the people, meetings and deals behind each outcome, linked to their records.
 import React, { useEffect, useMemo, useState } from "react";
 import { c as TC, t as TT, pill, tile, btn } from "../tokens.js";
 import { Download, ChevronRight, ChevronDown } from "lucide-react";
@@ -20,14 +19,13 @@ const plural = (n, one, many = `${one}s`) => `${num(n)} ${Number(n) === 1 ? one 
 const dayOf = ts => (ts ? new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—");
 const ago = ts => { if (!ts) return "never"; const m = Math.round((Date.now() - new Date(ts)) / 60000); return m < 60 ? `${m} min ago` : m < 48 * 60 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
 
-export default function Reports({ views = {}, db: legacyDb, legacyProps = {}, onNavigate, initialTab = "pipeline" }) {
-  const [tab, setTab] = useState(() => { try { const t = localStorage.getItem("ff:reports:tab"); return REPORTS.some(r => r.id === t) || t === "flexintel" ? t : initialTab; } catch { return initialTab; } });
+export default function Reports({ onNavigate, initialTab = "pipeline" }) {
+  const [tab, setTab] = useState(() => { try { const t = localStorage.getItem("ff:reports:tab"); return REPORTS.some(r => r.id === t) ? t : initialTab; } catch { return initialTab; } });
   const [period, setPeriod] = useState(() => { try { return localStorage.getItem("ff:reports:period") || "90"; } catch { return "90"; } });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const phone = useIsPhone();
-  const Flex = views.Flex;
 
   useEffect(() => {
     let on = true;
@@ -40,9 +38,9 @@ export default function Reports({ views = {}, db: legacyDb, legacyProps = {}, on
   const pickPeriod = id => { setPeriod(id); try { localStorage.setItem("ff:reports:period", id); } catch { /* ignore */ } };
   const periodLabel = PERIODS.find(p => p.id === period)?.label || "";
   const current = REPORTS.find(r => r.id === tab);
-  const usesPeriod = !["flexintel", "ops", "flex"].includes(tab);
+  const usesPeriod = !["ops", "flex"].includes(tab);
 
-  const entries = [...REPORTS, ...(Flex ? [{ id: "flexintel", label: "Flex Intel", blurb: "Sync and import from Flex; the older industry and market views.", legacy: true }] : [])];
+  const entries = REPORTS;
   const Rail = phone ? (
     <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "10px 16px", borderBottom: `1px solid ${TC.line}`, background: TC.card, WebkitOverflowScrolling: "touch" }}>
       {entries.map(r => <button key={r.id} data-report={r.id} aria-pressed={tab === r.id} onClick={() => pick(r.id)} style={{ ...pill(tab === r.id ? "ink" : "outline"), cursor: "pointer", padding: "4px 10px", whiteSpace: "nowrap", flexShrink: 0 }}>{r.label}</button>)}
@@ -70,9 +68,7 @@ export default function Reports({ views = {}, db: legacyDb, legacyProps = {}, on
       </div>
       <div style={{ flex: 1, display: "flex", minHeight: 0, flexDirection: phone ? "column" : "row" }}>
         {Rail}
-        {tab === "flexintel" ? (
-          <div style={{ flex: 1, display: "flex", minHeight: 0 }}>{Flex && <Flex db={legacyDb} onNavigate={onNavigate} {...legacyProps} />}</div>
-        ) : (
+        {(
           <div data-report-body={tab} style={{ flex: 1, overflowY: "auto", padding: phone ? "14px 16px 80px" : "20px 24px 40px" }}>
             {err && <div role="alert" style={{ ...pill("rust"), marginBottom: 12 }}>{err}</div>}
             {tab === "ops" ? <Ops onNavigate={onNavigate} /> : (
@@ -339,7 +335,7 @@ function FlexData({ data }) {
       }} />
       {f.stale && (
         <Section title="The Flex mirror is out of date" data-flex-stale note="">
-          <div style={{ ...TT.body2, color: TC.ink }}>The newest Flex row was imported {f.importedAt ? `on ${dayOf(f.importedAt)}, ${f.ageDays} days ago` : "never"}. Bookings made in Flex since then are missing, so rebooking suggestions, the matcher and the history below are behind. {f.matcher.ranAt && <>The matcher ran {ago(f.matcher.ranAt)}, but it only reads what was imported.</>} Refresh it with `node scripts/flex-refresh.mjs --apply` (Flex API, keyed on Flex ids, never duplicates). The CSV import in Flex Intel would duplicate rows.</div>
+          <div style={{ ...TT.body2, color: TC.ink }}>The newest Flex row was imported {f.importedAt ? `on ${dayOf(f.importedAt)}, ${f.ageDays} days ago` : "never"}. Bookings made in Flex since then are missing, so rebooking suggestions, the matcher and the history below are behind. {f.matcher.ranAt && <>The matcher ran {ago(f.matcher.ranAt)}, but it only reads what was imported.</>} The Mac mini refreshes it nightly (scripts/flex-refresh.mjs); check that the job is installed and the mini is on, or run it by hand.</div>
         </Section>
       )}
       <Section title="Not counted as bookings" data-flex-excluded note="Kept in the mirror for matching and history, left out of every value above and below.">

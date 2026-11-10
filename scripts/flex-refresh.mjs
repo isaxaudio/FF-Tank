@@ -16,6 +16,8 @@
 // Usage: node scripts/flex-refresh.mjs [--apply] [--all] [--from=21]
 // Token: FLEX_TOKEN_FILE (default ~/Projects/flex-quoting-study/.flex_token), read from the file, never printed.
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
+import { createRequire } from 'node:module';
+const { isBooking } = createRequire(import.meta.url)('../lib/server/flexdocs.cjs');
 
 for (const f of ['.env.local', '.env']) { const p = path.join(process.cwd(), f); if (!fs.existsSync(p)) continue; for (const line of fs.readFileSync(p, 'utf8').split('\n')) { const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, ''); } }
 const APPLY = process.argv.includes('--apply'), ALL = process.argv.includes('--all');
@@ -134,3 +136,40 @@ for (let i = 0; i < write.length; i += 200) {
 }
 await fetch(`${SB}/rest/v1/job_state?on_conflict=job`, { method: 'POST', headers: { ...SBH, Prefer: 'return=minimal,resolution=merge-duplicates' }, body: JSON.stringify({ job: 'flex_import', last_run_at: now, last_success_at: now, last_error: null, last_result: { listed: docs.size, added: added.length, changed: changed.length, headers: rows.length }, updated_at: now }) });
 console.log(`\nWrote ${write.length} rows (${added.length} new, ${changed.length} updated). job_state flex_import recorded.`);
+
+// Clients: every client on a Flex document gets a flex_clients row (new ones keyed client:<name>), linked to the FF Tank
+// company with exactly the same name when there is one, and its totals recomputed from bookings only (src/lib/flexdocs.js:
+// cancelled quotes, inquiries and folders do not count). Existing links are never changed.
+const norm = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const projectsNow = await sbAll('flex_projects?select=client_name,event_type,event_date,budget_estimate,notes&order=flex_id.asc');
+const clientsNow = await sbAll('flex_clients?select=id,name,company_id,flex_id&order=id.asc');
+const companies = await sbAll('companies?select=id,name&merged_into_id=is.null&order=id.asc');
+const companyByName = new Map(); for (const c of companies) { const k = norm(c.name); if (k && !companyByName.has(k)) companyByName.set(k, c.id); }
+const stats = new Map();
+for (const p of projectsNow) {
+  const k = norm(p.client_name); if (!k) continue;
+  const g = stats.get(k) || { name: String(p.client_name).trim(), events: 0, revenue: 0, first: null, last: null }; stats.set(k, g);
+  if (!isBooking(p)) continue;
+  const d = p.event_date ? String(p.event_date).slice(0, 10) : null;
+  g.events++; g.revenue += Number(p.budget_estimate || 0);
+  if (d && (!g.first || d < g.first)) g.first = d; if (d && (!g.last || d > g.last)) g.last = d;
+}
+const byClientName = new Map(); for (const c of clientsNow) { const k = norm(c.name); if (!byClientName.has(k)) byClientName.set(k, c); }
+let createdClients = 0, linked = 0, updatedClients = 0;
+const newRows = [];
+for (const [k, g] of stats) {
+  const existing = byClientName.get(k);
+  const totals = { total_events: g.events, total_revenue: Math.round(g.revenue * 100) / 100, first_event_date: g.first, last_event_date: g.last };
+  if (!existing) { newRows.push({ name: g.name, flex_id: `client:${k}`, company_id: companyByName.get(k) || null, ...totals, notes: 'added by scripts/flex-refresh.mjs from Flex documents' }); if (companyByName.get(k)) linked++; createdClients++; continue; }
+  const patch = { ...totals };
+  if (!existing.company_id && companyByName.get(k)) { patch.company_id = companyByName.get(k); linked++; }
+  const r = await fetch(`${SB}/rest/v1/flex_clients?id=eq.${existing.id}`, { method: 'PATCH', headers: { ...SBH, Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+  if (r.ok) updatedClients++;
+}
+for (let i = 0; i < newRows.length; i += 200) {
+  const r = await fetch(`${SB}/rest/v1/flex_clients?on_conflict=flex_id`, { method: 'POST', headers: { ...SBH, Prefer: 'return=minimal,resolution=merge-duplicates' }, body: JSON.stringify(newRows.slice(i, i + 200)) });
+  if (!r.ok) console.log(`client insert failed: ${r.status} ${(await r.text()).slice(0, 160)}`);
+}
+console.log(`Clients: ${createdClients} added, ${updatedClients} totals refreshed (bookings only), ${linked} newly linked to a company by exact name.`);
+const unlinked = [...stats.keys()].filter(k => { const c = byClientName.get(k); return !(c?.company_id || companyByName.get(k)); }).length;
+if (unlinked) console.log(`${unlinked} Flex clients have no FF Tank company with the same name: link them from Companies → Review, or create the company.`);

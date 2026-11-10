@@ -290,7 +290,7 @@ unauthenticated call never reaches a handler that holds server keys:
 - **public** — `gmail-auth` (Google's OAuth redirect; the signed state binds it to the user who started it), `resend-webhook`
   (Svix signature, 5-minute timestamp window), `unsubscribe` (`/u/<token>`, the contact's own `unsub_token`).
 - **staff** — every other service and the stand-alone files (`apollo-prospect`, `enrich-opportunities`, `scan-targets`,
-  `cron-exec-movement`, `cron-scout`): a Supabase user JWT or `CRON_SECRET` (`Authorization: Bearer …`).
+  `cron-scout`): a Supabase user JWT or `CRON_SECRET` (`Authorization: Bearer …`).
 - **person only** — `gmail-send`, `gmail-draft`, `gmail-connect` need a signed-in user (`requireUser`); the cron secret is refused.
 - **sender permission** — a user may send as a Gmail account whose address is their own sign-in email or that they connected
   (`gmail_accounts.connected_by`); `canUseSender`. The scheduler sends as the sequence's configured `sender_email`.
@@ -438,20 +438,22 @@ Design: working text is 14px (body2, table cells, inputs, buttons); captions and
 rings. Record pages on a phone show Call · Note · Task · Email. Verification: `scripts/verify-pr3.mjs` (needs
 migration 014, the local preview on 4174 and `vercel dev` on 3001).
 
-## Lead scout (signals and Handoff)
-The daily scout is the Vercel cron `api/cron-scout.js` (13:00 UTC, see vercel.json): Tavily searches, noise filters,
-then Claude scores each survivor (model `SCOUT_MODEL`, default claude-haiku-5-5). A lead Claude cannot score is saved
-with status `unscored` (Handoff and Signals never show it); the next run scores held leads from the last 30 days first
-and releases them (`new`) or archives them (score < 5). Each run writes job_state `scout` (last_error such as "credit
-balance is too low"), which Reports → Operations shows. Handoff shows the last 30 days by default ("Include the older
-backlog" for the rest). `scripts/archive-signal-backlog.mjs` archived the pre-November backlog (`--undo <file>`).
-**Scoring on the subscription:** with `SCOUT_SCORER=claude-code` (set in Vercel production since 2026-11-10) the scout makes
-no Anthropic API call and saves every lead as `unscored`; `scripts/score-leads.mjs` on the Mac mini scores them with
-`claude -p` (Claude Code on the subscription: ANTHROPIC_API_KEY is stripped from its environment, no tools, no MCP,
-rules from `lib/server/scoutprompt.cjs`) at 7:15 and 19:15 (`sh scripts/install-score-leads.sh`; log
-~/Library/Logs/ff-tank-score-leads.log) and writes job_state `lead_scoring`; Operations flags it after 36 h without
-success. Other API features (draft outreach, enrich-lead, the Monday brief) still need Anthropic API credits.
-OpenClaw on the VPS is not part of this path. Tests: `test/scout.test.cjs`.
+## AI work runs on the Claude subscription (Mac mini), not API credits
+Since 2026-11-10 no server code calls the Anthropic API (`ANTHROPIC_API_KEY` in Vercel is unused). Model work happens on
+the Mac mini through Claude Code (`claude -p`, the subscription login; `ANTHROPIC_API_KEY` is stripped from its
+environment, no tools, no MCP), installed with `sh scripts/install-mini-jobs.sh`:
+- **Lead scoring** `scripts/score-leads.mjs` (7:15, 19:15): the Vercel scout (`api/cron-scout.js`, 13:00 UTC) only
+  searches and saves leads as `unscored` (Handoff and Signals never show them). The mini scores them with the shared rules
+  in `lib/server/scoutprompt.cjs` (`decide`: < 5 archived; otherwise `new` with score, reason, host, date) and, for good
+  leads, writes `metadata.pitch` (angle, subject, opener). Handoff shows it as "Suggested first email"; `enrich-lead`
+  (Apollo contact lookup) uses it as the draft. job_state `lead_scoring`.
+- **Flex refresh** `scripts/flex-refresh.mjs --apply` (02:30): documents, then clients (new ones `client:<name>`, linked to
+  the company with the same name, totals from bookings only). job_state `flex_import`.
+Reports → Operations flags scoring after 36 h and the Flex refresh after 2 days without success. Handoff shows the last
+30 days by default. Retired on 2026-11-10: the Monday brief, `api/cron-exec-movement.js`, the Flex Intel screen with its AI
+panels, lookalike engine, Flex Sync and CSV import (and the browser-held Apollo/Flex keys), `draft-outreach`.
+`scripts/archive-signal-backlog.mjs` archived the pre-November backlog (`--undo <file>`). Tests: `test/scout.test.cjs`.
+The hiring checks in job_runs ("mac-mini" agent) are not in this repo (OpenClaw on the VPS).
 
 ## Reports you can trust (PR 4, migration 015)
 `src/lib/reports.js` loads once per period and computes every report with pure functions (`test/reports.test.mjs`).

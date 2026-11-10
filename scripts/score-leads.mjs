@@ -3,12 +3,13 @@
 // The Vercel scout (api/cron-scout.js with SCOUT_SCORER=claude-code) finds and saves leads as 'unscored'; this script
 // sends them in batches of 20 to `claude -p` with the shared rules (lib/server/scoutprompt.cjs), no tools and no MCP
 // servers (lead text is untrusted web content), then releases each lead (status new, score, why, company, date) or
-// archives it (score < 5). It records job_state 'lead_scoring' for Reports → Operations.
+// archives it (score < 5). Leads that pass also get an angle and a first email (metadata.pitch) for Handoff.
+// It records job_state 'lead_scoring' for Reports → Operations.
 // ANTHROPIC_API_KEY is removed from Claude Code's environment so it uses the subscription login, never the API account.
-// Usage: node scripts/score-leads.mjs [--dry] [--limit=100]   Scheduled by scripts/install-score-leads.sh.
+// Usage: node scripts/score-leads.mjs [--dry] [--limit=100]   Scheduled by scripts/install-mini-jobs.sh.
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path'; import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
-const { SYSTEM, listing, parseScores } = createRequire(import.meta.url)('../lib/server/scoutprompt.cjs');
+const { SYSTEM, listing, parseScores, decide } = createRequire(import.meta.url)('../lib/server/scoutprompt.cjs');
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const env = {};
 for (const f of ['.env.local', '.env']) { const p = path.join(ROOT, f); if (!fs.existsSync(p)) continue; for (const line of fs.readFileSync(p, 'utf8').split('\n')) { const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/); if (m && !(m[1] in env)) env[m[1]] = m[2].replace(/^["']|["']$/g, ''); } }
@@ -45,7 +46,7 @@ const started = new Date().toISOString();
 try {
   if (!SB || !KEY) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing (.env / .env.local)');
   const since = new Date(Date.now() - 30 * 864e5).toISOString();
-  const r = await fetch(`${SB}/rest/v1/opportunities?status=eq.unscored&created_at=gte.${since}&select=id,title,notes,signal,company&order=created_at.desc&limit=${LIMIT}`, { headers: H });
+  const r = await fetch(`${SB}/rest/v1/opportunities?status=eq.unscored&created_at=gte.${since}&select=id,title,notes,signal,company,metadata&order=created_at.desc&limit=${LIMIT}`, { headers: H });
   if (!r.ok) throw new Error(`load leads ${r.status}`);
   const held = await r.json();
   if (!held.length) { log('no held leads'); await state({ last_run_at: started, last_success_at: new Date().toISOString(), last_error: null, last_result: { checked: 0 } }); process.exit(0); }
@@ -54,15 +55,13 @@ try {
   for (let start = 0; start < items.length; start += 20) {
     const chunk = items.slice(start, start + 20);
     let scores = [];
-    try { scores = parseScores(await askClaude(listing(chunk, start))); }
+    try { scores = parseScores(await askClaude(listing(chunk, start, { pitch: true }))); }
     catch (e) { firstError = firstError || e.message; log(`batch ${start}: ${e.message}`); continue; }
     for (const q of scores) {
-      const h = held[q?.i]; const score = typeof q?.score === 'number' ? q.score : null;
-      if (!h || score == null) continue;
-      const why = q.why ? String(q.why).slice(0, 300) : null;
-      const patch = score < 5 ? { status: 'archived', overall_score: score, why_this_matters: why }
-        : { status: 'new', overall_score: score, why_this_matters: why, company: h.company || (q.company && String(q.company).toLowerCase() !== 'null' ? String(q.company).slice(0, 120) : null), deadline: q.event_date && !isNaN(new Date(q.event_date)) ? new Date(q.event_date).toISOString().slice(0, 10) : null };
-      if (DRY) log(`would set ${h.id.slice(0, 8)} → ${patch.status} ${score} · ${String(h.title).slice(0, 60)} · ${why || ''}`);
+      const h = held[q?.i]; if (!h) continue;
+      const patch = decide(h, q); if (!patch) continue;
+      const score = patch.overall_score;
+      if (DRY) log(`would set ${h.id.slice(0, 8)} → ${patch.status} ${score} · ${String(h.title).slice(0, 60)} · ${patch.why_this_matters || ''}${patch.metadata?.pitch ? ` · pitch: ${patch.metadata.pitch.subject}` : ''}`);
       else { const u = await fetch(`${SB}/rest/v1/opportunities?id=eq.${h.id}`, { method: 'PATCH', headers: H, body: JSON.stringify(patch) }); if (!u.ok) { firstError = firstError || `update ${u.status}`; continue; } }
       if (score < 5) out.dropped++; else out.released++;
     }

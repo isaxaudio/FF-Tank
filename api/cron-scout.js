@@ -1,6 +1,5 @@
 const { requireAuth } = require('../lib/server/auth.cjs');
 const { wrap } = require('../lib/server/http.cjs');
-const { SYSTEM, listing, parseScores } = require('../lib/server/scoutprompt.cjs');
 
 module.exports = wrap(async function handler(req, res) {
   if (!(await requireAuth(req, res))) return;
@@ -240,70 +239,11 @@ module.exports = wrap(async function handler(req, res) {
     // client-side regex stack becomes a safety net instead of load-bearing.
     // Chunked: one oversized batch would blow past max_tokens, truncate the JSON, and lose
     // scoring for EVERY candidate. Per-chunk failure only costs that chunk.
-    const qualKey = process.env.ANTHROPIC_API_KEY;
-    // The model is configurable so a retired id never silently stops scoring (SCOUT_MODEL in Vercel to override).
-    const QUAL_MODEL = process.env.SCOUT_MODEL || 'claude-haiku-5-5';
-    const QUAL_CHUNK = 20;
-    // Tuned against a real 18-lead sample. The naive version inverted the two things that matter
-    // most here: it dropped University of Phoenix / Chamberlain commencements to 4 ("lower
-    // production complexity") while KEEPING gala calendars and "top N conferences" roundups at
-    // 5-6. The single-organization test and the explicit commencement rule fix both — same
-    // sample now puts WGU/Chamberlain/UOPX at 9 and every directory page at 0-2.
-    const sys = SYSTEM;   // lib/server/scoutprompt.cjs
-    // Score items [{ type, title, content, company }] in chunks; returns { byIndex, error }. A failed chunk is left
-    // unscored and its error kept, so the caller holds those leads instead of passing them to people unscored.
-    // SCOUT_SCORER=claude-code: no Anthropic API calls here. Every lead is held as 'unscored' and the Mac mini scores
-    // it through Claude Code on the subscription (scripts/score-leads.mjs, twice a day).
-    const deferScoring = process.env.SCOUT_SCORER === 'claude-code';
-    async function qualify(items) {
-      const byIndex = {}; let error = null;
-      if (!items.length || deferScoring) return { byIndex, error };
-      if (!qualKey) return { byIndex, error: 'ANTHROPIC_API_KEY not set' };
-      for (let start = 0; start < items.length; start += QUAL_CHUNK) {
-        const chunk = items.slice(start, start + QUAL_CHUNK);
-        try {
-          const usr = listing(chunk, start);
-          const cr = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': qualKey, 'anthropic-version': '2023-06-01' },
-            body: JSON.stringify({ model: QUAL_MODEL, max_tokens: 4000, system: sys, messages: [{ role: 'user', content: usr }] }),
-          });
-          const cd = await cr.json();
-          if (cd && cd.error) throw new Error(cd.error.message || 'anthropic error');
-          const txt = (cd && cd.content && cd.content[0] && cd.content[0].text) || '[]';
-          const arr = parseScores(txt);
-          for (const o of arr) if (o && typeof o.i === 'number' && items[o.i]) byIndex[o.i] = o;
-        } catch (e) {
-          error = error || e.message;
-          console.error(`[cron-scout] qualify failed for items ${start}-${start + chunk.length - 1}; they are held as unscored:`, e.message);
-        }
-      }
-      return { byIndex, error };
-    }
-
-    // Leads held by an earlier failed run (status 'unscored', last 30 days) are scored first (not when the mini scores).
-    const rescored = { checked: 0, released: 0, dropped: 0, error: null };
-    if (!deferScoring) try {
-      const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
-      const held = await fetch(`${base}/rest/v1/opportunities?status=eq.unscored&created_at=gte.${since30}&select=id,title,notes,signal,company&order=created_at.desc&limit=60`, { headers }).then(r => r.json());
-      if (Array.isArray(held) && held.length) {
-        const { byIndex, error } = await qualify(held.map(h => ({ type: h.signal || 'event', title: h.title, content: String(h.notes || '').replace(/^\[[^\]]*\]\s*/, ''), company: h.company })));
-        rescored.checked = held.length; rescored.error = error;
-        for (const [i, q] of Object.entries(byIndex)) {
-          const h = held[i]; const score = typeof q.score === 'number' ? q.score : null; if (score == null) continue;
-          const patch = score < 5 ? { status: 'archived', overall_score: score, why_this_matters: q.why ? String(q.why).slice(0, 300) : null }
-            : { status: 'new', overall_score: score, why_this_matters: q.why ? String(q.why).slice(0, 300) : null, company: h.company || (q.company && String(q.company).toLowerCase() !== 'null' ? String(q.company).slice(0, 120) : null), deadline: q.event_date && !isNaN(new Date(q.event_date)) ? new Date(q.event_date).toISOString().slice(0, 10) : null };
-          await fetch(`${base}/rest/v1/opportunities?id=eq.${h.id}`, { method: 'PATCH', headers, body: JSON.stringify(patch) });
-          if (score < 5) rescored.dropped++; else rescored.released++;
-        }
-      }
-    } catch (e) { rescored.error = rescored.error || e.message; }
-
-    // ── Batch-qualify this run's survivors, then insert with real columns populated ──
-    // Chunked: one oversized batch would blow past max_tokens, truncate the JSON, and lose
-    // scoring for EVERY candidate. Per-chunk failure only costs that chunk.
-    const { byIndex: qmap, error: qualifyError } = await qualify(candidates.map(c => ({ type: c.type, title: c.r.title, content: c.r.content, company: c.company })));
-    console.log('[cron-scout] qualified', Object.keys(qmap).length, 'of', candidates.length, 'candidates', qualifyError ? `(error: ${qualifyError})` : '');
+    // No model call here (2026-11-10): every lead is saved as 'unscored' and the Mac mini scores it through Claude Code on
+    // the subscription (scripts/score-leads.mjs, rules in lib/server/scoutprompt.cjs), releasing it to Handoff or archiving it.
+    const qmap = {};
+    const qualifyError = null;
+    const rescored = null;
 
     for (let i = 0; i < candidates.length; i++) {
       const c = candidates[i];
@@ -321,8 +261,8 @@ module.exports = wrap(async function handler(req, res) {
       const row = {
         title: stripMd(c.r.title) || c.r.url,
         source: c.source,
-        // A lead Claude could not score is held ('unscored'): Handoff never shows it, the next run scores it.
-        status: score == null ? 'unscored' : 'new',
+          // Held until the Mac mini scores it (scripts/score-leads.mjs): Handoff never shows an unscored lead.
+        status: 'unscored',
         signal: c.type,   // 'rfp' | 'event' → drives UI tag, chips, learning key
         company,
         overall_score: score,
@@ -343,152 +283,15 @@ module.exports = wrap(async function handler(req, res) {
       c.bucket.push({ status: sbRes.status });
     }
 
-    // ── Weekly Intelligence Brief (auto-generate on Monday run) ─────────────
-    let briefGenerated = false;
-    try {
-      const anthropicKey = process.env.ANTHROPIC_API_KEY;
-      if (anthropicKey) {
-        const [clientsR, projectsR] = await Promise.all([
-          fetch(`${base}/rest/v1/flex_clients?select=name,industry,location,total_events&limit=80`, { headers }),
-          fetch(`${base}/rest/v1/flex_projects?select=client_name,venue_name,event_type,event_date&order=event_date.desc&limit=40`, { headers }),
-        ]);
-        const [flexClients, flexProjects] = await Promise.all([clientsR.json(), projectsR.json()]);
-
-        const compSignalsR = await fetch(`${base}/rest/v1/competitor_signals?order=created_at.desc&limit=8`, { headers });
-        const compSignals = await compSignalsR.json();
-
-        const weekDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-
-        const briefPrompt = `You are the FF Tank Intelligence Engine — the strategic advisor for Fatfish, a full-service event production company in Salt Lake City, Utah. Services: AV, lighting, staging, décor, video, experiential. Known clients: WGU, Huntsman, Fox Pest Control, TEDx, Utah Jazz/SEG Group, Progressive Leasing.
-
-Generate the Fatfish Weekly Intelligence Brief for the week of ${weekDate}. This is a CEO/CMO level briefing. Be specific, actionable, and direct. Use real names. No filler.
-
-Format EXACTLY as follows (plain text labels):
-
-FATFISH WEEKLY INTELLIGENCE BRIEF — ${weekDate}
-
-INDUSTRY MOVEMENT
-2-3 bullets summarizing relevant industry trends Fatfish should know about.
-
-NEW RFP SIGNALS
-2-3 bullets identifying potential new opportunities or procurement signals.
-
-LOOKALIKE CLIENT OPPORTUNITIES
-Based on historical clients below, name 3-4 specific organizations Fatfish should target.
-
-DORMANT CLIENT REACTIVATION
-Name 2-3 specific historical clients to contact this week, with one-line outreach angle each.
-
-CONTENT OPPORTUNITIES
-1-2 specific content pieces Fatfish should produce based on current intelligence.
-
-COMPETITOR SIGNALS
-Summarize competitor activity. If none: "No major signals this week."
-
-MARKET EXPANSION
-Name 1-2 cities or sectors showing growth signals.
-
-THIS WEEK'S PRIORITY ACTION
-One clear action for Fatfish leadership.
-
-Historical data: ${JSON.stringify({ clients: Array.isArray(flexClients) ? flexClients.slice(0, 40) : [], projects: Array.isArray(flexProjects) ? flexProjects.slice(0, 20) : [], competitor_signals: Array.isArray(compSignals) ? compSignals.slice(0, 5) : [], scout_results: allResults.slice(0, 5).map(r => ({ title: r.title, url: r.url })) })}`;
-
-        const briefStart = Date.now();
-        const claudeR = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000, messages: [{ role: 'user', content: briefPrompt }] }),
-        });
-        const claudeD = await claudeR.json();
-        const briefContent = claudeD.content?.find(b => b.type === 'text')?.text || '';
-
-        // Log token usage
-        if (claudeD.usage) {
-          const inputT  = claudeD.usage.input_tokens  || 0;
-          const outputT = claudeD.usage.output_tokens || 0;
-          const cost    = (inputT * 3.0 + outputT * 15.0) / 1_000_000; // Sonnet 4.6 rates
-          fetch(`${base}/rest/v1/job_runs`, {
-            method: 'POST',
-            headers: { ...headers, 'Prefer': 'return=minimal' },
-            body: JSON.stringify({
-              job_name: 'brief', agent_name: 'vercel', provider: 'anthropic', model: 'claude-sonnet-4-6',
-              input_tokens: inputT, output_tokens: outputT, total_tokens: inputT + outputT,
-              estimated_cost: cost, duration_ms: Date.now() - briefStart,
-              status: 'completed', triggered_by: 'cron', created_at: new Date().toISOString(), completed_at: new Date().toISOString(),
-            }),
-          }).catch(() => {});
-        }
-
-        if (briefContent) {
-          await fetch(`${base}/rest/v1/weekly_briefs`, {
-            method: 'POST',
-            headers: { ...headers, 'Prefer': 'return=minimal' },
-            body: JSON.stringify({ content: briefContent, generated_at: new Date().toISOString() }),
-          });
-          briefGenerated = true;
-          console.log('[cron-scout] weekly brief generated and stored');
-
-          // Auto-deliver if credentials are configured
-          const resendKey = process.env.RESEND_API_KEY;
-          const toEmail = process.env.BRIEF_TO_EMAIL;
-          const slackWebhook = process.env.SLACK_WEBHOOK_URL;
-          if (resendKey && toEmail) {
-            try {
-              const weekStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-              const subject = `Fatfish Weekly Intelligence Brief — ${weekStr}`;
-              const emailRes = await fetch('https://api.resend.com/emails', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${resendKey}` },
-                body: JSON.stringify({
-                  from: 'FF Tank <briefs@ff-tank.fatfish.co>',
-                  to: [toEmail],
-                  subject,
-                  html: `<pre style="font-family:monospace;background:#0A0A0A;color:#E8E4DC;padding:32px;font-size:13px;line-height:1.8;">${briefContent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`,
-                }),
-              });
-              if (emailRes.ok) {
-                await fetch(`${base}/rest/v1/brief_deliveries`, {
-                  method: 'POST',
-                  headers: { ...headers, 'Prefer': 'return=minimal' },
-                  body: JSON.stringify({ channel: 'email', recipient: toEmail, subject, status: 'sent', sent_at: new Date().toISOString() }),
-                });
-                console.log('[cron-scout] brief delivered via email to', toEmail);
-              }
-            } catch (e) {
-              console.error('[cron-scout] email delivery error:', e.message);
-            }
-          }
-          if (slackWebhook) {
-            try {
-              const truncated = briefContent.length > 2800 ? briefContent.slice(0, 2800) + '\n\n_[Open FF Tank for full brief]_' : briefContent;
-              const slackRes = await fetch(slackWebhook, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: `*Fatfish Weekly Intelligence Brief*\n\`\`\`${truncated}\`\`\`` }),
-              });
-              if (slackRes.ok) {
-                await fetch(`${base}/rest/v1/brief_deliveries`, {
-                  method: 'POST',
-                  headers: { ...headers, 'Prefer': 'return=minimal' },
-                  body: JSON.stringify({ channel: 'slack', recipient: 'webhook', subject: 'Weekly Brief', status: 'sent', sent_at: new Date().toISOString() }),
-                });
-                console.log('[cron-scout] brief delivered via Slack');
-              }
-            } catch (e) {
-              console.error('[cron-scout] slack delivery error:', e.message);
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.error('[cron-scout] brief generation error:', e.message);
-    }
+    // The Monday brief was retired on 2026-11-10 (it wrote to a table that no longer exists).
+    const briefGenerated = false;
 
     const inserted        = saved.filter(s => s.status === 201).length;
     const skipped         = saved.filter(s => s.status === 'skipped').length;
     const rejectedDomain  = saved.filter(s => s.status === 'rejected' && s.reason === 'noise domain').length;
     const rejectedNoSignal= saved.filter(s => s.status === 'rejected' && s.reason === 'no procurement signal').length;
     const completedAt = new Date().toISOString();
+
     console.log(`[cron-scout] DONE run_id=${runId} inserted=${inserted} skipped=${skipped} rejected_domain=${rejectedDomain} rejected_no_signal=${rejectedNoSignal} targets_scanned=${Array.isArray(accounts) ? accounts.length : 0} brief=${briefGenerated} duration_ms=${Date.now() - new Date(startedAt).getTime()}`);
 
     // Write run record to job_runs for dashboard visibility
@@ -511,11 +314,11 @@ Historical data: ${JSON.stringify({ clients: Array.isArray(flexClients) ? flexCl
 
     // The run's state for Reports → Operations (job_state 'scout'): a scoring failure is an error people see.
     const heldNow = candidates.filter((c, i) => !qmap[i]).length;
-    const scoutError = qualifyError || rescored.error || null;
+    const scoutError = null;
     await fetch(`${base}/rest/v1/job_state?on_conflict=job`, { method: 'POST', headers: { ...headers, Prefer: 'return=minimal,resolution=merge-duplicates' }, body: JSON.stringify({
       job: 'scout', last_run_at: completedAt, updated_at: completedAt, ...(scoutError ? {} : { last_success_at: completedAt }),
       last_error: scoutError ? `Claude scoring failed: ${scoutError}${heldNow ? ` (${heldNow} new leads held as unscored)` : ''}` : null,
-      last_result: { inserted, held_unscored: heldNow, rescored, model: deferScoring ? 'claude-code on the Mac mini' : QUAL_MODEL },
+      last_result: { inserted, held_unscored: heldNow, scored_by: 'claude-code on the Mac mini' },
     }) }).catch(() => {});
 
     return res.status(200).json({
