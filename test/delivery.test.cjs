@@ -338,6 +338,23 @@ test('repeated and early webhook events converge on the same delivery state, and
   assert.equal(db.table('campaign_sends')[0].outcome, 'permanent_failure'); assert.equal(db.table('campaign_sends')[0].status, 'bounced');
   await webhook(db, { body: pretty('email.delivered', 'em-early'), id: 'evt_d2' });
   assert.equal(db.table('campaign_sends')[0].status, 'bounced');
+  // the bounced address is on the suppression list now, once, with the provider as the source
+  assert.deepEqual(db.table('unsubscribes').map(u => [u.email, u.source, u.reason]), [['x@y.test', 'resend', 'bounce']]);
+  await webhook(db, { body: pretty('email.bounced', 'em-early'), id: 'evt_b2' });
+  assert.equal(db.table('unsubscribes').length, 1);
+});
+
+test('a complaint suppresses the address; a transient bounce does not', async () => {
+  const db = campaignDb(0);
+  db.insert('campaign_sends', { id: 'cs1', campaign_id: 'cp1', campaign_email_id: 'ce1', email: 'Full@y.test', contact_id: 'c1', provider_message_id: 'em-full', status: 'sent', outcome: 'accepted', is_test: false });
+  db.insert('campaign_sends', { id: 'cs2', campaign_id: 'cp1', campaign_email_id: 'ce1', email: 'angry@y.test', contact_id: 'c2', provider_message_id: 'em-angry', status: 'delivered', outcome: 'delivered', is_test: false });
+  const soft = JSON.stringify({ type: 'email.bounced', created_at: NOW.toISOString(), data: { email_id: 'em-full', bounce: { type: 'Transient', subType: 'MailboxFull' } } });
+  await webhook(db, { body: soft, id: 'evt_soft' });
+  assert.equal(db.table('campaign_sends').find(s => s.id === 'cs1').status, 'bounced');
+  assert.equal(db.table('unsubscribes').length, 0);
+  await webhook(db, { body: pretty('email.complained', 'em-angry'), id: 'evt_c' });
+  assert.deepEqual(db.table('unsubscribes').map(u => [u.email, u.contact_id, u.reason]), [['angry@y.test', 'c2', 'complaint']]);
+  assert.equal(db.table('campaign_sends').find(s => s.id === 'cs2').outcome, 'permanent_failure');
 });
 
 test('a receipt that cannot be stored is not acknowledged, so the provider retries', async () => {
