@@ -23,6 +23,7 @@ import Timeline from "../components/Timeline.jsx";
 import { NewContactForm } from "./People.jsx";
 import { NewDealForm } from "./Deals.jsx";
 import { useOwners } from "../lib/owners.js";
+import { accountOwner } from "../lib/flexdocs.js";
 
 const money = n => (n == null ? "—" : "$" + Math.round(Number(n)).toLocaleString());
 const day = d => (d ? String(d).slice(0, 10) : "—");
@@ -212,7 +213,7 @@ function CompanyPage({ id, onBack, onChanged, onNavigate }) {
       const row = rows?.[0]; setCo(row || null);
       const names = (row?.flex_clients || []).map(f => f.name).filter(Boolean);
       const [projs, mems] = await Promise.all([
-        names.length ? db.selectAll("flex_projects", { select: "id,flex_id,client_name,venue_name,event_type,event_date,budget_estimate,services", client_name: quoteIn(names), order: "event_date.desc" }) : [],
+        names.length ? db.selectAll("flex_projects", { select: "id,flex_id,client_name,venue_name,event_type,event_date,budget_estimate,services,notes", client_name: quoteIn(names), order: "event_date.desc" }) : [],
         membershipsForCompany(id),
       ]);
       setProjects(projs || []); setMemberships(mems || []);
@@ -245,6 +246,7 @@ function CompanyPage({ id, onBack, onChanged, onNavigate }) {
   const ta = (co.target_accounts || []).filter(a => a.relationship_notes || a.contact_name);
   const signals = (co.opportunities || []).sort((a, b) => (b.overall_score || 0) - (a.overall_score || 0));
   const toggle = k => setMore(m => ({ ...m, [k]: !m[k] }));
+  const flexAM = accountOwner(projects);
 
   return (
     <RecordLayout
@@ -259,6 +261,7 @@ function CompanyPage({ id, onBack, onChanged, onNavigate }) {
         </>}
         meta={<>
           <span>Owner: <b style={{ fontWeight: 450, color: TC.sub }}>{co.owner || "unassigned"}</b></span>
+          {flexAM && <span data-flex-am title={`From Flex: AM on ${flexAM.basis.doc || "the latest quote"} (${flexAM.basis.status || "status unknown"}, ${flexAM.basis.date || "no date"})${flexAM.others.length ? `. Also worked by ${flexAM.others.map(o => `${o.name} (${o.n})`).join(", ")} in the last three years.` : ""}`}>Flex AM: <b style={{ fontWeight: 450, color: TC.sub }}>{flexAM.owner}</b>{flexAM.others.length ? <span style={{ color: TC.muted }}> +{flexAM.others.length}</span> : null}</span>}
           <span>Last touch: <b style={{ fontWeight: 450, color: co.last_touch_at ? TC.sub : TC.faint }}>{co.last_touch_at ? `${ago(co.last_touch_at)} (${day(co.last_touch_at)})` : "never"}</b></span>
           {memberships.length > 0 && <span>Campaigns: <b style={{ fontWeight: 450, color: TC.sub }}>{[...new Set(memberships.map(m => m.campaigns?.name).filter(Boolean))].join(", ")}</b></span>}
         </>}

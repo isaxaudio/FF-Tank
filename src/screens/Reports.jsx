@@ -10,7 +10,7 @@ import { STAGE_TONE, STAGE_LABEL } from "../lib/deals.js";
 import { CAMPAIGN_KIND_LABEL, CAMPAIGN_KIND_TONE } from "../lib/status.js";
 import { useIsPhone } from "../lib/viewport.js";
 import { workerStatus, runScheduler } from "../lib/automationApi.js";
-import { REPORTS, PERIODS, METRICS, HEADLINES, metricPeriod, loadReportData, loadOps, pipelineByStage, valueSummary, velocity, winRate, funnel, bySource, sourceTotals, campaignOutcomes, campaignTotals, flexFreshness, flexHistory, activityByOwner, opsSummary, ACTIVITY_COLS, FLEX_STALE_DAYS, INFLUENCE_DAYS, toCsv, downloadCsv } from "../lib/reports.js";
+import { REPORTS, PERIODS, METRICS, HEADLINES, metricPeriod, loadReportData, loadOps, pipelineByStage, valueSummary, velocity, winRate, funnel, bySource, sourceTotals, campaignOutcomes, campaignTotals, flexFreshness, flexHistory, activityByOwner, opsSummary, accountsByAM, ACTIVITY_COLS, FLEX_STALE_DAYS, INFLUENCE_DAYS, toCsv, downloadCsv } from "../lib/reports.js";
 
 const money = n => "$" + Math.round(Number(n || 0)).toLocaleString();
 const num = n => Number(n || 0).toLocaleString();
@@ -40,7 +40,7 @@ export default function Reports({ views = {}, db: legacyDb, legacyProps = {}, on
   const pickPeriod = id => { setPeriod(id); try { localStorage.setItem("ff:reports:period", id); } catch { /* ignore */ } };
   const periodLabel = PERIODS.find(p => p.id === period)?.label || "";
   const current = REPORTS.find(r => r.id === tab);
-  const usesPeriod = !["flexintel", "ops", "flex"].includes(tab);
+  const usesPeriod = !["flexintel", "ops", "flex", "accounts"].includes(tab);
 
   const entries = [...REPORTS, ...(Flex ? [{ id: "flexintel", label: "Flex Intel", blurb: "Sync and import from Flex; the older industry and market views.", legacy: true }] : [])];
   const Rail = phone ? (
@@ -86,6 +86,7 @@ export default function Reports({ views = {}, db: legacyDb, legacyProps = {}, on
                     {tab === "campaign" && <Campaign data={data} periodLabel={periodLabel} onNavigate={onNavigate} />}
                     {tab === "flex" && <FlexData data={data} />}
                     {tab === "activity" && <Activity data={data} periodLabel={periodLabel} />}
+                    {tab === "accounts" && <Accounts data={data} onNavigate={onNavigate} />}
                   </div>
                 )}
               </>
@@ -369,6 +370,42 @@ function Activity({ data, periodLabel }) {
         <Bars rows={rows} value={r => r.total} label={r => r.owner} sub={r => ACTIVITY_COLS.filter(([k]) => r[k] > 0).map(([k, l]) => `${r[k]} ${l.toLowerCase()}`).join(" · ")} />
       </Section>
       <Section title="By type"><Table columns={cols} rows={rows} rowKey={r => r.owner} empty="Nothing logged in this period. Calls, meetings and emails logged on a record show up here." /></Section>
+    </>
+  );
+}
+
+// ---- accounts by account manager ------------------------------------------------------------------------------------
+
+function Accounts({ data, onNavigate }) {
+  const a = useMemo(() => accountsByAM({ projects: data.flexProjects, clients: data.flexClients, now: data.now }), [data]);
+  const [who, setWho] = useState(() => { try { return localStorage.getItem("ff:reports:am") || ""; } catch { return ""; } });
+  const [showAll, setShowAll] = useState(false);
+  const pickWho = v => { setWho(v); try { localStorage.setItem("ff:reports:am", v); } catch { /* ignore */ } };
+  const rows = a.rows.filter(r => (showAll || r.active) && (!who || r.owner === who));
+  const cols = [
+    { key: "client", label: "Account", value: r => r.companyName || r.client, render: r => (r.companyId ? <LinkBtn data-account={r.client} onClick={() => onNavigate?.("companies", { companyId: r.companyId })}>{r.companyName || r.client}</LinkBtn> : <span data-account={r.client}>{r.client} <span style={{ ...TT.caption, color: TC.muted }}>not in FF Tank</span></span>) },
+    { key: "owner", label: "Account manager", render: r => <b style={{ fontWeight: 450 }}>{r.owner}</b> },
+    { key: "others", label: "Also worked by", value: r => r.others.map(o => `${o.name} (${o.n})`).join(", "), render: r => (r.others.length ? <span style={{ color: TC.sub }}>{r.others.map(o => `${o.name} (${o.n})`).join(", ")}</span> : <span style={{ color: TC.faint }}>—</span>) },
+    { key: "brand", label: "Brand", value: r => r.brand || "" },
+    { key: "lastEvent", label: "Last event", value: r => r.lastEvent || "", render: r => (r.lastEvent ? dayOf(r.lastEvent + "T12:00:00") : "—") },
+    { key: "nextEvent", label: "Next booked", value: r => r.nextEvent || "", render: r => (r.nextEvent ? dayOf(r.nextEvent + "T12:00:00") : "—") },
+    { key: "booked3y", label: "Booked, 3 years", align: "right", value: r => money(r.booked3y) },
+    { key: "lifetime", label: "Booked, all time", align: "right", value: r => money(r.lifetime) },
+    { key: "basis", label: "Owner from", value: r => `${r.basis.doc || ""} ${r.basis.status || ""}`, render: r => <span style={{ ...TT.caption, color: TC.muted }}>{r.basis.doc} · {r.basis.status}</span> },
+  ];
+  return (
+    <>
+      <Headlines report="accounts" values={{ am_accounts: [num(a.totals.active)], am_people: [num(a.totals.people)], am_shared: [num(a.totals.shared)], am_unmatched: [num(a.totals.unmatched), a.totals.unmatched ? "link them from Companies → Review" : ""] }} />
+      <Section title="By account manager" note="Active accounts each person owns, and their booked value over the last three years. Pick one to filter.">
+        <div role="group" aria-label="Account manager" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button data-am="" aria-pressed={!who} onClick={() => pickWho("")} style={{ ...pill(!who ? "ink" : "outline"), cursor: "pointer", padding: "4px 10px" }}>Everyone</button>
+          {a.people.map(p => <button key={p.name} data-am={p.name} aria-pressed={who === p.name} onClick={() => pickWho(who === p.name ? "" : p.name)} style={{ ...pill(who === p.name ? "ink" : "outline"), cursor: "pointer", padding: "4px 10px" }}>{p.name} · {p.accounts} · {money(p.booked3y)}</button>)}
+        </div>
+      </Section>
+      <Section title={who ? `${who}'s accounts` : "All accounts"} data-accounts note={`${rows.length} account${rows.length === 1 ? "" : "s"}${showAll ? ", including clients with no booking in three years" : ""}.`} action={<span style={{ display: "flex", gap: 8, alignItems: "center" }}><label style={{ ...TT.caption, color: TC.sub, display: "flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Include lapsed</label><Csv name={`accounts${who ? "-" + who.toLowerCase().replace(/\s+/g, "-") : ""}`} rows={rows} columns={cols} /></span>}>
+        <Table columns={cols} rows={rows} rowKey={r => r.key} empty="No accounts for this filter." />
+        <div style={{ ...TT.caption, color: TC.muted, marginTop: 8 }}>From Flex quotes, both brands. The owner is the AM on the client's latest quote that is not cancelled; "Also worked by" counts other AMs' quotes in the last three years. FF Tank's own record owner (who works the account in the CRM) is set separately on the company.</div>
+      </Section>
     </>
   );
 }

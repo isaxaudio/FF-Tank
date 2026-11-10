@@ -472,6 +472,11 @@ migration 014, the local preview on 4174 and `vercel dev` on 3001).
   backups/flex-cache), upserts on `flex_id` (Flex's element id, so deal links survive), stamps `created_at` and
   `job_state.flex_import`. Token from `FLEX_TOKEN_FILE` (default `~/Projects/flex-quoting-study/.flex_token`; the in-app
   `flexApiKey` only reaches contacts). The Flex Intel CSV import invents row-number ids and would duplicate rows.
+- **Accounts by AM.** Reports → Accounts by AM (`accountsByAM`) and "Flex AM" on the company page (`accountOwner` in
+  src/lib/flexdocs.js): the owner of a Flex client is the AM on its latest quote that is not cancelled; other AMs on its
+  quotes in the last three years are listed. Clients map to companies through `flex_clients` by name; clients added in
+  Flex since the last contact sync show "not in FF Tank". This is Flex's view; `companies.owner` (who works the account
+  in the CRM) is separate and not changed by it.
 - **Migration 015** fixes `campaign_stats`: `open_value` = open stages only (a booked deal used to stay in it), `sent` /
   `failed` by delivery outcome. Same columns, so readers keep working.
 - **Measured:** first report renders about 2 s after navigation on the live data (2,000+ Flex projects); queries stay in
