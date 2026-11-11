@@ -3,7 +3,7 @@
 // consent stay separate from lead status and lifecycle.
 import React, { useEffect, useState } from "react";
 import { c as TC, t as TT, pill, btn, tile, inputStyle } from "../tokens.js";
-import { Search, Plus, User, Building2, ExternalLink } from "lucide-react";
+import { Search, Plus, User, Building2, ExternalLink, Upload } from "lucide-react";
 import { db } from "../lib/db.js";
 import { auth } from "../lib/auth.js";
 import { logActivity } from "../lib/activities.js";
@@ -22,6 +22,7 @@ import InlineField from "../components/InlineField.jsx";
 import Timeline from "../components/Timeline.jsx";
 import CompanyPicker from "../components/CompanyPicker.jsx";
 import { useOwners } from "../lib/owners.js";
+import ImportContacts from "../components/ImportContacts.jsx";
 
 const MKT = ["unknown", "subscribed", "unsubscribed"];
 const MKT_TONE = { subscribed: "evergreen", unsubscribed: "rust", unknown: "outline" };
@@ -61,6 +62,7 @@ export default function People({ initialContactId = null, initialNew = false, on
   const [state, setState] = useUrlState(DEFAULT);
   const [refresh, setRefresh] = useState(0);
   const [showNew, setShowNew] = useState(!!initialNew);
+  const [showImport, setShowImport] = useState(false);
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
   const personal = useSavedViews("people");
@@ -88,16 +90,22 @@ export default function People({ initialContactId = null, initialNew = false, on
     setBusy(false);
   }
   const n = sel.count;
-  const addTo = async cid => {
+  const addTo = async (cid, given) => {
     const cp = campaigns.find(c => c.id === cid); if (!cp) return;
+    if (given) {
+      setBusy(true);
+      try { const r = await bulkAddToCampaign(cid, given, "contact_id"); setToast({ msg: `${r.added} added to ${cp.name}${r.skipped ? ` (${r.skipped} already in it)` : ""}`, undo: r.undo }); }
+      catch (e) { setToast({ msg: `Failed: ${e.message}` }); }
+      setBusy(false); return;
+    }
     await act(`Added to ${cp.name}`, async rows => { const r = await bulkAddToCampaign(cid, rows, "contact_id"); setToast(null); return r.undo; });
   };
   // Enroll the selection in a sequence; people without an address, unsubscribed, or already in one are skipped and named.
-  const enrollIn = async sid => {
+  const enrollIn = async (sid, given) => {
     const sq = sequences.find(s => s.id === sid); if (!sq) return;
     setBusy(true);
     try {
-      const r = await enrollMany({ ...sq, steps: sq.sequence_steps }, await rowsForBulk());
+      const r = await enrollMany({ ...sq, steps: sq.sequence_steps }, given || await rowsForBulk());
       reload(); sel.clear();
       const why = r.skipped.length ? ` Skipped ${r.skipped.length}: ${r.skipped.slice(0, 3).map(x => `${x.contact.name || "unnamed"} (${x.reason.replace(/\.$/, "").toLowerCase()})`).join(", ")}${r.skipped.length > 3 ? "…" : ""}.` : "";
       setToast({ msg: `${r.enrolled.length} enrolled in ${sq.name}.${why}`, undo: r.enrolled.length ? async () => { await r.undo(); reload(); } : null });
@@ -125,7 +133,8 @@ export default function People({ initialContactId = null, initialNew = false, on
       <div style={{ padding: "16px 24px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div><h1 style={{ ...TT.h3, color: TC.ink, margin: 0 }}>People</h1><div style={{ ...TT.caption, color: TC.muted }}>{counts.all != null ? `${counts.all.toLocaleString()} contacts` : ""}{list.total != null ? ` · ${list.total.toLocaleString()} in this view` : ""}</div></div>
-          <button type="button" data-new-contact onClick={() => setShowNew(s => !s)} style={{ ...btn("primary"), marginLeft: "auto" }}><Plus size={16} strokeWidth={1.5} /> Contact</button>
+          <button type="button" data-import-open onClick={() => { setShowImport(s => !s); setShowNew(false); }} style={{ ...btn("secondary"), marginLeft: "auto" }}><Upload size={16} strokeWidth={1.5} /> Import</button>
+          <button type="button" data-new-contact onClick={() => { setShowNew(s => !s); setShowImport(false); }} style={btn("primary")}><Plus size={16} strokeWidth={1.5} /> Contact</button>
         </div>
         <div style={{ marginTop: 10 }}>
           <ViewTabs builtin={BUILTIN} personal={personal.views} state={state} counts={counts} onPick={v => setState({ ...DEFAULT, ...v.state })} onSave={(name, o) => personal.save(name, { ...state, page: 1 }, o)} onRemove={personal.remove} onShare={personal.setShared} onImport={async () => { const k = await personal.importBrowser(); setToast({ msg: `${k} view${k === 1 ? "" : "s"} moved to your account` }); }} />
@@ -140,6 +149,7 @@ export default function People({ initialContactId = null, initialNew = false, on
           {JSON.stringify({ ...state, page: 1, sort: "" }) !== JSON.stringify(DEFAULT) && <button type="button" onClick={() => setState({ ...DEFAULT })} style={{ ...btn("tertiary"), padding: "2px 8px", fontSize: 13, color: TC.sub }}>Reset</button>}
         </div>
         {list.error && <div style={{ ...pill("rust"), marginTop: 10 }}>{list.error}</div>}
+        {showImport && <div style={{ marginTop: 12 }}><ImportContacts owners={owners} campaigns={campaigns} sequences={sequences} onClose={() => { setShowImport(false); reload(); }} onImported={reload} onAddToCampaign={addTo} onEnroll={enrollIn} /></div>}
         {showNew && <div style={{ marginTop: 12 }}><NewContactForm onDone={c => { setShowNew(false); reload(); if (c?.id) onNavigate?.("people", { contactId: c.id }); }} onCancel={() => setShowNew(false)} /></div>}
       </div>
       <div style={{ flex: 1, display: "flex", minHeight: 0, padding: "12px 24px 24px", gap: 0 }}>
