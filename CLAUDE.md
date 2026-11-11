@@ -539,3 +539,6 @@ CREATE TABLE IF NOT EXISTS opportunity_feedback (
   created_at timestamptz default now()
 );
 ```
+
+## Contact import (People → Import)
+CSV upload or rows pasted from a sheet → column mapping → preview → import. Rules in `src/lib/importContacts.js` (tests: `test/import-contacts.test.mjs`, headless: `scripts/verify-import.mjs`): one contact per email; existing contacts only get blank fields filled; companies match by name, then email domain, else are created (optional); unsubscribed stays unsubscribed; marketing consent only when "opted in" is ticked (consent_source `imported_list`). Contacts carry source `import` and the batch name in source_detail. Undo removes only what that import created and clears what it filled.
